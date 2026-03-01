@@ -14,19 +14,26 @@ import { Ionicons } from "@expo/vector-icons";
 import { BASE_URL } from "../../constants/config";
 
 type BackendDashboardDTO = {
-  user: { name?: string; goal_status?: string };
-  calories: { target: number; consumed: number; remaining: number; percent: number };
+  userName: string;
+  streakDays: number;
+
+  calories: {
+    target: number;
+    consumed: number;
+    percentage: number; // ✅ backend ใช้ percentage
+  };
+
   macros: {
     protein: { current: number; target: number };
     carb: { current: number; target: number };
     fat: { current: number; target: number };
   };
-  water: { current: number; target: number };
-  next_meal: any | null;
 
-  warnings?: { kcalOver?: boolean; carbNearLimit?: boolean; waterLow?: boolean };
+  // backend ตอนนี้ยังไม่ส่ง water/nextMeal -> ทำ UI แบบรอได้
+  water?: { current: number; target: number };
+  nextMeal?: { time?: string; name?: string; kcal?: number; tag?: string } | null;
+
   recommendation?: { title: string; message: string } | null;
-  streakDays?: number;
 };
 
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
@@ -36,10 +43,10 @@ export default function HomeScreen() {
   const [data, setData] = useState<BackendDashboardDTO | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // ✅ streak modal
   const [showStreakModal, setShowStreakModal] = useState(false);
 
-  const userId = "sunny";
+  // ✅ ให้ตรงกับข้อมูลใน Users ของคุณ
+  const userId = "user01";
 
   useEffect(() => {
     let alive = true;
@@ -63,33 +70,41 @@ export default function HomeScreen() {
   }, []);
 
   const kcalPct = useMemo(() => {
-    if (!data) return 0;
-    return Number.isFinite(data.calories?.percent) ? data.calories.percent : 0;
+    const p = data?.calories?.percentage ?? 0;
+    return Number.isFinite(p) ? p : 0;
   }, [data]);
 
-  const isOver = (data?.calories?.consumed ?? 0) > (data?.calories?.target ?? 0);
+  const isOver = useMemo(() => {
+    const c = data?.calories?.consumed ?? 0;
+    const t = data?.calories?.target ?? 0;
+    return c > t && t > 0;
+  }, [data]);
 
   const carbNearLimit = useMemo(() => {
-    if (!data) return false;
-    const cur = data.macros?.carb?.current ?? 0;
-    const tar = data.macros?.carb?.target ?? 1;
+    const cur = data?.macros?.carb?.current ?? 0;
+    const tar = data?.macros?.carb?.target ?? 1;
     return cur >= tar * 0.9;
   }, [data]);
 
   const waterLow = useMemo(() => {
-    if (!data) return false;
-    const cur = data.water?.current ?? 0;
-    const tar = data.water?.target ?? 1;
+    const cur = data?.water?.current ?? 0;
+    const tar = data?.water?.target ?? 0;
+    if (!tar) return false;
     return cur < tar * 0.4;
   }, [data]);
 
+  // ✅ ทำแจ้งเตือนฝั่งหน้าได้ก่อน (backend ยังไม่ส่ง warnings)
   const warnings = useMemo(() => {
     return {
-      kcalOver: data?.warnings?.kcalOver ?? isOver,
-      carbNearLimit: data?.warnings?.carbNearLimit ?? (!isOver && carbNearLimit),
-      waterLow: data?.warnings?.waterLow ?? waterLow,
+      kcalOver: isOver,
+      carbNearLimit: !isOver && carbNearLimit,
+      waterLow: waterLow,
     };
-  }, [data, isOver, carbNearLimit, waterLow]);
+  }, [isOver, carbNearLimit, waterLow]);
+
+  const notificationCount = useMemo(() => {
+    return [warnings.kcalOver, warnings.carbNearLimit, warnings.waterLow].filter(Boolean).length;
+  }, [warnings]);
 
   const recommendation = useMemo(() => {
     if (data?.recommendation) return data.recommendation;
@@ -102,37 +117,40 @@ export default function HomeScreen() {
     return null;
   }, [data, warnings.carbNearLimit]);
 
-  const notificationCount = useMemo(() => {
-    return [warnings.kcalOver, warnings.carbNearLimit, warnings.waterLow].filter(Boolean).length;
-  }, [warnings]);
-
-  const nextMeal = useMemo(() => {
-    const m = data?.next_meal;
-    if (!m) return null;
-    return {
-      time: m.time || m.meal_time || "18:00",
-      name: m.name || m.title || m.food_name || "-",
-      kcal: m.kcal || m.calories || 0,
-      tag: m.tag || m.note || undefined,
-    };
-  }, [data]);
-
   const proteinRatio = useMemo(() => {
-    if (!data) return 0;
-    return clamp01((data.macros?.protein?.current ?? 0) / Math.max(1, data.macros?.protein?.target ?? 1));
+    const cur = data?.macros?.protein?.current ?? 0;
+    const tar = data?.macros?.protein?.target ?? 1;
+    return clamp01(cur / Math.max(1, tar));
   }, [data]);
 
   const carbRatio = useMemo(() => {
-    if (!data) return 0;
-    return clamp01((data.macros?.carb?.current ?? 0) / Math.max(1, data.macros?.carb?.target ?? 1));
+    const cur = data?.macros?.carb?.current ?? 0;
+    const tar = data?.macros?.carb?.target ?? 1;
+    return clamp01(cur / Math.max(1, tar));
   }, [data]);
 
   const fatRatio = useMemo(() => {
-    if (!data) return 0;
-    return clamp01((data.macros?.fat?.current ?? 0) / Math.max(1, data.macros?.fat?.target ?? 1));
+    const cur = data?.macros?.fat?.current ?? 0;
+    const tar = data?.macros?.fat?.target ?? 1;
+    return clamp01(cur / Math.max(1, tar));
   }, [data]);
 
-  const streakDays = data?.streakDays ?? 1;
+  const streakDays = data?.streakDays ?? 0;
+
+  // ✅ next meal / water ตอนนี้ backend ยังไม่ส่ง -> fallback ก่อน
+  const waterCurrent = data?.water?.current ?? 0;
+  const waterTarget = data?.water?.target ?? 0;
+
+  const nextMeal = useMemo(() => {
+    const m = data?.nextMeal;
+    if (!m) return null;
+    return {
+      time: m.time ?? "18:00 น.",
+      name: m.name ?? "-",
+      kcal: m.kcal ?? 0,
+      tag: m.tag ?? undefined,
+    };
+  }, [data]);
 
   if (loading) {
     return (
@@ -177,13 +195,10 @@ export default function HomeScreen() {
           {/* LEFT */}
           <View style={{ flex: 1 }}>
             <Text style={styles.welcome}>ยินดีต้อนรับ</Text>
-            <Text style={styles.name}>คุณ {data?.user?.name ?? "-"}</Text>
+            <Text style={styles.name}>คุณ {data?.userName ?? "-"}</Text>
             <Text style={styles.date}>{fmtTHDate()}</Text>
 
-            <Pressable
-              style={styles.weekLinkWrap}
-              onPress={() => router.push({ pathname: "/weekly", params: { userId } })}
-            >
+            <Pressable style={styles.weekLinkWrap} onPress={() => router.push("/weekly")}>
               <Text style={styles.weekLink}>ดูภาพรวมรายสัปดาห์ ›</Text>
             </Pressable>
           </View>
@@ -199,14 +214,12 @@ export default function HomeScreen() {
               />
               {notificationCount > 0 && (
                 <View style={styles.badge}>
-                  <Text style={styles.badgeText}>
-                    {notificationCount > 9 ? "9+" : notificationCount}
-                  </Text>
+                  <Text style={styles.badgeText}>{notificationCount > 9 ? "9+" : notificationCount}</Text>
                 </View>
               )}
             </Pressable>
 
-            {/* 🔥 Streak (กดได้ -> เปิด modal) */}
+            {/* 🔥 Streak */}
             <Pressable style={styles.streakPill} onPress={() => setShowStreakModal(true)}>
               <Text style={styles.streakText}>🔥 ต่อเนื่อง {streakDays} วัน (?)</Text>
             </Pressable>
@@ -218,7 +231,7 @@ export default function HomeScreen() {
           <Text style={styles.cardTitle}>ภาพรวมวันนี้</Text>
 
           <View style={styles.rowBetween}>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={styles.label}>กินไปแล้ว (Kcal)</Text>
               <Text style={[styles.bigNumber, warnings.kcalOver && { color: "#d00" }]}>
                 {data?.calories?.consumed ?? 0}
@@ -231,9 +244,9 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          {/* Macro */}
+          {/* Macro 3 columns (สมดุล) */}
           <View style={styles.macroRow}>
-            <View style={[styles.macroItem, styles.macroItemBorder]}>
+            <View style={styles.macroItem}>
               <Text style={styles.macroLabel}>โปรตีน</Text>
               <Text style={styles.macroValue}>
                 {data?.macros?.protein?.current ?? 0}/{data?.macros?.protein?.target ?? 0}g
@@ -243,7 +256,9 @@ export default function HomeScreen() {
               </View>
             </View>
 
-            <View style={[styles.macroItem, styles.macroItemBorder]}>
+            <View style={styles.sep} />
+
+            <View style={styles.macroItem}>
               <Text style={styles.macroLabel}>คาร์บ</Text>
               <Text style={styles.macroValue}>
                 {data?.macros?.carb?.current ?? 0}/{data?.macros?.carb?.target ?? 0}g
@@ -252,6 +267,8 @@ export default function HomeScreen() {
                 <View style={[styles.fill, { width: `${Math.round(carbRatio * 100)}%` }, styles.fillCarb]} />
               </View>
             </View>
+
+            <View style={styles.sep} />
 
             <View style={styles.macroItem}>
               <Text style={styles.macroLabel}>ไขมัน</Text>
@@ -265,7 +282,7 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Alerts */}
+        {/* Alerts / Recommendation */}
         {warnings.kcalOver && (
           <View style={styles.alertRed}>
             <Text style={styles.alertTitle}>แคลอรี่ของคุณเกินแล้ว!!!</Text>
@@ -289,16 +306,26 @@ export default function HomeScreen() {
 
         {/* Water */}
         <Pressable style={styles.waterRow}>
-          <Text style={styles.waterTitle}>น้ำดื่มวันนี้</Text>
-          <Text style={styles.waterValue}>
-            {(data?.water?.current ?? 0).toLocaleString()} / {(data?.water?.target ?? 0).toLocaleString()} ml
-          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <View style={styles.waterIcon}>
+              <Ionicons name="water" size={18} color="#2a6ef7" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.waterTitle}>น้ำดื่มวันนี้</Text>
+              <Text style={styles.waterValue}>
+                {waterCurrent.toLocaleString()} / {waterTarget.toLocaleString()} ml
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#999" />
+          </View>
         </Pressable>
 
         {/* Next meal */}
         <View style={styles.nextMeal}>
           <Text style={styles.nextMealTitle}>มื้อต่อไป</Text>
-          <Text style={styles.nextMealLink}>ดูแผนทั้งหมด</Text>
+          <Pressable onPress={() => router.push("/plan")}>
+            <Text style={styles.nextMealLink}>ดูแผนทั้งหมด</Text>
+          </Pressable>
         </View>
 
         <View style={styles.mealCard}>
@@ -323,6 +350,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "flex-start",
     marginTop: 12,
+    gap: 10,
   },
   welcome: { fontSize: 14, color: "#555" },
   name: { fontSize: 28, fontWeight: "700" },
@@ -366,7 +394,7 @@ const styles = StyleSheet.create({
   },
   cardTitle: { fontSize: 18, fontWeight: "900", marginBottom: 10 },
 
-  rowBetween: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  rowBetween: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10 },
   label: { color: "#d00", fontWeight: "800" },
   bigNumber: { fontSize: 36, fontWeight: "900", marginTop: 6 },
   sub: { color: "#555", marginTop: 4 },
@@ -378,27 +406,38 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 10,
-    marginLeft: 10,
   },
   circleGreen: { borderColor: "#3aa655" },
   circleRed: { borderColor: "#d00" },
   circleText: { fontSize: 22, fontWeight: "900" },
 
+  // ✅ Macro (สมดุล)
   macroRow: {
     marginTop: 18,
     flexDirection: "row",
     borderTopWidth: 1,
     borderTopColor: "#eee",
     paddingTop: 12,
+    alignItems: "center",
   },
-  macroItem: { flex: 1, alignItems: "center", justifyContent: "center" },
-  macroItemBorder: { borderRightWidth: 1, borderRightColor: "#eee" },
+  macroItem: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
+  },
+  sep: {
+    width: 1,
+    alignSelf: "stretch",
+    backgroundColor: "#eee",
+    marginHorizontal: 6,
+  },
   macroLabel: { fontSize: 12, color: "#666", fontWeight: "800" },
   macroValue: { marginTop: 6, fontSize: 16, fontWeight: "900" },
 
   track: {
     marginTop: 8,
-    width: "80%",
+    width: "100%",
     height: 8,
     borderRadius: 8,
     backgroundColor: "#e5e5e5",
@@ -436,10 +475,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#eee",
   },
+  waterIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: "#eef4ff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   waterTitle: { fontWeight: "900" },
   waterValue: { marginTop: 4, color: "#333", fontWeight: "700" },
 
-  nextMeal: { marginTop: 18, flexDirection: "row", justifyContent: "space-between" },
+  nextMeal: { marginTop: 18, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   nextMealTitle: { fontSize: 18, fontWeight: "900" },
   nextMealLink: { color: "#2e7d32", fontWeight: "800" },
 
