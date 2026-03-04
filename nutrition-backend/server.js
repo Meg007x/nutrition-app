@@ -11,7 +11,7 @@ app.use(cors());
 app.use(express.json());
 
 // 2. ลิงก์ MongoDB (กุญแจเดิมของคุณ)
-const dbURI = "mongodb+srv://nutrationproject_db_user:NS6ocxDkOw83oXiL@nutrationproject.9pjijzj.mongodb.net/NutritionApp?retryWrites=true&w=majority";
+const dbURI = "mongodb+srv://nutrationproject_db_user:NS6ocxDkOw83oXiL@nutrationproject.9pjijzj.mongodb.net/nutation?retryWrites=true&w=majority";
 
 mongoose.connect(dbURI)
   .then(() => console.log("✅ หลังบ้านเชื่อมต่อ MongoDB สำเร็จ! (Clean Version)"))
