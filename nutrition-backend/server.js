@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 
+
 // 1. นำเข้า Routes (พนักงานรับออเดอร์ที่เราแยกไฟล์ไว้)
 const dashboardRoutes = require('./routes/dashboardRoutes'); 
 
@@ -18,6 +19,7 @@ mongoose.connect(dbURI)
 
 // 3. 🛡️ จุดสำคัญ: บอก Server ว่าถ้ามีคนเรียก /api/dashboard ให้ไปดูที่ไฟล์ Routes นะ
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/auth', require('./routes/authRoutes'));
 
 // 4. เปิดเซิร์ฟเวอร์
 app.listen(3000, () => {
