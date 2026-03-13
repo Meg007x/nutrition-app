@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import { ThemedText } from '../components/themed-text'; 
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -26,10 +27,10 @@ export default function LoginScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>เข้าสู่ระบบ</Text>
-        <Text style={styles.subtitle}>ยินดีต้อนรับกลับมา</Text>
+        <ThemedText style={styles.title}>เข้าสู่ระบบ</ThemedText>
+        <ThemedText style={styles.subtitle}>ยินดีต้อนรับกลับมา</ThemedText>
 
-        <Text style={styles.label}>อีเมล</Text>
+        <ThemedText style={styles.label}>อีเมล</ThemedText>
         <TextInput
           style={styles.input}
           placeholder="กรอกอีเมล"
@@ -39,7 +40,7 @@ export default function LoginScreen() {
           onChangeText={setEmail}
         />
 
-        <Text style={styles.label}>รหัสผ่าน</Text>
+        <ThemedText style={styles.label}>รหัสผ่าน</ThemedText>
         <TextInput
           style={styles.input}
           placeholder="กรอกรหัสผ่าน"
@@ -49,15 +50,15 @@ export default function LoginScreen() {
         />
 
         <TouchableOpacity style={styles.primaryButton} onPress={handleLogin}>
-          <Text style={styles.primaryButtonText}>เข้าสู่ระบบ</Text>
+          <ThemedText style={styles.primaryButtonThemedText}>เข้าสู่ระบบ</ThemedText>
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => router.push("/register/step1")}>
-          <Text style={styles.linkText}>ยังไม่มีบัญชี? สมัครสมาชิก</Text>
+          <ThemedText style={styles.linkThemedText}>ยังไม่มีบัญชี? สมัครสมาชิก</ThemedText>
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => router.back()}>
-          <Text style={styles.backText}>← กลับหน้าแรก</Text>
+          <ThemedText style={styles.backThemedText}>← กลับหน้าแรก</ThemedText>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -85,18 +86,18 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: "center",
   },
-  primaryButtonText: {
+  primaryButtonThemedText: {
     color: "#fff",
     fontSize: 18,
     fontWeight: "900",
   },
-  linkText: {
+  linkThemedText: {
     marginTop: 20,
     textAlign: "center",
     color: "#EA580C",
     fontWeight: "700",
   },
-  backText: {
+  backThemedText: {
     marginTop: 16,
     textAlign: "center",
     color: "#6B7280",

@@ -37,24 +37,29 @@ const styles = StyleSheet.create({
   default: {
     fontSize: 16,
     lineHeight: 24,
+    fontFamily: 'NotoSansThai', // 👈 เพิ่มบรรทัดนี้
   },
   defaultSemiBold: {
     fontSize: 16,
     lineHeight: 24,
     fontWeight: '600',
+    fontFamily: 'NotoSansThaiBold', // 👈 เพิ่มบรรทัดนี้ (ตัวหนา)
   },
   title: {
     fontSize: 32,
     fontWeight: 'bold',
     lineHeight: 32,
+    fontFamily: 'NotoSansThaiBold', // 👈 เพิ่มบรรทัดนี้ (ตัวหนา)
   },
   subtitle: {
     fontSize: 20,
     fontWeight: 'bold',
+    fontFamily: 'NotoSansThaiBold', // 👈 เพิ่มบรรทัดนี้ (ตัวหนา)
   },
   link: {
     lineHeight: 30,
     fontSize: 16,
     color: '#0a7ea4',
+    fontFamily: 'NotoSansThai', // 👈 เพิ่มบรรทัดนี้
   },
 });

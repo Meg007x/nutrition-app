@@ -1,26 +1,27 @@
 import React from "react";
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
   Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import { ThemedText } from '../components/themed-text'; 
+
 
 export default function WelcomeScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.topSection}>
         <View style={styles.logoCircle}>
-          <Text style={styles.logoText}>🥗</Text>
+          <ThemedText style={styles.logoThemedText}>🥗</ThemedText>
         </View>
 
-        <Text style={styles.title}>Nutrition Planning</Text>
-        <Text style={styles.subtitle}>
+        <ThemedText style={styles.title}>Nutrition Planning</ThemedText>
+        <ThemedText style={styles.subtitle}>
           วางแผนการกิน ดูแลสุขภาพ{"\n"}ง่ายๆ ในคลิกเดียว
-        </Text>
+        </ThemedText>
 
         <View style={styles.imageWrapper}>
           <View style={styles.imageCircle}>
@@ -33,27 +34,27 @@ export default function WelcomeScreen() {
           </View>
 
           <View style={styles.kcalBadge}>
-            <Text style={styles.kcalText}>🔥 350 Kcal</Text>
+            <ThemedText style={styles.kcalThemedText}>🔥 350 Kcal</ThemedText>
           </View>
         </View>
       </View>
 
       <View style={styles.bottomCard}>
-        <Text style={styles.bottomTitle}>เริ่มต้นสุขภาพดีวันนี้</Text>
-        <Text style={styles.bottomSubtitle}>เข้าร่วมกับเราเพื่อสุขภาพที่ดี</Text>
+        <ThemedText style={styles.bottomTitle}>เริ่มต้นสุขภาพดีวันนี้</ThemedText>
+        <ThemedText style={styles.bottomSubtitle}>เข้าร่วมกับเราเพื่อสุขภาพที่ดี</ThemedText>
 
         <TouchableOpacity
           style={styles.primaryButton}
           onPress={() => router.push("/register/step1")}
         >
-          <Text style={styles.primaryButtonText}>สร้างบัญชีใหม่</Text>
+          <ThemedText style={styles.primaryButtonThemedText}>สร้างบัญชีใหม่</ThemedText>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.secondaryButton}
           onPress={() => router.push("/login")}
         >
-          <Text style={styles.secondaryButtonText}>เข้าสู่ระบบ</Text>
+          <ThemedText style={styles.secondaryButtonThemedText}>เข้าสู่ระบบ</ThemedText>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -85,7 +86,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#D1D5DB",
   },
-  logoText: {
+  logoThemedText: {
     fontSize: 30,
   },
   title: {
@@ -132,7 +133,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#111827",
   },
-  kcalText: {
+  kcalThemedText: {
     fontSize: 14,
     fontWeight: "700",
     color: "#111827",
@@ -166,7 +167,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     elevation: 4,
   },
-  primaryButtonText: {
+  primaryButtonThemedText: {
     color: "#fff",
     fontSize: 18,
     fontWeight: "900",
@@ -181,7 +182,7 @@ const styles = StyleSheet.create({
     borderColor: "#111827",
     elevation: 3,
   },
-  secondaryButtonText: {
+  secondaryButtonThemedText: {
     color: "#000",
     fontSize: 18,
     fontWeight: "900",

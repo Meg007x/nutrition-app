@@ -1,9 +1,8 @@
 import React, { useMemo, useState } from "react";
 import {
   View,
-  Text,
   StyleSheet,
-  TextInput,
+TextInput,
   TouchableOpacity,
   ScrollView,
   Alert,
@@ -14,9 +13,11 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { ThemedText } from '../../components/themed-text'; 
 import DateTimePicker, {
   DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
+
 
 export default function RegisterStep1Screen() {
   const [username, setUsername] = useState("");
@@ -97,24 +98,25 @@ export default function RegisterStep1Screen() {
       <View style={styles.headerBar}>
         <TouchableOpacity style={styles.homeBackButton} onPress={() => router.replace("/")}>
           <Ionicons name="arrow-back" size={16} color="#fff" />
-          <Text style={styles.homeBackText}>หน้าแรก</Text>
+          <ThemedText style={styles.homeBackThemedThemedText}>หน้าแรก</ThemedText>
         </TouchableOpacity>
 
-        <Text style={styles.headerBarText}>ลงทะเบียนผู้ใช้งาน</Text>
+        <ThemedText style={styles.headerBarThemedThemedText}>ลงทะเบียนผู้ใช้งาน</ThemedText>
       </View>
+   
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.stepTitle}>1.ข้อมูลพื้นฐาน</Text>
+        <ThemedText style={styles.stepTitle}>1.ข้อมูลพื้นฐาน</ThemedText>
 
         <View style={styles.progressTrack}>
           <View style={styles.progressFill} />
         </View>
 
         <View style={styles.formCard}>
-          <Text style={styles.label}>ชื่อผู้ใช้</Text>
+          <ThemedText style={styles.label}>ชื่อผู้ใช้</ThemedText>
           <TextInput
             style={styles.fullInput}
             value={username}
@@ -123,8 +125,8 @@ export default function RegisterStep1Screen() {
             placeholderTextColor="#8A8A8A"
           />
 
-          <Text style={styles.label}>อีเมล</Text>
-          <TextInput
+          <ThemedText style={styles.label}>อีเมล</ThemedText>
+        <TextInput
             style={styles.fullInput}
             value={email}
             onChangeText={setEmail}
@@ -134,12 +136,12 @@ export default function RegisterStep1Screen() {
             autoCapitalize="none"
           />
 
-          <Text style={styles.label}>วันเกิด</Text>
+          <ThemedText style={styles.label}>วันเกิด</ThemedText>
           <View style={styles.birthRow}>
             <Pressable style={styles.birthInputButton} onPress={openDateModal}>
-              <Text style={[styles.birthInputText, !formattedBirthDate && styles.placeholderText]}>
+              <ThemedText style={[styles.birthInputThemedThemedText, !formattedBirthDate && styles.placeholderThemedThemedText]}>
                 {formattedBirthDate || "เลือกวัน / เดือน / ปี"}
-              </Text>
+              </ThemedText>
             </Pressable>
 
             <TouchableOpacity style={styles.calendarButton} onPress={openDateModal}>
@@ -147,17 +149,17 @@ export default function RegisterStep1Screen() {
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.label}>เพศ</Text>
+          <ThemedText style={styles.label}>เพศ</ThemedText>
           <TouchableOpacity style={styles.genderBox} onPress={() => setShowGenderModal(true)}>
-            <Text style={[styles.genderText, !gender && styles.placeholderText]}>
+            <ThemedText style={[styles.genderThemedThemedText, !gender && styles.placeholderThemedThemedText]}>
               {gender || "เลือกเพศ"}
-            </Text>
+            </ThemedText>
             <Ionicons name="chevron-down" size={20} color="#777" />
           </TouchableOpacity>
 
           <View style={styles.spacer} />
 
-          <Text style={styles.label}>รหัสผ่าน</Text>
+          <ThemedText style={styles.label}>รหัสผ่าน</ThemedText>
           <View style={styles.passwordWrap}>
             <TextInput
               style={styles.passwordInput}
@@ -179,7 +181,7 @@ export default function RegisterStep1Screen() {
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.label}>ยืนยันรหัสผ่าน</Text>
+          <ThemedText style={styles.label}>ยืนยันรหัสผ่าน</ThemedText>
           <View style={styles.passwordWrap}>
             <TextInput
               style={styles.passwordInput}
@@ -203,7 +205,7 @@ export default function RegisterStep1Screen() {
         </View>
 
         <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
-          <Text style={styles.nextButtonText}>ถัดไป</Text>
+          <ThemedText style={styles.nextButtonThemedThemedText}>ถัดไป</ThemedText>
         </TouchableOpacity>
       </ScrollView>
 
@@ -211,7 +213,7 @@ export default function RegisterStep1Screen() {
         <View style={styles.modalOverlay}>
           <View style={styles.dateModalCard}>
             <View style={styles.dateModalHeader}>
-              <Text style={styles.dateModalTitle}>เลือกวันเกิด</Text>
+              <ThemedText style={styles.dateModalTitle}>เลือกวันเกิด</ThemedText>
             </View>
 
             <View style={styles.datePickerWrap}>
@@ -244,14 +246,14 @@ export default function RegisterStep1Screen() {
                 style={[styles.dateActionButton, styles.dateCancelButton]}
                 onPress={handleCancelDate}
               >
-                <Text style={styles.dateCancelText}>ยกเลิก</Text>
+                <ThemedText style={styles.dateCancelThemedThemedText}>ยกเลิก</ThemedText>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[styles.dateActionButton, styles.dateConfirmButton]}
                 onPress={handleConfirmDate}
               >
-                <Text style={styles.dateConfirmText}>ตกลง</Text>
+                <ThemedText style={styles.dateConfirmThemedThemedText}>ตกลง</ThemedText>
               </TouchableOpacity>
             </View>
           </View>
@@ -261,7 +263,7 @@ export default function RegisterStep1Screen() {
       <Modal visible={showGenderModal} transparent animationType="fade">
         <Pressable style={styles.modalOverlay} onPress={() => setShowGenderModal(false)}>
           <Pressable style={styles.genderModalCard} onPress={() => {}}>
-            <Text style={styles.genderModalTitle}>เลือกเพศ</Text>
+            <ThemedText style={styles.genderModalTitle}>เลือกเพศ</ThemedText>
 
             <TouchableOpacity
               style={styles.genderOption}
@@ -270,7 +272,7 @@ export default function RegisterStep1Screen() {
                 setShowGenderModal(false);
               }}
             >
-              <Text style={styles.genderOptionText}>ชาย</Text>
+              <ThemedText style={styles.genderOptionThemedThemedText}>ชาย</ThemedText>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -280,7 +282,7 @@ export default function RegisterStep1Screen() {
                 setShowGenderModal(false);
               }}
             >
-              <Text style={styles.genderOptionText}>หญิง</Text>
+              <ThemedText style={styles.genderOptionThemedThemedText}>หญิง</ThemedText>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -290,14 +292,14 @@ export default function RegisterStep1Screen() {
                 setShowGenderModal(false);
               }}
             >
-              <Text style={styles.genderOptionText}>อื่นๆ</Text>
+              <ThemedText style={styles.genderOptionThemedThemedText}>อื่นๆ</ThemedText>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.genderCancelButton}
               onPress={() => setShowGenderModal(false)}
             >
-              <Text style={styles.genderCancelText}>ยกเลิก</Text>
+              <ThemedText style={styles.genderCancelThemedThemedText}>ยกเลิก</ThemedText>
             </TouchableOpacity>
           </Pressable>
         </Pressable>
@@ -323,7 +325,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     position: "relative",
   },
-  headerBarText: {
+  headerBarThemedThemedText: {
     color: "#fff",
     fontSize: 20,
     fontWeight: "900",
@@ -340,7 +342,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: "rgba(0,0,0,0.14)",
   },
-  homeBackText: {
+  homeBackThemedThemedText: {
     color: "#fff",
     fontSize: 12,
     fontWeight: "800",
@@ -420,11 +422,11 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  birthInputText: {
+  birthInputThemedThemedText: {
     fontSize: 16,
     color: "#333",
   },
-  placeholderText: {
+  placeholderThemedThemedText: {
     color: "#8A8A8A",
   },
   calendarButton: {
@@ -449,7 +451,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  genderText: {
+  genderThemedThemedText: {
     fontSize: 16,
     color: "#333",
   },
@@ -490,7 +492,7 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 5,
   },
-  nextButtonText: {
+  nextButtonThemedThemedText: {
     color: "#fff",
     fontSize: 22,
     fontWeight: "900",
@@ -541,12 +543,12 @@ const styles = StyleSheet.create({
   dateConfirmButton: {
     backgroundColor: ORANGE,
   },
-  dateCancelText: {
+  dateCancelThemedThemedText: {
     color: "#444",
     fontSize: 16,
     fontWeight: "800",
   },
-  dateConfirmText: {
+  dateConfirmThemedThemedText: {
     color: "#fff",
     fontSize: 16,
     fontWeight: "900",
@@ -569,7 +571,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#EEE",
   },
-  genderOptionText: {
+  genderOptionThemedThemedText: {
     fontSize: 17,
     fontWeight: "700",
     color: "#222",
@@ -581,7 +583,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: "center",
   },
-  genderCancelText: {
+  genderCancelThemedThemedText: {
     fontSize: 16,
     fontWeight: "800",
     color: "#333",

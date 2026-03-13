@@ -67,7 +67,7 @@ export default function RegisterStep5Screen() {
   };
 
   const goNext = () => {
-    router.push("/register/step6");
+    router.push("/register/step6-1");
   };
 
   return (
