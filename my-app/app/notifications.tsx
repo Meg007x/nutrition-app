@@ -1,55 +1,107 @@
-import React from "react";
-import { View, Text, StyleSheet, Pressable } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { Platform } from "react-native";
+import * as Notifications from "expo-notifications";
 
-export default function NotificationsScreen() {
+const isWeb = Platform.OS === "web";
+
+if (!isWeb) {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }),
+  });
+}
+
+export async function ensureNotificationPermissions() {
+  if (isWeb) {
+    return false;
+  }
+
+  const settings = await Notifications.getPermissionsAsync();
+
+  if (
+    settings.granted ||
+    settings.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL
+  ) {
+    return true;
+  }
+
+  const request = await Notifications.requestPermissionsAsync();
+
   return (
-    <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()}>
-          <Text style={styles.back}>‹ กลับ</Text>
-        </Pressable>
-
-        <Text style={styles.title}>แจ้งเตือน</Text>
-
-        <View style={{ width: 40 }} />
-      </View>
-
-      <View style={styles.body}>
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>ตัวอย่างแจ้งเตือน</Text>
-          <Text style={styles.cardBody}>
-            ตอนนี้ยังเป็นตัวอย่าง — ขั้นต่อไปค่อยดึงจาก backend/collection NotificationSettings
-          </Text>
-        </View>
-      </View>
-    </SafeAreaView>
+    request.granted ||
+    request.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#fff" },
-  header: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
-  },
-  back: { color: "#2e7d32", fontWeight: "900" },
-  title: { fontSize: 18, fontWeight: "900" },
+export async function setupNotificationChannel() {
+  if (isWeb) return;
 
-  body: { padding: 16 },
-  card: {
-    borderWidth: 1,
-    borderColor: "#eee",
-    borderRadius: 14,
-    padding: 14,
-    backgroundColor: "#fff",
-  },
-  cardTitle: { fontWeight: "900", fontSize: 16 },
-  cardBody: { marginTop: 6, color: "#555", fontWeight: "600" },
-});
+  if (Platform.OS === "android") {
+    await Notifications.setNotificationChannelAsync("meal-reminders", {
+      name: "Meal Reminders",
+      importance: Notifications.AndroidImportance.HIGH,
+      vibrationPattern: [0, 250, 250, 250],
+      sound: "default",
+    });
+  }
+}
+
+export async function cancelAllMealNotifications() {
+  if (isWeb) return;
+  await Notifications.cancelAllScheduledNotificationsAsync();
+}
+
+type MealReminderItem = {
+  id: string;
+  name: string;
+  time: string;
+  notify: boolean;
+};
+
+export async function scheduleMealNotifications(meals: MealReminderItem[]) {
+  if (isWeb) {
+    return { ok: false, reason: "web_not_supported" as const };
+  }
+
+  const granted = await ensureNotificationPermissions();
+
+  if (!granted) {
+    return { ok: false, reason: "permission_denied" as const };
+  }
+
+  await setupNotificationChannel();
+  await cancelAllMealNotifications();
+
+  const scheduledIds: string[] = [];
+
+  for (const meal of meals) {
+    if (!meal.notify) continue;
+
+    const [hourStr, minuteStr] = meal.time.split(":");
+    const hour = Number(hourStr);
+    const minute = Number(minuteStr);
+
+    if (Number.isNaN(hour) || Number.isNaN(minute)) continue;
+
+    const id = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: `ถึงเวลามื้อ${meal.name}`,
+        body: `ได้เวลารับประทานมื้อ${meal.name}แล้ว`,
+        sound: "default",
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DAILY,
+        hour,
+        minute,
+        channelId: "meal-reminders",
+      },
+    });
+
+    scheduledIds.push(id);
+  }
+
+  return { ok: true, ids: scheduledIds };
+}

@@ -2,31 +2,40 @@ import React, { useMemo, useState } from "react";
 import {
   View,
   StyleSheet,
-TextInput,
+  TextInput,
   TouchableOpacity,
   ScrollView,
-  Alert,
   Modal,
   Pressable,
   Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { ThemedText } from '../../components/themed-text'; 
+import { ThemedText } from "../../components/themed-text";
 import DateTimePicker, {
   DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
-
+import { useRegister } from "../../context/register-context";
+import type { Gender } from "../../types/register-types";
 
 export default function RegisterStep1Screen() {
-  const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
-  const [birthDate, setBirthDate] = useState<Date | null>(null);
-  const [tempBirthDate, setTempBirthDate] = useState<Date>(new Date(2004, 4, 14));
-  const [gender, setGender] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const router = useRouter();
+  const { form, updateForm } = useRegister();
+
+  const [username, setUsername] = useState(form.username || form.name || "");
+  const [email, setEmail] = useState(form.email || "");
+  const [birthDate, setBirthDate] = useState<Date | null>(
+    form.dateOfBirth ? new Date(form.dateOfBirth) : null
+  );
+  const [tempBirthDate, setTempBirthDate] = useState<Date>(
+    form.dateOfBirth ? new Date(form.dateOfBirth) : new Date(2004, 4, 14)
+  );
+  const [gender, setGender] = useState<Gender>(form.gender || "");
+  const [password, setPassword] = useState(form.password || "");
+  const [confirmPassword, setConfirmPassword] = useState(
+    form.confirmPassword || ""
+  );
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -35,12 +44,15 @@ export default function RegisterStep1Screen() {
   const [showDatePickerIOS, setShowDatePickerIOS] = useState(false);
   const [showGenderModal, setShowGenderModal] = useState(false);
 
+  const [errorMessage, setErrorMessage] = useState("");
+  const [debugMessage, setDebugMessage] = useState("");
+
   const formattedBirthDate = useMemo(() => {
     if (!birthDate) return "";
 
     const day = birthDate.getDate();
     const month = birthDate.toLocaleString("th-TH", { month: "long" });
-    const year = birthDate.getFullYear(); // ค.ศ.
+    const year = birthDate.getFullYear();
 
     return `${day} ${month} ${year}`;
   }, [birthDate]);
@@ -56,7 +68,10 @@ export default function RegisterStep1Screen() {
     }
   };
 
-  const handleDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
+  const handleDateChange = (
+    event: DateTimePickerEvent,
+    selectedDate?: Date
+  ) => {
     if (Platform.OS === "android") {
       if (event.type === "set" && selectedDate) {
         setTempBirthDate(selectedDate);
@@ -79,31 +94,97 @@ export default function RegisterStep1Screen() {
     setShowDatePickerIOS(false);
   };
 
+  const calculateAgeFromBirthDate = (date: Date) => {
+    const today = new Date();
+    let age = today.getFullYear() - date.getFullYear();
+    const monthDiff = today.getMonth() - date.getMonth();
+
+    if (
+      monthDiff < 0 ||
+      (monthDiff === 0 && today.getDate() < date.getDate())
+    ) {
+      age--;
+    }
+
+    return String(age);
+  };
+
   const handleNext = () => {
-    if (!username || !email || !birthDate || !gender || !password || !confirmPassword) {
-      Alert.alert("กรอกข้อมูลไม่ครบ", "กรุณากรอกข้อมูลให้ครบทุกช่อง");
+    setErrorMessage("");
+    setDebugMessage("กดปุ่มแล้ว");
+
+    if (
+      !username.trim() ||
+      !email.trim() ||
+      !birthDate ||
+      !gender ||
+      !password ||
+      !confirmPassword
+    ) {
+      setErrorMessage("กรุณากรอกข้อมูลให้ครบทุกช่อง");
+      setDebugMessage("ไม่ผ่าน: ข้อมูลไม่ครบ");
+      return;
+    }
+
+    const trimmedEmail = email.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailRegex.test(trimmedEmail)) {
+      setErrorMessage("กรุณากรอกอีเมลให้ถูกต้อง");
+      setDebugMessage("ไม่ผ่าน: อีเมลไม่ถูกต้อง");
+      return;
+    }
+
+    if (password.length < 6) {
+      setErrorMessage("รหัสผ่านควรมีอย่างน้อย 6 ตัวอักษร");
+      setDebugMessage("ไม่ผ่าน: รหัสผ่านสั้น");
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert("รหัสผ่านไม่ตรงกัน", "กรุณาตรวจสอบรหัสผ่านอีกครั้ง");
+      setErrorMessage("กรุณาตรวจสอบรหัสผ่านอีกครั้ง");
+      setDebugMessage("ไม่ผ่าน: รหัสผ่านไม่ตรงกัน");
       return;
     }
 
-    router.push("/register/step2");
+    try {
+      updateForm({
+        username: username.trim(),
+        name: username.trim(),
+        email: trimmedEmail,
+        password,
+        confirmPassword,
+        dateOfBirth: birthDate.toISOString(),
+        age: calculateAgeFromBirthDate(birthDate),
+        gender,
+      });
+
+      setDebugMessage("ผ่าน validation แล้ว กำลังไป step2");
+      router.replace("/register/step2");
+    } catch (error) {
+      console.error("step1 handleNext error:", error);
+      setErrorMessage("เกิดข้อผิดพลาดระหว่างบันทึกข้อมูล");
+      setDebugMessage(`error: ${String(error)}`);
+    }
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.headerBar}>
-        <TouchableOpacity style={styles.homeBackButton} onPress={() => router.replace("/")}>
+        <TouchableOpacity
+          style={styles.homeBackButton}
+          onPress={() => router.replace("/")}
+        >
           <Ionicons name="arrow-back" size={16} color="#fff" />
-          <ThemedText style={styles.homeBackThemedThemedText}>หน้าแรก</ThemedText>
+          <ThemedText style={styles.homeBackThemedThemedText}>
+            หน้าแรก
+          </ThemedText>
         </TouchableOpacity>
 
-        <ThemedText style={styles.headerBarThemedThemedText}>ลงทะเบียนผู้ใช้งาน</ThemedText>
+        <ThemedText style={styles.headerBarThemedThemedText}>
+          ลงทะเบียนผู้ใช้งาน
+        </ThemedText>
       </View>
-   
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
@@ -114,6 +195,13 @@ export default function RegisterStep1Screen() {
         <View style={styles.progressTrack}>
           <View style={styles.progressFill} />
         </View>
+
+        <ThemedText style={styles.debugText}>{debugMessage}</ThemedText>
+        {!!errorMessage && (
+          <View style={styles.errorBox}>
+            <ThemedText style={styles.errorText}>{errorMessage}</ThemedText>
+          </View>
+        )}
 
         <View style={styles.formCard}>
           <ThemedText style={styles.label}>ชื่อผู้ใช้</ThemedText>
@@ -126,7 +214,7 @@ export default function RegisterStep1Screen() {
           />
 
           <ThemedText style={styles.label}>อีเมล</ThemedText>
-        <TextInput
+          <TextInput
             style={styles.fullInput}
             value={email}
             onChangeText={setEmail}
@@ -139,19 +227,35 @@ export default function RegisterStep1Screen() {
           <ThemedText style={styles.label}>วันเกิด</ThemedText>
           <View style={styles.birthRow}>
             <Pressable style={styles.birthInputButton} onPress={openDateModal}>
-              <ThemedText style={[styles.birthInputThemedThemedText, !formattedBirthDate && styles.placeholderThemedThemedText]}>
+              <ThemedText
+                style={[
+                  styles.birthInputThemedThemedText,
+                  !formattedBirthDate && styles.placeholderThemedThemedText,
+                ]}
+              >
                 {formattedBirthDate || "เลือกวัน / เดือน / ปี"}
               </ThemedText>
             </Pressable>
 
-            <TouchableOpacity style={styles.calendarButton} onPress={openDateModal}>
+            <TouchableOpacity
+              style={styles.calendarButton}
+              onPress={openDateModal}
+            >
               <Ionicons name="calendar-outline" size={28} color="#111" />
             </TouchableOpacity>
           </View>
 
           <ThemedText style={styles.label}>เพศ</ThemedText>
-          <TouchableOpacity style={styles.genderBox} onPress={() => setShowGenderModal(true)}>
-            <ThemedText style={[styles.genderThemedThemedText, !gender && styles.placeholderThemedThemedText]}>
+          <TouchableOpacity
+            style={styles.genderBox}
+            onPress={() => setShowGenderModal(true)}
+          >
+            <ThemedText
+              style={[
+                styles.genderThemedThemedText,
+                !gender && styles.placeholderThemedThemedText,
+              ]}
+            >
               {gender || "เลือกเพศ"}
             </ThemedText>
             <Ionicons name="chevron-down" size={20} color="#777" />
@@ -205,7 +309,9 @@ export default function RegisterStep1Screen() {
         </View>
 
         <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
-          <ThemedText style={styles.nextButtonThemedThemedText}>ถัดไป</ThemedText>
+          <ThemedText style={styles.nextButtonThemedThemedText}>
+            ถัดไป
+          </ThemedText>
         </TouchableOpacity>
       </ScrollView>
 
@@ -213,7 +319,9 @@ export default function RegisterStep1Screen() {
         <View style={styles.modalOverlay}>
           <View style={styles.dateModalCard}>
             <View style={styles.dateModalHeader}>
-              <ThemedText style={styles.dateModalTitle}>เลือกวันเกิด</ThemedText>
+              <ThemedText style={styles.dateModalTitle}>
+                เลือกวันเกิด
+              </ThemedText>
             </View>
 
             <View style={styles.datePickerWrap}>
@@ -246,14 +354,18 @@ export default function RegisterStep1Screen() {
                 style={[styles.dateActionButton, styles.dateCancelButton]}
                 onPress={handleCancelDate}
               >
-                <ThemedText style={styles.dateCancelThemedThemedText}>ยกเลิก</ThemedText>
+                <ThemedText style={styles.dateCancelThemedThemedText}>
+                  ยกเลิก
+                </ThemedText>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[styles.dateActionButton, styles.dateConfirmButton]}
                 onPress={handleConfirmDate}
               >
-                <ThemedText style={styles.dateConfirmThemedThemedText}>ตกลง</ThemedText>
+                <ThemedText style={styles.dateConfirmThemedThemedText}>
+                  ตกลง
+                </ThemedText>
               </TouchableOpacity>
             </View>
           </View>
@@ -261,7 +373,10 @@ export default function RegisterStep1Screen() {
       </Modal>
 
       <Modal visible={showGenderModal} transparent animationType="fade">
-        <Pressable style={styles.modalOverlay} onPress={() => setShowGenderModal(false)}>
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowGenderModal(false)}
+        >
           <Pressable style={styles.genderModalCard} onPress={() => {}}>
             <ThemedText style={styles.genderModalTitle}>เลือกเพศ</ThemedText>
 
@@ -272,7 +387,9 @@ export default function RegisterStep1Screen() {
                 setShowGenderModal(false);
               }}
             >
-              <ThemedText style={styles.genderOptionThemedThemedText}>ชาย</ThemedText>
+              <ThemedText style={styles.genderOptionThemedThemedText}>
+                ชาย
+              </ThemedText>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -282,7 +399,9 @@ export default function RegisterStep1Screen() {
                 setShowGenderModal(false);
               }}
             >
-              <ThemedText style={styles.genderOptionThemedThemedText}>หญิง</ThemedText>
+              <ThemedText style={styles.genderOptionThemedThemedText}>
+                หญิง
+              </ThemedText>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -292,14 +411,18 @@ export default function RegisterStep1Screen() {
                 setShowGenderModal(false);
               }}
             >
-              <ThemedText style={styles.genderOptionThemedThemedText}>อื่นๆ</ThemedText>
+              <ThemedText style={styles.genderOptionThemedThemedText}>
+                อื่นๆ
+              </ThemedText>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.genderCancelButton}
               onPress={() => setShowGenderModal(false)}
             >
-              <ThemedText style={styles.genderCancelThemedThemedText}>ยกเลิก</ThemedText>
+              <ThemedText style={styles.genderCancelThemedThemedText}>
+                ยกเลิก
+              </ThemedText>
             </TouchableOpacity>
           </Pressable>
         </Pressable>
@@ -369,6 +492,25 @@ const styles = StyleSheet.create({
     height: "100%",
     backgroundColor: ORANGE,
     borderRadius: 999,
+  },
+  debugText: {
+    marginTop: 12,
+    color: "#0A66C2",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  errorBox: {
+    marginTop: 10,
+    backgroundColor: "#FDECEC",
+    borderWidth: 1,
+    borderColor: "#E57373",
+    borderRadius: 10,
+    padding: 10,
+  },
+  errorText: {
+    color: "#B00020",
+    fontSize: 14,
+    fontWeight: "700",
   },
   formCard: {
     marginTop: 12,

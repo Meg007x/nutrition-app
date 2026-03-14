@@ -13,20 +13,21 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useRegister } from "../../context/register-context";
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
-const ORANGE    = "#F5A400";
+const ORANGE = "#F5A400";
 const ORANGE_DK = "#C97D00";
-const BG        = "#F1F1F1";
-const RULER_BG  = "#EDE0CC";
-const RULER_LINE = "#8B7355";
-const WHITE     = "#FFFFFF";
+const BG = "#F1F1F1";
+const RULER_BG = "#EDE0CC";
+const WHITE = "#FFFFFF";
 
 // ─── Ruler Config ─────────────────────────────────────────────────────────────
-const MIN_CM      = 100;
-const MAX_CM      = 220;
+const MIN_CM = 100;
+const MAX_CM = 220;
 const ITEM_HEIGHT = 13;
 const RULER_WIDTH = 110;
+const DEFAULT_HEIGHT_CM = 171;
 
 const HEIGHT_DATA = Array.from(
   { length: MAX_CM - MIN_CM + 1 },
@@ -34,50 +35,88 @@ const HEIGHT_DATA = Array.from(
 );
 
 export default function RegisterStep2Screen() {
-  const [unit, setUnit]                   = useState<"cm" | "ft">("cm");
-  const [heightCm, setHeightCm]           = useState(171);
+  const { form, updateForm } = useRegister();
+
+  const initialHeight = form.heightCm ? Number(form.heightCm) : DEFAULT_HEIGHT_CM;
+
+  const [unit, setUnit] = useState<"cm" | "ft">("cm");
+  const [heightCm, setHeightCm] = useState(initialHeight);
   const [showInfoModal, setShowInfoModal] = useState(false);
 
-  const flatListRef  = useRef<FlatList<number>>(null);
+  const flatListRef = useRef<FlatList<number>>(null);
+  const hasInitializedRef = useRef(false);
+
   const currentIndex = useMemo(() => MAX_CM - heightCm, [heightCm]);
 
-  // centerPad is set dynamically from onLayout
   const [rulerHeight, setRulerHeight] = useState(400);
   const centerPad = rulerHeight / 2 - ITEM_HEIGHT / 2;
 
   const displayValue = useMemo(() => {
     if (unit === "cm") return `${heightCm}`;
+
     const totalInches = heightCm / 2.54;
-    const feet        = Math.floor(totalInches / 12);
-    const inches      = Math.round(totalInches % 12);
+    const feet = Math.floor(totalInches / 12);
+    const inches = Math.round(totalInches % 12);
     return `${feet}'${inches}"`;
   }, [heightCm, unit]);
 
+  const updateHeightFromOffset = (offsetY: number) => {
+    const index = Math.round(offsetY / ITEM_HEIGHT);
+    const clamped = Math.max(0, Math.min(index, HEIGHT_DATA.length - 1));
+    const nextHeight = HEIGHT_DATA[clamped];
+
+    setHeightCm((prev) => (prev === nextHeight ? prev : nextHeight));
+  };
+
+  const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const offsetY = e.nativeEvent.contentOffset.y;
+    updateHeightFromOffset(offsetY);
+  };
+
   const handleScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const offsetY = e.nativeEvent.contentOffset.y;
-    const index   = Math.round(offsetY / ITEM_HEIGHT);
-    const clamped = Math.max(0, Math.min(index, HEIGHT_DATA.length - 1));
-    setHeightCm(HEIGHT_DATA[clamped]);
+    updateHeightFromOffset(offsetY);
+  };
+
+  const handleRulerLayout = (height: number) => {
+    setRulerHeight(height);
+
+    if (!hasInitializedRef.current) {
+      hasInitializedRef.current = true;
+
+      requestAnimationFrame(() => {
+        flatListRef.current?.scrollToOffset({
+          offset: currentIndex * ITEM_HEIGHT,
+          animated: false,
+        });
+      });
+    }
+  };
+
+  const handleNext = () => {
+    updateForm({
+      heightCm: String(heightCm),
+    });
+
+    router.push("/register/step3");
   };
 
   const renderRulerItem = ({ item }: { item: number }) => {
-    const isMajor  = item % 10 === 0;
-    const isMedium = item % 5  === 0 && !isMajor;
+    const isMajor = item % 10 === 0;
+    const isMedium = item % 5 === 0 && !isMajor;
 
     return (
       <View style={styles.rulerRow}>
-        {/* Label — only on major ticks */}
         {isMajor ? (
           <Text style={styles.rulerLabelMajor}>{item}</Text>
         ) : (
           <View style={styles.rulerLabelSpacer} />
         )}
 
-        {/* Tick mark flush right */}
         <View
           style={[
             styles.tick,
-            isMajor  && styles.tickMajor,
+            isMajor && styles.tickMajor,
             isMedium && styles.tickMedium,
           ]}
         />
@@ -87,20 +126,17 @@ export default function RegisterStep2Screen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-
-      {/* ── Orange Header ── */}
       <View style={styles.headerBar}>
         <Text style={styles.headerBarText}>ลงทะเบียนผู้ใช้งาน</Text>
       </View>
 
       <View style={styles.body}>
-
-        {/* Step title + help */}
         <View style={styles.titleRow}>
           <Text style={styles.stepTitle}>2.ส่วนสูง</Text>
           <TouchableOpacity
             style={styles.helpRow}
             onPress={() => setShowInfoModal(true)}
+            activeOpacity={0.8}
           >
             <Ionicons name="alert-circle-outline" size={20} color="#111" />
             <Text style={styles.helpText}>วัดยังไงให้แม่นยำ?</Text>
@@ -108,18 +144,15 @@ export default function RegisterStep2Screen() {
           </TouchableOpacity>
         </View>
 
-        {/* Progress bar */}
         <View style={styles.progressTrack}>
           <View style={styles.progressFill} />
         </View>
 
-        {/* Question */}
         <Text style={styles.questionTitle}>ส่วนสูงของคุณคือเท่าไหร่ ?</Text>
         <Text style={styles.questionDesc}>
           ส่วนสูงของคุณจะช่วยให้สามารถปรับ{"\n"}แต่งแผนการกินได้อย่างแม่นยำ
         </Text>
 
-        {/* Unit Toggle */}
         <View style={styles.unitToggleWrap}>
           {(["cm", "ft"] as const).map((u) => (
             <TouchableOpacity
@@ -128,44 +161,46 @@ export default function RegisterStep2Screen() {
               onPress={() => setUnit(u)}
               activeOpacity={0.8}
             >
-              <Text style={[styles.unitText, unit === u && styles.unitTextActive]}>
+              <Text
+                style={[styles.unitText, unit === u && styles.unitTextActive]}
+              >
                 {u}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        {/* ── Main display area ── */}
         <View style={styles.displayArea}>
-
-          {/* ── Left zone: value display ── */}
-          <View style={styles.leftZone} pointerEvents="none">
+          <View style={styles.leftZone} pointerEvents="box-none">
             <View style={styles.valueBlock}>
               <Text style={styles.bigValue}>{displayValue}</Text>
               <Text style={styles.bigUnit}>{unit}</Text>
             </View>
           </View>
 
-          {/* ── Orange selection line ── */}
           <View style={styles.selectionLine} pointerEvents="none">
-            {/* Triangle pointer on right edge pointing into ruler */}
             <View style={styles.lineArrow} />
           </View>
 
-          {/* ── Ruler strip right ── */}
           <View
             style={styles.rulerContainer}
-            onLayout={(e) => setRulerHeight(e.nativeEvent.layout.height)}
+            onLayout={(e) => handleRulerLayout(e.nativeEvent.layout.height)}
           >
-            {/* Top fade */}
-            <View style={[styles.rulerFade, styles.rulerFadeTop]} pointerEvents="none" />
+            <View
+              style={[styles.rulerFade, styles.rulerFadeTop]}
+              pointerEvents="none"
+            />
 
             <FlatList
               ref={flatListRef}
               data={HEIGHT_DATA}
               keyExtractor={(item) => item.toString()}
               renderItem={renderRulerItem}
-              showsVerticalScrollIndicator={false}
+              style={styles.rulerList}
+              scrollEnabled
+              nestedScrollEnabled
+              showsVerticalScrollIndicator
+              scrollEventThrottle={16}
               snapToInterval={ITEM_HEIGHT}
               decelerationRate="fast"
               bounces={false}
@@ -178,20 +213,20 @@ export default function RegisterStep2Screen() {
                 paddingTop: centerPad,
                 paddingBottom: centerPad,
               }}
-              initialScrollIndex={currentIndex}
+              onScroll={handleScroll}
               onMomentumScrollEnd={handleScrollEnd}
               onScrollEndDrag={handleScrollEnd}
             />
 
-            {/* Bottom fade */}
-            <View style={[styles.rulerFade, styles.rulerFadeBottom]} pointerEvents="none" />
+            <View
+              style={[styles.rulerFade, styles.rulerFadeBottom]}
+              pointerEvents="none"
+            />
 
-            {/* Left border of ruler */}
             <View style={styles.rulerBorder} pointerEvents="none" />
           </View>
         </View>
 
-        {/* ── Buttons ── */}
         <View style={styles.bottomRow}>
           <TouchableOpacity
             style={styles.backButton}
@@ -203,7 +238,7 @@ export default function RegisterStep2Screen() {
 
           <TouchableOpacity
             style={styles.nextButton}
-            onPress={() => router.push("/register/step3")}
+            onPress={handleNext}
             activeOpacity={0.8}
           >
             <Text style={styles.nextButtonText}>ถัดไป</Text>
@@ -211,9 +246,11 @@ export default function RegisterStep2Screen() {
         </View>
       </View>
 
-      {/* ── Info Modal ── */}
       <Modal visible={showInfoModal} transparent animationType="fade">
-        <Pressable style={styles.modalOverlay} onPress={() => setShowInfoModal(false)}>
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowInfoModal(false)}
+        >
           <Pressable style={styles.modalCard} onPress={() => {}}>
             <Text style={styles.modalTitle}>วิธีวัดส่วนสูงให้แม่นยำ</Text>
             <Text style={styles.modalBody}>
@@ -241,8 +278,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: BG,
   },
-
-  // ── Header ──
   headerBar: {
     backgroundColor: ORANGE,
     paddingVertical: 16,
@@ -255,16 +290,12 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: 0.3,
   },
-
-  // ── Body ──
   body: {
     flex: 1,
     paddingHorizontal: 16,
     paddingTop: 14,
     paddingBottom: 20,
   },
-
-  // ── Title row ──
   titleRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -286,8 +317,6 @@ const styles = StyleSheet.create({
     color: "#444",
     fontWeight: "700",
   },
-
-  // ── Progress bar ──
   progressTrack: {
     width: "100%",
     height: 6,
@@ -302,8 +331,6 @@ const styles = StyleSheet.create({
     backgroundColor: ORANGE,
     borderRadius: 999,
   },
-
-  // ── Question ──
   questionTitle: {
     fontSize: 20,
     fontWeight: "900",
@@ -318,8 +345,6 @@ const styles = StyleSheet.create({
     lineHeight: 23,
     marginBottom: 16,
   },
-
-  // ── Unit Toggle ──
   unitToggleWrap: {
     flexDirection: "row",
     alignSelf: "center",
@@ -347,26 +372,22 @@ const styles = StyleSheet.create({
   unitTextActive: {
     color: WHITE,
   },
-
-  // ── Display area ──
   displayArea: {
     flex: 1,
     backgroundColor: WHITE,
     position: "relative",
     overflow: "hidden",
   },
-
-  // Left zone with value — sits just above the orange center line
   leftZone: {
     position: "absolute",
     left: 0,
     top: 0,
-    bottom: "50%",          // only occupies top half (above the line)
-    right: RULER_WIDTH + 16, // gap from ruler
+    bottom: "50%",
+    right: RULER_WIDTH + 16,
     zIndex: 2,
     justifyContent: "flex-end",
     paddingLeft: 16,
-    paddingBottom: 10,      // gap between number and the orange line
+    paddingBottom: 10,
   },
   valueBlock: {
     flexDirection: "row",
@@ -389,8 +410,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     letterSpacing: -0.5,
   },
-
-  // Orange center line
   selectionLine: {
     position: "absolute",
     left: 0,
@@ -403,7 +422,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
-  // Small right-pointing arrow on the line
   lineArrow: {
     position: "absolute",
     right: RULER_WIDTH - 1,
@@ -416,8 +434,6 @@ const styles = StyleSheet.create({
     borderBottomColor: "transparent",
     borderLeftColor: ORANGE_DK,
   },
-
-  // Ruler strip
   rulerContainer: {
     position: "absolute",
     right: 0,
@@ -426,6 +442,10 @@ const styles = StyleSheet.create({
     width: RULER_WIDTH,
     backgroundColor: RULER_BG,
     zIndex: 4,
+  },
+  rulerList: {
+    flex: 1,
+    width: "100%",
   },
   rulerBorder: {
     position: "absolute",
@@ -444,7 +464,6 @@ const styles = StyleSheet.create({
   },
   rulerFadeTop: {
     top: 0,
-    // Simulated fade using background — actual LinearGradient needs expo-linear-gradient
     backgroundColor: RULER_BG,
     opacity: 0.78,
   },
@@ -453,8 +472,6 @@ const styles = StyleSheet.create({
     backgroundColor: RULER_BG,
     opacity: 0.78,
   },
-
-  // Ruler rows
   rulerRow: {
     height: ITEM_HEIGHT,
     flexDirection: "row",
@@ -487,8 +504,6 @@ const styles = StyleSheet.create({
     height: 2.5,
     backgroundColor: "#3A3028",
   },
-
-  // ── Buttons ──
   bottomRow: {
     marginTop: 16,
     flexDirection: "row",
@@ -531,8 +546,6 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: "900",
   },
-
-  // ── Modal ──
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.38)",

@@ -4,256 +4,527 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  ScrollView,
   Modal,
   Pressable,
   TextInput,
   Keyboard,
   TouchableWithoutFeedback,
-  ScrollView,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useRegister } from "../../context/register-context";
 
 const ORANGE = "#F5A400";
 const BG = "#F3F3F3";
+const WHITE = "#FFFFFF";
 
-const mockWeightKg = 66;
+type ActivityLevel = "low" | "medium" | "high" | "very_high";
+type ProteinLevel = "low" | "medium" | "high";
+type ProteinMode = "auto" | "custom";
 
-const activityOptions = [
-  { key: "low", title: "น้อย", subtitle: "เดินน้อย ทำงานนั่ง" },
-  { key: "medium", title: "ปานกลาง", subtitle: "เดินบ้าง" },
-  { key: "high", title: "มาก", subtitle: "ขยับเยอะ" },
-  { key: "heavy", title: "หนัก", subtitle: "ทำกิจกรรมหนัก" },
+const activityOptions: {
+  label: string;
+  value: ActivityLevel;
+  desc: string;
+}[] = [
+  {
+    label: "น้อย",
+    value: "low",
+    desc: "นั่งทำงานเป็นส่วนใหญ่ หรือออกกำลังกายน้อยมาก",
+  },
+  {
+    label: "ปานกลาง",
+    value: "medium",
+    desc: "มีการเดินหรือออกกำลังกายเบา ๆ 2-3 วันต่อสัปดาห์",
+  },
+  {
+    label: "มาก",
+    value: "high",
+    desc: "ออกกำลังกายสม่ำเสมอ หรือใช้ร่างกายค่อนข้างมาก",
+  },
+  {
+    label: "หนัก",
+    value: "very_high",
+    desc: "ออกกำลังกายหนักหรือใช้แรงงานเป็นประจำเกือบทุกวัน",
+  },
+];
+
+const proteinOptions: {
+  label: string;
+  value: ProteinLevel;
+  desc: string;
+  hint: string;
+}[] = [
+  {
+    label: "พื้นฐาน",
+    value: "low",
+    desc: "เหมาะกับคนทั่วไปที่ต้องการดูแลสุขภาพ",
+    hint: "ประมาณ 1.2 กรัม / กก.",
+  },
+  {
+    label: "สมดุล",
+    value: "medium",
+    desc: "เหมาะกับคนที่ออกกำลังกายสม่ำเสมอ",
+    hint: "ประมาณ 1.6 กรัม / กก.",
+  },
+  {
+    label: "สูง",
+    value: "high",
+    desc: "เหมาะกับคนที่เน้นสร้างกล้ามเนื้อหรือควบคุมน้ำหนัก",
+    hint: "ประมาณ 2.0 กรัม / กก.",
+  },
 ];
 
 export default function RegisterStep5Screen() {
-  const [activity, setActivity] = useState("medium");
-  const [manualProtein, setManualProtein] = useState("");
-  const [showActivityInfo, setShowActivityInfo] = useState(false);
-  const [showProteinInfo, setShowProteinInfo] = useState(false);
+  const { form, updateForm, calculateRecommendedProtein } = useRegister();
 
-  const aiProtein = useMemo(() => {
-    let multiplier = 1.6;
+  const currentWeight = form.weightKg ? Number(form.weightKg) : 0;
 
-    if (activity === "low") multiplier = 1.2;
-    if (activity === "medium") multiplier = 1.6;
-    if (activity === "high") multiplier = 1.8;
-    if (activity === "heavy") multiplier = 2.0;
+  const [selectedActivity, setSelectedActivity] = useState<ActivityLevel>(
+    (form.activityLevel as ActivityLevel) || "medium"
+  );
 
-    return Math.round(mockWeightKg * multiplier);
-  }, [activity]);
+  const [selectedProtein, setSelectedProtein] = useState<ProteinLevel>(
+    (form.proteinLevel as ProteinLevel) || "medium"
+  );
 
-  const parsedProtein = useMemo(() => {
-    const n = parseFloat(manualProtein);
-    return Number.isFinite(n) ? n : 0;
-  }, [manualProtein]);
+  const [proteinMode, setProteinMode] = useState<ProteinMode>(
+    form.recommendedProteinG ? "custom" : "auto"
+  );
 
-  const increaseProtein = () => {
+  const [customProtein, setCustomProtein] = useState(
+    form.recommendedProteinG ? String(form.recommendedProteinG) : ""
+  );
+
+  const [showActivityModal, setShowActivityModal] = useState(false);
+  const [showProteinModal, setShowProteinModal] = useState(false);
+
+  const autoRecommendedProtein = useMemo(() => {
+    const result = calculateRecommendedProtein(
+      String(currentWeight || 0),
+      selectedProtein as any
+    );
+    return result ?? 0;
+  }, [calculateRecommendedProtein, currentWeight, selectedProtein]);
+
+  const finalProtein = useMemo(() => {
+    if (proteinMode === "custom") {
+      const parsed = Number(customProtein);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+    }
+
+    return autoRecommendedProtein > 0 ? autoRecommendedProtein : 0;
+  }, [proteinMode, customProtein, autoRecommendedProtein]);
+
+  const activityLabel = useMemo(() => {
+    return (
+      activityOptions.find((item) => item.value === selectedActivity)?.label ?? "-"
+    );
+  }, [selectedActivity]);
+
+  const proteinLabel = useMemo(() => {
+    return (
+      proteinOptions.find((item) => item.value === selectedProtein)?.label ?? "-"
+    );
+  }, [selectedProtein]);
+
+  const proteinHint = useMemo(() => {
+    return (
+      proteinOptions.find((item) => item.value === selectedProtein)?.hint ?? "-"
+    );
+  }, [selectedProtein]);
+
+  const handleSelectProteinMode = (mode: ProteinMode) => {
     Keyboard.dismiss();
-    const next = Math.min(400, parsedProtein + 1);
-    setManualProtein(String(next));
+    setProteinMode(mode);
+
+    if (mode === "auto") {
+      // เมื่อเลือกให้ระบบคำนวณ จะไม่ใช้ค่ากรอกเอง
+      setCustomProtein("");
+    }
+
+    if (mode === "custom") {
+      // เมื่อเลือกกรอกเอง ให้ใส่ค่าเริ่มต้นจาก auto เพื่อแก้ไขต่อได้สะดวก
+      if (!customProtein && autoRecommendedProtein > 0) {
+        setCustomProtein(String(autoRecommendedProtein));
+      }
+    }
   };
 
-  const decreaseProtein = () => {
+  const handleChangeCustomProtein = (text: string) => {
+    const cleaned = text.replace(/[^0-9.]/g, "");
+    const parts = cleaned.split(".");
+    const normalized =
+      parts.length > 2 ? `${parts[0]}.${parts.slice(1).join("")}` : cleaned;
+
+    setCustomProtein(normalized);
+  };
+
+  const handleBlurCustomProtein = () => {
+    if (!customProtein.trim()) return;
+
+    const parsed = Number(customProtein);
+    if (!Number.isFinite(parsed)) {
+      setCustomProtein("");
+      return;
+    }
+
+    const clamped = Math.max(0, Math.min(500, parsed));
+    setCustomProtein(
+      Number.isInteger(clamped) ? String(clamped) : clamped.toFixed(1)
+    );
+  };
+
+  const handleNext = () => {
     Keyboard.dismiss();
-    const next = Math.max(0, parsedProtein - 1);
-    setManualProtein(String(next));
-  };
 
-  const handleChangeProtein = (text: string) => {
-    const cleaned = text.replace(/[^0-9]/g, "");
-    setManualProtein(cleaned);
-  };
+    if (proteinMode === "custom") {
+      const parsed = Number(customProtein);
 
-  const goNext = () => {
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        Alert.alert(
+          "โปรตีนไม่ถูกต้อง",
+          "กรุณากรอกปริมาณโปรตีนที่ต้องการให้ถูกต้อง"
+        );
+        return;
+      }
+
+      updateForm({
+        activityLevel: selectedActivity as any,
+        proteinLevel: selectedProtein as any,
+        recommendedProteinG: parsed,
+      });
+    } else {
+      updateForm({
+        activityLevel: selectedActivity as any,
+        proteinLevel: selectedProtein as any,
+        recommendedProteinG: autoRecommendedProtein,
+      });
+    }
+
     router.push("/register/step6-1");
   };
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <SafeAreaView style={styles.container}>
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.headerBar}>
-          <Text style={styles.headerText}>ลงทะเบียนผู้ใช้งาน</Text>
+          <Text style={styles.headerBarText}>ลงทะเบียนผู้ใช้งาน</Text>
         </View>
 
         <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.stepTitle}>5.ระดับกิจกรรมและโปรตีน</Text>
+          <Text style={styles.stepTitle}>5.กิจกรรมและโปรตีน</Text>
 
           <View style={styles.progressTrack}>
             <View style={styles.progressFill} />
           </View>
 
-          <Text style={styles.sectionTitle}>
-            ระดับกิจกรรมในชีวิตประจำวัน
+          <Text style={styles.sectionTitle}>ระดับกิจกรรมต่อวัน</Text>
+          <Text style={styles.sectionDesc}>
+            ใช้เพื่อช่วยประเมินการใช้พลังงานของร่างกาย
           </Text>
 
-          <View style={styles.activityGrid}>
+          <View style={styles.optionList}>
             {activityOptions.map((item) => {
-              const active = activity === item.key;
+              const active = selectedActivity === item.value;
 
               return (
                 <TouchableOpacity
-                  key={item.key}
-                  style={[
-                    styles.activityButton,
-                    active && styles.activityButtonActive,
-                  ]}
-                  onPress={() => setActivity(item.key)}
+                  key={item.value}
+                  style={[styles.optionCard, active && styles.optionCardActive]}
+                  onPress={() => setSelectedActivity(item.value)}
+                  activeOpacity={0.85}
                 >
+                  <View style={styles.optionTopRow}>
+                    <Text
+                      style={[
+                        styles.optionTitle,
+                        active && styles.optionTitleActive,
+                      ]}
+                    >
+                      {item.label}
+                    </Text>
+
+                    {active && (
+                      <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                    )}
+                  </View>
+
                   <Text
                     style={[
-                      styles.activityTitle,
-                      active && styles.activityTitleActive,
+                      styles.optionDesc,
+                      active && styles.optionDescActive,
                     ]}
                   >
-                    {item.title}
+                    {item.desc}
                   </Text>
-
-                  <Text style={styles.activitySubtitle}>{item.subtitle}</Text>
                 </TouchableOpacity>
               );
             })}
           </View>
 
-          <TouchableOpacity
-            style={styles.infoRow}
-            onPress={() => setShowActivityInfo(true)}
-          >
-            <View style={styles.infoLeft}>
-              <Ionicons name="alert-circle-outline" size={26} color="#111" />
-              <Text style={styles.infoText}>
-                ระดับกิจกรรมในชีวิตประจำวันคืออะไร
+          <View style={styles.helpButtonWrap}>
+            <TouchableOpacity
+              style={styles.helperButton}
+              onPress={() => setShowActivityModal(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name="information-circle-outline"
+                size={18}
+                color="#666"
+              />
+              <Text style={styles.helperButtonText}>คำอธิบายระดับกิจกรรม</Text>
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.sectionTitle}>ระดับโปรตีนที่ต้องการ</Text>
+          <Text style={styles.sectionDesc}>
+            เลือกให้ระบบคำนวณ หรือกรอกเองได้ถ้าคุณมีแผนโปรตีนอยู่แล้ว
+          </Text>
+
+          <View style={styles.modeRow}>
+            <TouchableOpacity
+              style={[
+                styles.modeButton,
+                proteinMode === "auto" && styles.modeButtonActive,
+              ]}
+              onPress={() => handleSelectProteinMode("auto")}
+              activeOpacity={0.85}
+            >
+              <Text
+                style={[
+                  styles.modeButtonText,
+                  proteinMode === "auto" && styles.modeButtonTextActive,
+                ]}
+              >
+                ให้ระบบคำนวณ
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.modeButton,
+                proteinMode === "custom" && styles.modeButtonActive,
+              ]}
+              onPress={() => handleSelectProteinMode("custom")}
+              activeOpacity={0.85}
+            >
+              <Text
+                style={[
+                  styles.modeButtonText,
+                  proteinMode === "custom" && styles.modeButtonTextActive,
+                ]}
+              >
+                กรอกเอง
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {proteinMode === "auto" ? (
+            <>
+              <View style={styles.optionList}>
+                {proteinOptions.map((item) => {
+                  const active = selectedProtein === item.value;
+
+                  return (
+                    <TouchableOpacity
+                      key={item.value}
+                      style={[styles.optionCard, active && styles.optionCardActive]}
+                      onPress={() => setSelectedProtein(item.value)}
+                      activeOpacity={0.85}
+                    >
+                      <View style={styles.optionTopRow}>
+                        <Text
+                          style={[
+                            styles.optionTitle,
+                            active && styles.optionTitleActive,
+                          ]}
+                        >
+                          {item.label}
+                        </Text>
+
+                        {active && (
+                          <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                        )}
+                      </View>
+
+                      <Text
+                        style={[
+                          styles.optionDesc,
+                          active && styles.optionDescActive,
+                        ]}
+                      >
+                        {item.desc}
+                      </Text>
+
+                      <Text
+                        style={[
+                          styles.optionHint,
+                          active && styles.optionHintActive,
+                        ]}
+                      >
+                        {item.hint}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <View style={styles.helpButtonWrap}>
+                <TouchableOpacity
+                  style={styles.helperButton}
+                  onPress={() => setShowProteinModal(true)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons
+                    name="information-circle-outline"
+                    size={18}
+                    color="#666"
+                  />
+                  <Text style={styles.helperButtonText}>คำอธิบายระดับโปรตีน</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : (
+            <View style={styles.customProteinCard}>
+              <Text style={styles.customProteinTitle}>โปรตีนที่ต้องการต่อวัน</Text>
+
+              <View style={styles.customProteinInputWrap}>
+                <TextInput
+                  style={styles.customProteinInput}
+                  value={customProtein}
+                  onChangeText={handleChangeCustomProtein}
+                  onBlur={handleBlurCustomProtein}
+                  keyboardType="decimal-pad"
+                  placeholder="กรอกโปรตีนที่ต้องการ"
+                  placeholderTextColor="#999"
+                />
+                <Text style={styles.customProteinUnit}>กรัม/วัน</Text>
+              </View>
+
+              <Text style={styles.customProteinHint}>
+                เหมาะสำหรับผู้ที่มีแผนโภชนาการหรือเป้าหมายโปรตีนเฉพาะอยู่แล้ว
+              </Text>
+            </View>
+          )}
+
+          <View style={styles.resultCard}>
+            <Text style={styles.resultTitle}>สรุปที่เลือก</Text>
+
+            <View style={styles.resultRow}>
+              <Text style={styles.resultLabel}>กิจกรรม</Text>
+              <Text style={styles.resultValue}>{activityLabel}</Text>
+            </View>
+
+            <View style={styles.resultRow}>
+              <Text style={styles.resultLabel}>โหมดโปรตีน</Text>
+              <Text style={styles.resultValue}>
+                {proteinMode === "auto" ? "ให้ระบบคำนวณ" : "กรอกเอง"}
               </Text>
             </View>
 
-            <Ionicons name="chevron-forward" size={18} color="#111" />
-          </TouchableOpacity>
+            {proteinMode === "auto" ? (
+              <>
+                <View style={styles.resultRow}>
+                  <Text style={styles.resultLabel}>ระดับโปรตีน</Text>
+                  <Text style={styles.resultValue}>{proteinLabel}</Text>
+                </View>
 
-          <Text style={styles.proteinTitle}>
-            เป้าหมายโปรตีนที่ต้องการ/วัน (กรัม)
-          </Text>
+                <View style={styles.resultRow}>
+                  <Text style={styles.resultLabel}>เกณฑ์โปรตีน</Text>
+                  <Text style={styles.resultValue}>{proteinHint}</Text>
+                </View>
+              </>
+            ) : null}
 
-          <View style={styles.aiBox}>
-            <Text style={styles.aiTitle}>ให้ AI คำนวณให้ (แนะนำ)</Text>
+            <View style={styles.resultDivider} />
 
-            <Text style={styles.aiSubtitle}>
-              ระบบจะคำนวณจาก น้ำหนัก + ระดับกิจกรรม + เป้าหมาย
-            </Text>
-
-            <View style={styles.aiValueRow}>
-              <Text style={styles.aiValue}>{aiProtein}</Text>
-              <Text style={styles.aiUnit}>กรัม/วัน</Text>
+            <View style={styles.resultRow}>
+              <Text style={styles.resultLabelStrong}>โปรตีนที่ใช้ต่อวัน</Text>
+              <Text style={styles.resultValueStrong}>
+                {finalProtein > 0 ? `${finalProtein} กรัม` : "-"}
+              </Text>
             </View>
           </View>
 
-          <Text style={styles.manualTitle}>กำหนดเอง</Text>
-
-          <Text style={styles.manualSubtitle}>
-            หากคุณมีตารางจากเทรนเนอร์ส่วนตัว
-          </Text>
-
-          <View style={styles.inputRow}>
-            <TextInput
-              style={styles.input}
-              value={manualProtein}
-              onChangeText={handleChangeProtein}
-              keyboardType="number-pad"
-              placeholder="ระบุตัวเลข (กรัม)"
-            />
-
-            <View style={styles.arrowWrap}>
-              <TouchableOpacity onPress={increaseProtein}>
-                <Ionicons name="chevron-up" size={18} color="#555" />
-              </TouchableOpacity>
-
-              <TouchableOpacity onPress={decreaseProtein}>
-                <Ionicons name="chevron-down" size={18} color="#555" />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.unitText}>กรัม/วัน</Text>
-          </View>
-
-          <TouchableOpacity
-            style={styles.infoRow}
-            onPress={() => setShowProteinInfo(true)}
-          >
-            <View style={styles.infoLeft}>
-              <Ionicons name="alert-circle-outline" size={26} color="#111" />
-              <Text style={styles.infoText}>เป้าหมายโปรตีนคืออะไร</Text>
-            </View>
-
-            <Ionicons name="chevron-forward" size={18} color="#111" />
-          </TouchableOpacity>
-
-          <View style={styles.buttonRow}>
+          <View style={styles.bottomRow}>
             <TouchableOpacity
               style={styles.backButton}
               onPress={() => router.back()}
+              activeOpacity={0.8}
             >
-              <Text style={styles.backText}>ย้อนกลับ</Text>
+              <Text style={styles.backButtonText}>ย้อนกลับ</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.nextButton} onPress={goNext}>
-              <Text style={styles.nextText}>ถัดไป</Text>
+            <TouchableOpacity
+              style={styles.nextButton}
+              onPress={handleNext}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.nextButtonText}>ถัดไป</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
 
-        {/* Activity Info Modal */}
-
-        <Modal visible={showActivityInfo} transparent animationType="fade">
+        <Modal visible={showActivityModal} transparent animationType="fade">
           <Pressable
             style={styles.modalOverlay}
-            onPress={() => setShowActivityInfo(false)}
+            onPress={() => setShowActivityModal(false)}
           >
-            <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>ระดับกิจกรรมคืออะไร</Text>
+            <Pressable style={styles.modalCard} onPress={() => {}}>
+              <Text style={styles.modalTitle}>คำอธิบายระดับกิจกรรม</Text>
 
-              <Text style={styles.modalText}>
-                น้อย = เดินน้อย ทำงานนั่ง{"\n"}
-                ปานกลาง = เดินบ้างในชีวิตประจำวัน{"\n"}
-                มาก = ขยับตัวเยอะ{"\n"}
-                หนัก = ใช้แรงมาก
-              </Text>
+              {activityOptions.map((item) => (
+                <View key={item.value} style={styles.modalItem}>
+                  <Text style={styles.modalItemTitle}>{item.label}</Text>
+                  <Text style={styles.modalItemDesc}>{item.desc}</Text>
+                </View>
+              ))}
 
               <TouchableOpacity
-                style={styles.modalButton}
-                onPress={() => setShowActivityInfo(false)}
+                style={styles.modalCloseButton}
+                onPress={() => setShowActivityModal(false)}
+                activeOpacity={0.8}
               >
-                <Text style={styles.modalButtonText}>เข้าใจแล้ว</Text>
+                <Text style={styles.modalCloseText}>เข้าใจแล้ว</Text>
               </TouchableOpacity>
-            </View>
+            </Pressable>
           </Pressable>
         </Modal>
 
-        {/* Protein Info */}
-
-        <Modal visible={showProteinInfo} transparent animationType="fade">
+        <Modal visible={showProteinModal} transparent animationType="fade">
           <Pressable
             style={styles.modalOverlay}
-            onPress={() => setShowProteinInfo(false)}
+            onPress={() => setShowProteinModal(false)}
           >
-            <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>โปรตีนคืออะไร</Text>
+            <Pressable style={styles.modalCard} onPress={() => {}}>
+              <Text style={styles.modalTitle}>คำอธิบายระดับโปรตีน</Text>
 
-              <Text style={styles.modalText}>
-                โปรตีนช่วยซ่อมแซมกล้ามเนื้อ
-                และช่วยให้ร่างกายฟื้นตัวหลังออกกำลังกาย
-              </Text>
+              {proteinOptions.map((item) => (
+                <View key={item.value} style={styles.modalItem}>
+                  <Text style={styles.modalItemTitle}>
+                    {item.label} • {item.hint}
+                  </Text>
+                  <Text style={styles.modalItemDesc}>{item.desc}</Text>
+                </View>
+              ))}
 
               <TouchableOpacity
-                style={styles.modalButton}
-                onPress={() => setShowProteinInfo(false)}
+                style={styles.modalCloseButton}
+                onPress={() => setShowProteinModal(false)}
+                activeOpacity={0.8}
               >
-                <Text style={styles.modalButtonText}>เข้าใจแล้ว</Text>
+                <Text style={styles.modalCloseText}>เข้าใจแล้ว</Text>
               </TouchableOpacity>
-            </View>
+            </Pressable>
           </Pressable>
         </Modal>
       </SafeAreaView>
@@ -262,7 +533,10 @@ export default function RegisterStep5Screen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
+  container: {
+    flex: 1,
+    backgroundColor: BG,
+  },
 
   headerBar: {
     backgroundColor: ORANGE,
@@ -270,173 +544,359 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  headerText: { color: "#fff", fontSize: 20, fontWeight: "900" },
-
-  scroll: { flex: 1 },
-
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 30,
-  },
-
-  stepTitle: { fontSize: 26, fontWeight: "900" },
-
-  progressTrack: {
-    marginTop: 12,
-    height: 6,
-    backgroundColor: "#D8D0C0",
-    borderRadius: 8,
-  },
-
-  progressFill: {
-    width: "60%",
-    height: "100%",
-    backgroundColor: ORANGE,
-  },
-
-  sectionTitle: {
-    marginTop: 18,
+  headerBarText: {
+    color: "#fff",
     fontSize: 20,
     fontWeight: "900",
   },
 
-  activityGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    marginTop: 10,
+  content: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 24,
   },
 
-  activityButton: {
-    width: "31%",
-    backgroundColor: "#EA8D20",
-    borderRadius: 12,
-    padding: 10,
-    alignItems: "center",
-    marginBottom: 10,
-  },
-
-  activityButtonActive: {
-    borderWidth: 2,
-    borderColor: "#B65E00",
-  },
-
-  activityTitle: { color: "#fff", fontWeight: "900", fontSize: 16 },
-
-  activityTitleActive: {},
-
-  activitySubtitle: { color: "#fff", fontSize: 12 },
-
-  infoRow: {
-    marginTop: 10,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-
-  infoLeft: { flexDirection: "row", alignItems: "center" },
-
-  infoText: { marginLeft: 8, fontSize: 16, color: "#666" },
-
-  proteinTitle: {
-    marginTop: 16,
-    fontSize: 18,
+  stepTitle: {
+    fontSize: 26,
     fontWeight: "900",
+    color: "#111",
   },
 
-  aiBox: {
-    borderWidth: 1.5,
-    borderColor: ORANGE,
-    borderRadius: 16,
-    padding: 16,
-    marginTop: 10,
+  progressTrack: {
+    marginTop: 12,
+    height: 7,
+    backgroundColor: "#D7CFBF",
+    borderRadius: 10,
+    overflow: "hidden",
   },
 
-  aiTitle: { fontWeight: "900", fontSize: 18 },
+  progressFill: {
+    width: "56%",
+    height: "100%",
+    backgroundColor: ORANGE,
+    borderRadius: 10,
+  },
 
-  aiSubtitle: { color: "#777", marginTop: 4 },
+  sectionTitle: {
+    marginTop: 20,
+    fontSize: 20,
+    fontWeight: "900",
+    color: "#111",
+  },
 
-  aiValueRow: {
-    marginTop: 18,
+  sectionDesc: {
+    marginTop: 6,
+    fontSize: 14,
+    color: "#666",
+    lineHeight: 21,
+  },
+
+  optionList: {
+    marginTop: 12,
+    gap: 12,
+  },
+
+  optionCard: {
+    backgroundColor: WHITE,
+    borderRadius: 14,
+    borderWidth: 1.4,
+    borderColor: "#D9D9D9",
+    padding: 14,
+  },
+
+  optionCardActive: {
+    backgroundColor: ORANGE,
+    borderColor: "#C97800",
+  },
+
+  optionTopRow: {
     flexDirection: "row",
-    justifyContent: "flex-end",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+
+  optionTitle: {
+    fontSize: 17,
+    fontWeight: "900",
+    color: "#222",
+  },
+
+  optionTitleActive: {
+    color: "#fff",
+  },
+
+  optionDesc: {
+    marginTop: 8,
+    fontSize: 13,
+    lineHeight: 19,
+    color: "#555",
+  },
+
+  optionDescActive: {
+    color: "#FFF7E8",
+  },
+
+  optionHint: {
+    marginTop: 8,
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#7A5A00",
+  },
+
+  optionHintActive: {
+    color: "#fff",
+  },
+
+  modeRow: {
+    marginTop: 12,
+    flexDirection: "row",
+    gap: 12,
+  },
+
+  modeButton: {
+    flex: 1,
+    backgroundColor: WHITE,
+    borderWidth: 1.4,
+    borderColor: "#D9D9D9",
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  modeButtonActive: {
+    backgroundColor: ORANGE,
+    borderColor: "#C97800",
+  },
+
+  modeButtonText: {
+    fontSize: 15,
+    fontWeight: "900",
+    color: "#333",
+  },
+
+  modeButtonTextActive: {
+    color: "#fff",
+  },
+
+  helpButtonWrap: {
+    marginTop: 10,
     alignItems: "flex-end",
   },
 
-  aiValue: { fontSize: 36, color: "#F08A00", fontWeight: "900" },
-
-  aiUnit: { marginLeft: 6, fontSize: 16 },
-
-  manualTitle: { marginTop: 16, fontSize: 18, fontWeight: "900" },
-
-  manualSubtitle: { color: "#777", marginTop: 2 },
-
-  inputRow: {
+  helperButton: {
     flexDirection: "row",
     alignItems: "center",
-    borderWidth: 1.5,
-    borderColor: ORANGE,
-    borderRadius: 12,
-    marginTop: 8,
-    paddingHorizontal: 10,
-    height: 50,
+    gap: 6,
   },
 
-  input: { flex: 1, fontSize: 16 },
+  helperButtonText: {
+    fontSize: 13,
+    color: "#666",
+    fontWeight: "700",
+  },
 
-  arrowWrap: { marginHorizontal: 6 },
+  customProteinCard: {
+    marginTop: 14,
+    backgroundColor: "#fff",
+    borderRadius: 14,
+    borderWidth: 1.2,
+    borderColor: "#E3E3E3",
+    padding: 14,
+  },
 
-  unitText: { fontSize: 14 },
+  customProteinTitle: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#111",
+    marginBottom: 10,
+  },
 
-  buttonRow: {
+  customProteinInputWrap: {
+    backgroundColor: "#F8F8F8",
+    borderRadius: 12,
+    borderWidth: 1.2,
+    borderColor: "#CCC",
+    minHeight: 52,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  customProteinInput: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: "900",
+    color: "#111",
+    paddingVertical: 12,
+  },
+
+  customProteinUnit: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#666",
+    marginLeft: 8,
+  },
+
+  customProteinHint: {
+    marginTop: 10,
+    fontSize: 13,
+    color: "#666",
+    lineHeight: 19,
+  },
+
+  resultCard: {
+    marginTop: 20,
+    backgroundColor: "#fff",
+    borderRadius: 14,
+    borderWidth: 1.2,
+    borderColor: "#E3E3E3",
+    padding: 16,
+  },
+
+  resultTitle: {
+    fontSize: 17,
+    fontWeight: "900",
+    color: "#111",
+    marginBottom: 12,
+  },
+
+  resultRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 30,
+    alignItems: "center",
+    paddingVertical: 5,
+    gap: 10,
+  },
+
+  resultLabel: {
+    flex: 1,
+    fontSize: 14,
+    color: "#666",
+    fontWeight: "700",
+  },
+
+  resultValue: {
+    fontSize: 14,
+    color: "#111",
+    fontWeight: "900",
+    textAlign: "right",
+  },
+
+  resultDivider: {
+    marginVertical: 10,
+    height: 1,
+    backgroundColor: "#EEE",
+  },
+
+  resultLabelStrong: {
+    flex: 1,
+    fontSize: 15,
+    color: "#111",
+    fontWeight: "900",
+  },
+
+  resultValueStrong: {
+    fontSize: 18,
+    color: ORANGE,
+    fontWeight: "900",
+    textAlign: "right",
+  },
+
+  bottomRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 24,
+    paddingBottom: 4,
   },
 
   backButton: {
-    borderWidth: 1.5,
-    borderColor: "#222",
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 28,
+    width: 120,
+    paddingVertical: 15,
+    borderRadius: 15,
+    borderWidth: 1.8,
+    borderColor: "#333",
+    backgroundColor: "#FFF",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
-  backText: { fontWeight: "900" },
+  backButtonText: {
+    fontWeight: "900",
+    fontSize: 16,
+    color: "#111",
+  },
 
   nextButton: {
+    width: 120,
     backgroundColor: ORANGE,
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 36,
+    paddingVertical: 15,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: ORANGE,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.28,
+    shadowRadius: 5,
+    elevation: 5,
   },
 
-  nextText: { color: "#fff", fontWeight: "900" },
+  nextButtonText: {
+    color: "#fff",
+    fontWeight: "900",
+    fontSize: 16,
+  },
 
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
+    backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "center",
-    padding: 20,
+    padding: 24,
   },
 
   modalCard: {
     backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 20,
+    padding: 22,
   },
 
-  modalTitle: { fontSize: 20, fontWeight: "900", textAlign: "center" },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: "900",
+    textAlign: "center",
+    color: "#111",
+    marginBottom: 14,
+  },
 
-  modalText: { marginTop: 10, fontSize: 16, lineHeight: 24 },
+  modalItem: {
+    marginBottom: 14,
+  },
 
-  modalButton: {
-    marginTop: 18,
+  modalItemTitle: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#111",
+  },
+
+  modalItemDesc: {
+    marginTop: 4,
+    fontSize: 14,
+    color: "#555",
+    lineHeight: 21,
+  },
+
+  modalCloseButton: {
+    marginTop: 16,
     backgroundColor: ORANGE,
-    padding: 12,
-    borderRadius: 10,
+    paddingVertical: 14,
+    borderRadius: 12,
     alignItems: "center",
   },
 
-  modalButtonText: { color: "#fff", fontWeight: "900" },
+  modalCloseText: {
+    color: "#fff",
+    fontWeight: "900",
+    fontSize: 16,
+  },
 });

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -7,14 +7,15 @@ import {
   Keyboard,
   TouchableWithoutFeedback,
   ScrollView,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import { useRegister } from "../../context/register-context";
 
 const ORANGE = "#F5A400";
 const BG = "#F3F3F3";
 
-// ลิสต์อาหารที่แพ้
 const ALLERGIES = [
   "แพ้ถั่ว",
   "แพ้อาหารทะเล",
@@ -24,33 +25,111 @@ const ALLERGIES = [
   "แพ้แป้งสาลี",
 ];
 
+const NONE_OPTION = "ไม่มีอาการแพ้";
+
 export default function RegisterStep6Screen() {
-  const [selectedAllergies, setSelectedAllergies] = useState<string[]>([]);
+  const { form, updateForm } = useRegister();
+
+  const initialSelected = useMemo(() => {
+    if (!form.allergies || !Array.isArray(form.allergies)) return [];
+    return form.allergies;
+  }, [form.allergies]);
+
+  const [selectedAllergies, setSelectedAllergies] =
+    useState<string[]>(initialSelected);
+
+  useEffect(() => {
+    if (!form.allergies || !Array.isArray(form.allergies)) {
+      setSelectedAllergies([]);
+      return;
+    }
+
+    setSelectedAllergies(form.allergies);
+  }, [form.allergies]);
+
+  const hasNoneSelected = selectedAllergies.includes(NONE_OPTION);
+  const selectedFoodOnly = selectedAllergies.filter((item) => item !== NONE_OPTION);
 
   const toggleAllergy = (option: string) => {
-    if (option === "ไม่มีอาการแพ้") {
-      if (selectedAllergies.includes("ไม่มีอาการแพ้")) {
-        setSelectedAllergies([]);
-      } else {
-        setSelectedAllergies(["ไม่มีอาการแพ้"]);
-      }
-    } else {
-      // เอาคำว่าไม่มีอาการแพ้ออกเมื่อเลือกอย่างอื่น
-      let newSelected = selectedAllergies.filter(
-        (item) => item !== "ไม่มีอาการแพ้"
+    if (hasNoneSelected) {
+      Alert.alert(
+        "เลือกไม่ได้",
+        "คุณเลือก 'ไม่มีอาการแพ้' อยู่ หากต้องการเลือกอาหารที่แพ้ กรุณายกเลิก 'ไม่มีอาการแพ้' ก่อน"
       );
-
-      if (newSelected.includes(option)) {
-        newSelected = newSelected.filter((item) => item !== option);
-      } else {
-        newSelected.push(option);
-      }
-      setSelectedAllergies(newSelected);
+      return;
     }
+
+    setSelectedAllergies((prev) =>
+      prev.includes(option)
+        ? prev.filter((item) => item !== option)
+        : [...prev, option]
+    );
+  };
+
+  const toggleNone = () => {
+    if (hasNoneSelected) {
+      setSelectedAllergies([]);
+      return;
+    }
+
+    if (selectedFoodOnly.length > 0) {
+      Alert.alert(
+        "ยืนยันการเลือก",
+        "หากเลือก 'ไม่มีอาการแพ้' ระบบจะล้างรายการอาหารที่แพ้ทั้งหมด",
+        [
+          { text: "ยกเลิก", style: "cancel" },
+          {
+            text: "ยืนยัน",
+            style: "destructive",
+            onPress: () => setSelectedAllergies([NONE_OPTION]),
+          },
+        ]
+      );
+      return;
+    }
+
+    setSelectedAllergies([NONE_OPTION]);
+  };
+
+  const handleOpenMore = () => {
+    if (hasNoneSelected) {
+      Alert.alert(
+        "เลือกไม่ได้",
+        "คุณเลือก 'ไม่มีอาการแพ้' อยู่ จึงไม่สามารถเพิ่มรายการอาหารที่แพ้ได้"
+      );
+      return;
+    }
+
+    updateForm({
+      hasAllergies: true,
+      allergies: selectedAllergies,
+    });
+
+    router.push("/register/step6-2" as any);
+  };
+
+  const handleNext = () => {
+    if (selectedAllergies.length === 0) {
+      Alert.alert(
+        "ยังไม่ได้เลือกข้อมูล",
+        "กรุณาเลือกอาการแพ้อาหาร หรือเลือก 'ไม่มีอาการแพ้'"
+      );
+      return;
+    }
+
+    updateForm({
+      hasAllergies: !hasNoneSelected,
+      allergies: selectedAllergies,
+    });
+
+    router.push("/register/step7" as any);
+  };
+
+  const removeSelectedItem = (itemToRemove: string) => {
+    setSelectedAllergies((prev) => prev.filter((item) => item !== itemToRemove));
   };
 
   const isSelected = (option: string) => selectedAllergies.includes(option);
-  const canGoNext = selectedAllergies.length > 0;
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -77,19 +156,24 @@ export default function RegisterStep6Screen() {
           <View style={styles.gridContainer}>
             {ALLERGIES.map((item) => {
               const active = isSelected(item);
+              const disabled = hasNoneSelected;
+
               return (
                 <TouchableOpacity
                   key={item}
                   style={[
                     styles.allergyBtn,
                     active && styles.allergyBtnActive,
+                    disabled && !active && styles.disabledButton,
                   ]}
                   onPress={() => toggleAllergy(item)}
+                  activeOpacity={0.85}
                 >
                   <Text
                     style={[
                       styles.allergyText,
                       active && styles.allergyTextActive,
+                      disabled && !active && styles.disabledText,
                     ]}
                   >
                     {item}
@@ -99,48 +183,70 @@ export default function RegisterStep6Screen() {
             })}
           </View>
 
-          {/* ปุ่มอื่นๆ ปรับขอบส้ม และ ตัวหนังสือสีดำ ตามบรีฟ */}
           <TouchableOpacity
-            style={styles.otherBtn}
-            onPress={() => router.push("/register/step6-2" as any)}
+            style={[styles.otherBtn, hasNoneSelected && styles.disabledOtherBtn]}
+            onPress={handleOpenMore}
+            activeOpacity={0.85}
           >
-            <Text style={styles.otherBtnText}>+ อื่นๆ / รายการเพิ่มเติม</Text>
+            <Text
+              style={[
+                styles.otherBtnText,
+                hasNoneSelected && styles.disabledText,
+              ]}
+            >
+              + อื่นๆ / รายการเพิ่มเติม
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[
               styles.noneBtn,
-              isSelected("ไม่มีอาการแพ้") && styles.noneBtnActive,
+              isSelected(NONE_OPTION) && styles.noneBtnActive,
             ]}
-            onPress={() => toggleAllergy("ไม่มีอาการแพ้")}
+            onPress={toggleNone}
+            activeOpacity={0.85}
           >
             <Text
               style={[
                 styles.noneBtnText,
-                isSelected("ไม่มีอาการแพ้") && styles.noneBtnTextActive,
+                isSelected(NONE_OPTION) && styles.noneBtnTextActive,
               ]}
             >
               ไม่มีอาการแพ้
             </Text>
           </TouchableOpacity>
 
+          <View style={styles.summaryBox}>
+            <Text style={styles.summaryTitle}>สรุปรายการที่เลือก</Text>
+
+            {selectedAllergies.length > 0 ? (
+              <View style={styles.summaryChipWrap}>
+                {selectedAllergies.map((item) => (
+                  <View key={item} style={styles.summaryChip}>
+                    <Text style={styles.summaryChipText}>{item}</Text>
+                    <TouchableOpacity
+                      onPress={() => removeSelectedItem(item)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.summaryChipRemove}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <Text style={styles.summaryText}>-</Text>
+            )}
+          </View>
+
           <View style={styles.buttonRow}>
-            {/* แก้ปุ่มย้อนกลับให้ลิงก์ตรงไปที่ Step 5 */}
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() => router.push("/register/step5" as any)}
+              onPress={() => router.replace("/register/step5" as any)}
             >
               <Text style={styles.backText}>ย้อนกลับ</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[
-                styles.nextButton,
-                !canGoNext && styles.nextButtonDisabled,
-              ]}
-              
-              onPress={() => router.push("/register/step7" as any)}
-            >
+            <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
               <Text style={styles.nextText}>ถัดไป</Text>
             </TouchableOpacity>
           </View>
@@ -158,22 +264,34 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: "center",
   },
-  headerText: { color: "#fff", fontSize: 20, fontWeight: "900" },
+
+  headerText: {
+    color: "#fff",
+    fontSize: 20,
+    fontWeight: "900",
+  },
 
   scroll: { flex: 1 },
+
   scrollContent: {
     padding: 16,
     paddingBottom: 30,
   },
 
-  stepTitle: { fontSize: 26, fontWeight: "900" },
+  stepTitle: {
+    fontSize: 26,
+    fontWeight: "900",
+    color: "#111",
+  },
 
   progressTrack: {
     marginTop: 12,
     height: 6,
     backgroundColor: "#D8D0C0",
     borderRadius: 8,
+    overflow: "hidden",
   },
+
   progressFill: {
     width: "75%",
     height: "100%",
@@ -185,6 +303,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#666",
     marginBottom: 20,
+    lineHeight: 22,
   },
 
   gridContainer: {
@@ -192,7 +311,7 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     justifyContent: "space-between",
   },
-  
+
   allergyBtn: {
     width: "48%",
     backgroundColor: ORANGE,
@@ -203,20 +322,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 12,
   },
+
+  allergyBtnActive: {
+    backgroundColor: "#FFF",
+    borderColor: ORANGE,
+  },
+
   allergyText: {
     fontSize: 16,
     fontWeight: "600",
     color: "#FFF",
   },
-  allergyBtnActive: {
-    backgroundColor: "#FFF",
-    borderColor: ORANGE,
-  },
+
   allergyTextActive: {
     color: ORANGE,
   },
 
-  // ปุ่ม อื่นๆ - ตัวหนังสือสีดำ (#333) ตามบรีฟ
   otherBtn: {
     width: "100%",
     backgroundColor: "#FFF",
@@ -227,10 +348,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 12,
   },
+
   otherBtnText: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#333", // เปลี่ยนเป็นสีดำ
+    color: "#333",
   },
 
   noneBtn: {
@@ -243,17 +365,75 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 10,
   },
+
   noneBtnActive: {
     backgroundColor: "#FFF",
     borderColor: ORANGE,
   },
+
   noneBtnText: {
     fontSize: 18,
     fontWeight: "900",
     color: "#FFF",
   },
+
   noneBtnTextActive: {
     color: ORANGE,
+  },
+
+  summaryBox: {
+    marginTop: 16,
+    backgroundColor: "#FFF8EC",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#F0D3A3",
+    padding: 14,
+  },
+
+  summaryTitle: {
+    fontSize: 15,
+    fontWeight: "900",
+    color: "#6B5A3D",
+    marginBottom: 8,
+  },
+
+  summaryText: {
+    fontSize: 14,
+    color: "#333",
+    lineHeight: 20,
+    fontWeight: "700",
+  },
+
+  summaryChipWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: 4,
+  },
+
+  summaryChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFF4DD",
+    borderWidth: 1,
+    borderColor: "#F3D299",
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+
+  summaryChipText: {
+    color: "#8A5A00",
+    fontWeight: "700",
+    fontSize: 14,
+  },
+
+  summaryChipRemove: {
+    marginLeft: 8,
+    color: "#C96E00",
+    fontWeight: "900",
+    fontSize: 14,
   },
 
   buttonRow: {
@@ -261,22 +441,44 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginTop: 30,
   },
+
   backButton: {
     borderWidth: 1.5,
     borderColor: "#222",
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 28,
+    backgroundColor: "#FFF",
   },
-  backText: { fontWeight: "900", color: "#222" },
+
+  backText: {
+    fontWeight: "900",
+    color: "#222",
+  },
+
   nextButton: {
     backgroundColor: ORANGE,
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 36,
   },
-  nextButtonDisabled: {
-    backgroundColor: "#CCC",
+
+  nextText: {
+    color: "#fff",
+    fontWeight: "900",
   },
-  nextText: { color: "#fff", fontWeight: "900" },
+
+  disabledButton: {
+    backgroundColor: "#E5E5E5",
+    borderColor: "#D0D0D0",
+  },
+
+  disabledOtherBtn: {
+    backgroundColor: "#F2F2F2",
+    borderColor: "#D8D8D8",
+  },
+
+  disabledText: {
+    color: "#999",
+  },
 });

@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -13,19 +13,17 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useRegister } from "../../context/register-context";
 
 const ORANGE = "#F5A400";
 const BG = "#F3F3F3";
 const GREEN = "#67C56B";
+const WHITE = "#FFFFFF";
 
 const MIN_KG = 30;
 const MAX_KG = 150;
 const ITEM_WIDTH = 16;
-const RULER_WIDTH = 420;
-const initialWeightKg = 66.0;
-
-// ตอนนี้ใช้ส่วนสูงตัวอย่างก่อน
-const mockHeightCm = 171;
+const DEFAULT_WEIGHT_KG = 66.0;
 
 const WEIGHT_DATA = Array.from(
   { length: (MAX_KG - MIN_KG) * 10 + 1 },
@@ -33,24 +31,42 @@ const WEIGHT_DATA = Array.from(
 );
 
 export default function RegisterStep3Screen() {
+  const { form, updateForm } = useRegister();
+
+  const initialWeight = form.weightKg ? Number(form.weightKg) : DEFAULT_WEIGHT_KG;
+  const heightCm = form.heightCm ? Number(form.heightCm) : 171;
+
   const [unit, setUnit] = useState<"kg" | "lbs">("kg");
-  const [weightKg, setWeightKg] = useState(initialWeightKg);
+  const [weightKg, setWeightKg] = useState(initialWeight);
   const [showInfoModal, setShowInfoModal] = useState(false);
+  const [rulerWidth, setRulerWidth] = useState(0);
 
   const flatListRef = useRef<FlatList<number>>(null);
-  const centerPadding = RULER_WIDTH / 2 - ITEM_WIDTH / 2;
+  const hasInitializedRef = useRef(false);
+
+  const selectedIndex = useMemo(() => {
+    return Math.max(
+      0,
+      Math.min(WEIGHT_DATA.length - 1, Math.round((weightKg - MIN_KG) * 10))
+    );
+  }, [weightKg]);
+
+  const centerPadding = useMemo(() => {
+    if (!rulerWidth) return 0;
+    return rulerWidth / 2 - ITEM_WIDTH / 2;
+  }, [rulerWidth]);
 
   const displayValue = useMemo(() => {
     if (unit === "kg") return weightKg.toFixed(1);
-
     const lbs = weightKg * 2.20462;
     return lbs.toFixed(1);
   }, [weightKg, unit]);
 
   const bmi = useMemo(() => {
-    const heightM = mockHeightCm / 100;
+    if (!heightCm || heightCm <= 0) return 0;
+    const heightM = heightCm / 100;
     return Number((weightKg / (heightM * heightM)).toFixed(1));
-  }, [weightKg]);
+  }, [weightKg, heightCm]);
 
   const bmiStatus = useMemo(() => {
     if (bmi < 18.5) {
@@ -66,39 +82,84 @@ export default function RegisterStep3Screen() {
   }, [bmi]);
 
   const bmiMessage = useMemo(() => {
-    if (bmi < 18.5) return "ลองเพิ่มพลังงานและโปรตีนเพื่อช่วยให้ร่างกายแข็งแรงขึ้น";
-    if (bmi < 23) return "น่าประทับใจมาก มารักษาสุขภาพที่ยอดเยี่ยมด้วยกันเถอะ!";
-    if (bmi < 25) return "เริ่มควบคุมอาหารและการออกกำลังกายอีกนิดเพื่อสมดุลที่ดี";
+    if (bmi < 18.5) {
+      return "ลองเพิ่มพลังงานและโปรตีนเพื่อช่วยให้ร่างกายแข็งแรงขึ้น";
+    }
+    if (bmi < 23) {
+      return "น่าประทับใจมาก มารักษาสุขภาพที่ยอดเยี่ยมด้วยกันเถอะ!";
+    }
+    if (bmi < 25) {
+      return "เริ่มควบคุมอาหารและการออกกำลังกายอีกนิดเพื่อสมดุลที่ดี";
+    }
     return "ลองปรับพฤติกรรมการกินและการออกกำลังเพื่อสุขภาพที่ดีขึ้น";
   }, [bmi]);
 
-  const handleScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const offsetX = event.nativeEvent.contentOffset.x;
+  const updateWeightFromOffset = (offsetX: number) => {
     const index = Math.round(offsetX / ITEM_WIDTH);
     const clampedIndex = Math.max(0, Math.min(index, WEIGHT_DATA.length - 1));
     const selectedWeight = WEIGHT_DATA[clampedIndex];
 
-    if (selectedWeight !== weightKg) {
-      setWeightKg(selectedWeight);
-    }
+    setWeightKg((prev) => (prev === selectedWeight ? prev : selectedWeight));
   };
 
-  const renderRulerItem = ({ item, index }: { item: number; index: number }) => {
-    const absoluteValue = MIN_KG + index * 0.1;
-    const rounded = Number(absoluteValue.toFixed(1));
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const offsetX = event.nativeEvent.contentOffset.x;
+    updateWeightFromOffset(offsetX);
+  };
 
-    const isMajor = Number.isInteger(rounded);
-    const isMedium = !isMajor && Math.round(rounded * 10) % 5 === 0;
+  const handleScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const offsetX = event.nativeEvent.contentOffset.x;
+    updateWeightFromOffset(offsetX);
+  };
+
+  useEffect(() => {
+    if (!rulerWidth || hasInitializedRef.current) return;
+
+    hasInitializedRef.current = true;
+
+    requestAnimationFrame(() => {
+      flatListRef.current?.scrollToOffset({
+        offset: selectedIndex * ITEM_WIDTH,
+        animated: false,
+      });
+    });
+  }, [rulerWidth, selectedIndex]);
+
+  const handleNext = () => {
+    updateForm({
+      weightKg: weightKg.toFixed(1),
+      bmi,
+    });
+
+    router.push("/register/step4");
+  };
+
+  const renderRulerItem = ({ index }: { item: number; index: number }) => {
+    const value = Number((MIN_KG + index * 0.1).toFixed(1));
+    const isMajor = Number.isInteger(value);
+    const isMedium = !isMajor && Math.round(value * 10) % 5 === 0;
 
     return (
       <View style={styles.rulerItem}>
-        <View style={[styles.tick, isMajor && styles.tickMajor, !isMajor && isMedium && styles.tickMedium]} />
+        {isMajor ? (
+          <Text style={styles.rulerLabel}>{value}</Text>
+        ) : (
+          <View style={styles.labelSpacer} />
+        )}
+
+        <View
+          style={[
+            styles.tick,
+            isMajor && styles.tickMajor,
+            !isMajor && isMedium && styles.tickMedium,
+          ]}
+        />
       </View>
     );
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.headerBar}>
         <Text style={styles.headerBarText}>ลงทะเบียนผู้ใช้งาน</Text>
       </View>
@@ -110,6 +171,7 @@ export default function RegisterStep3Screen() {
           <TouchableOpacity
             style={styles.helpRow}
             onPress={() => setShowInfoModal(true)}
+            activeOpacity={0.8}
           >
             <Ionicons name="alert-circle-outline" size={20} color="#111" />
             <Text style={styles.helpText}>ชั่งยังไงให้แม่นยำ?</Text>
@@ -132,6 +194,7 @@ export default function RegisterStep3Screen() {
           <TouchableOpacity
             style={[styles.unitButton, unit === "kg" && styles.unitButtonActive]}
             onPress={() => setUnit("kg")}
+            activeOpacity={0.8}
           >
             <Text style={[styles.unitText, unit === "kg" && styles.unitTextActive]}>
               kg
@@ -141,6 +204,7 @@ export default function RegisterStep3Screen() {
           <TouchableOpacity
             style={[styles.unitButton, unit === "lbs" && styles.unitButtonActive]}
             onPress={() => setUnit("lbs")}
+            activeOpacity={0.8}
           >
             <Text style={[styles.unitText, unit === "lbs" && styles.unitTextActive]}>
               lbs
@@ -153,7 +217,10 @@ export default function RegisterStep3Screen() {
           <Text style={styles.bigUnit}>{unit}</Text>
         </View>
 
-        <View style={styles.rulerSection}>
+        <View
+          style={styles.rulerSection}
+          onLayout={(e) => setRulerWidth(e.nativeEvent.layout.width)}
+        >
           <View pointerEvents="none" style={styles.centerLine} />
 
           <FlatList
@@ -163,20 +230,22 @@ export default function RegisterStep3Screen() {
             keyExtractor={(item, index) => `${item}-${index}`}
             renderItem={renderRulerItem}
             showsHorizontalScrollIndicator={false}
+            scrollEventThrottle={16}
             snapToInterval={ITEM_WIDTH}
-            snapToAlignment="center"
+            snapToAlignment="start"
             decelerationRate="fast"
             bounces={false}
+            overScrollMode="never"
             contentContainerStyle={{
               paddingLeft: centerPadding,
               paddingRight: centerPadding,
             }}
-            initialScrollIndex={Math.round((initialWeightKg - MIN_KG) * 10)}
             getItemLayout={(_, index) => ({
               length: ITEM_WIDTH,
               offset: ITEM_WIDTH * index,
               index,
             })}
+            onScroll={handleScroll}
             onMomentumScrollEnd={handleScrollEnd}
             onScrollEndDrag={handleScrollEnd}
           />
@@ -194,19 +263,23 @@ export default function RegisterStep3Screen() {
             <Text style={[styles.bmiValue, { color: bmiStatus.color }]}>{bmi}</Text>
             <Text style={styles.bmiMessage}>{bmiMessage}</Text>
           </View>
+
+          <Text style={styles.heightHint}>คำนวณจากส่วนสูง {heightCm} ซม.</Text>
         </View>
 
         <View style={styles.bottomRow}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => router.back()}
+            activeOpacity={0.8}
           >
             <Text style={styles.backButtonText}>ย้อนกลับ</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.nextButton}
-            onPress={() => router.push("/register/step4")}
+            onPress={handleNext}
+            activeOpacity={0.8}
           >
             <Text style={styles.nextButtonText}>ถัดไป</Text>
           </TouchableOpacity>
@@ -218,7 +291,7 @@ export default function RegisterStep3Screen() {
           style={styles.modalOverlay}
           onPress={() => setShowInfoModal(false)}
         >
-          <View style={styles.modalCard}>
+          <Pressable style={styles.modalCard} onPress={() => {}}>
             <Text style={styles.modalTitle}>วิธีชั่งน้ำหนักให้แม่นยำ</Text>
             <Text style={styles.modalBody}>
               1. ชั่งตอนเช้าหลังเข้าห้องน้ำ{"\n"}
@@ -230,10 +303,11 @@ export default function RegisterStep3Screen() {
             <TouchableOpacity
               style={styles.modalCloseButton}
               onPress={() => setShowInfoModal(false)}
+              activeOpacity={0.8}
             >
               <Text style={styles.modalCloseText}>เข้าใจแล้ว</Text>
             </TouchableOpacity>
-          </View>
+          </Pressable>
         </Pressable>
       </Modal>
     </SafeAreaView>
@@ -383,7 +457,7 @@ const styles = StyleSheet.create({
 
   rulerSection: {
     marginTop: 18,
-    height: 110,
+    height: 120,
     justifyContent: "center",
     position: "relative",
   },
@@ -392,7 +466,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: "50%",
     marginLeft: -1,
-    top: 0,
+    top: 12,
     bottom: 0,
     width: 2,
     backgroundColor: ORANGE,
@@ -401,9 +475,22 @@ const styles = StyleSheet.create({
 
   rulerItem: {
     width: ITEM_WIDTH,
-    height: 110,
+    height: 120,
     alignItems: "center",
     justifyContent: "flex-end",
+    paddingBottom: 6,
+  },
+
+  rulerLabel: {
+    position: "absolute",
+    top: 0,
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#333",
+  },
+
+  labelSpacer: {
+    height: 14,
   },
 
   tick: {
@@ -474,6 +561,13 @@ const styles = StyleSheet.create({
     color: "#444",
   },
 
+  heightHint: {
+    marginTop: 10,
+    fontSize: 13,
+    color: "#666",
+    fontWeight: "700",
+  },
+
   bottomRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -488,7 +582,7 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     borderWidth: 1.8,
     borderColor: "#333",
-    backgroundColor: "#FFF",
+    backgroundColor: WHITE,
     alignItems: "center",
     justifyContent: "center",
   },

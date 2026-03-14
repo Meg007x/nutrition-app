@@ -13,9 +13,12 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useRegister } from "../../context/register-context";
+import { GoalType } from "../../types/register-types";
 
 const ORANGE = "#F5A400";
 const BG = "#F3F3F3";
+const WHITE = "#FFFFFF";
 
 const weekOptions = [
   "1 สัปดาห์",
@@ -26,51 +29,97 @@ const weekOptions = [
   "8 สัปดาห์",
   "10 สัปดาห์",
   "12 สัปดาห์",
-];
+] as const;
 
-const goalOptions = [
-  "ลดน้ำหนัก",
-  "เพิ่มน้ำหนัก",
-  "รักษารูปร่าง",
-  "เพิ่มกล้ามเนื้อ",
+const goalOptions: { label: string; value: GoalType }[] = [
+  { label: "ลดน้ำหนัก", value: "lose_weight" },
+  { label: "รักษารูปร่าง", value: "maintain" },
+  { label: "เพิ่มน้ำหนัก", value: "gain_weight" },
 ];
 
 export default function RegisterStep4Screen() {
-  const [selectedGoal, setSelectedGoal] = useState("ลดน้ำหนัก");
-  const [targetWeight, setTargetWeight] = useState("67");
-  const [selectedWeek, setSelectedWeek] = useState("1 สัปดาห์");
+  const { form, updateForm } = useRegister();
+
+  const currentWeight = form.weightKg ? Number(form.weightKg) : 0;
+  const currentHeightCm = form.heightCm ? Number(form.heightCm) : 0;
+  const currentBmi = form.bmi ?? null;
+
+  const initialGoalType: GoalType = form.goalType || "lose_weight";
+  const initialGoalWeeks = form.goalDurationWeeks || "4 สัปดาห์";
+  const initialTargetWeight =
+    form.targetWeightKg && form.targetWeightKg.trim()
+      ? form.targetWeightKg
+      : currentWeight > 0
+      ? currentWeight.toFixed(1)
+      : "0";
+
+  const [selectedGoalType, setSelectedGoalType] =
+    useState<GoalType>(initialGoalType);
+  const [targetWeight, setTargetWeight] = useState(initialTargetWeight);
+  const [selectedWeek, setSelectedWeek] = useState(initialGoalWeeks);
 
   const [showAdviceModal, setShowAdviceModal] = useState(false);
   const [showWeekModal, setShowWeekModal] = useState(false);
 
-  const adviceText = useMemo(() => {
-    if (selectedGoal === "ลดน้ำหนัก") {
-      return "แนะนำให้ตั้งเป้าลดน้ำหนักแบบค่อยเป็นค่อยไป ประมาณ 0.25 - 1 กก. ต่อสัปดาห์ เพื่อให้ปลอดภัยและทำได้จริง";
-    }
-    if (selectedGoal === "เพิ่มน้ำหนัก") {
-      return "ควรเพิ่มน้ำหนักอย่างสมดุล โดยเน้นอาหารคุณภาพดีและพลังงานเพียงพอ ประมาณ 0.25 - 0.5 กก. ต่อสัปดาห์";
-    }
-    if (selectedGoal === "รักษารูปร่าง") {
-      return "เป้าหมายนี้เหมาะกับการรักษาน้ำหนักปัจจุบัน ควรเน้นการกินสมดุลและการเคลื่อนไหวอย่างสม่ำเสมอ";
-    }
-    return "การเพิ่มกล้ามเนื้อควรเน้นโปรตีนเพียงพอ ออกกำลังกายแบบแรงต้าน และตั้งเป้าหมายอย่างค่อยเป็นค่อยไป";
-  }, [selectedGoal]);
+  const selectedGoalLabel = useMemo(() => {
+    const found = goalOptions.find((item) => item.value === selectedGoalType);
+    return found?.label ?? "ลดน้ำหนัก";
+  }, [selectedGoalType]);
 
-  const parsedWeight = useMemo(() => {
+  const parsedTargetWeight = useMemo(() => {
     const n = parseFloat(targetWeight);
     return Number.isFinite(n) ? n : 0;
   }, [targetWeight]);
 
+  const weightDiff = useMemo(() => {
+    if (!currentWeight || !parsedTargetWeight) return 0;
+    return Number((parsedTargetWeight - currentWeight).toFixed(1));
+  }, [currentWeight, parsedTargetWeight]);
+
+  const recommendedText = useMemo(() => {
+    if (selectedGoalType === "lose_weight") {
+      return "แนะนำให้ตั้งเป้าลดน้ำหนักแบบค่อยเป็นค่อยไป ประมาณ 0.25 - 1 กก. ต่อสัปดาห์ เพื่อให้ปลอดภัยและทำได้จริง";
+    }
+    if (selectedGoalType === "gain_weight") {
+      return "ควรเพิ่มน้ำหนักอย่างสมดุล โดยเน้นอาหารคุณภาพดีและพลังงานเพียงพอ ประมาณ 0.25 - 0.5 กก. ต่อสัปดาห์";
+    }
+    return "เป้าหมายนี้เหมาะกับการรักษาน้ำหนักปัจจุบัน ควรเน้นการกินสมดุลและการเคลื่อนไหวอย่างสม่ำเสมอ";
+  }, [selectedGoalType]);
+
+  const goalHint = useMemo(() => {
+    if (selectedGoalType === "lose_weight") {
+      return "ควรตั้งเป้าหมายให้น้อยกว่าน้ำหนักปัจจุบัน";
+    }
+    if (selectedGoalType === "gain_weight") {
+      return "ควรตั้งเป้าหมายให้มากกว่าน้ำหนักปัจจุบัน";
+    }
+    return "สามารถใช้น้ำหนักปัจจุบันเป็นเป้าหมายได้";
+  }, [selectedGoalType]);
+
+  const summaryText = useMemo(() => {
+    if (!currentWeight) return "-";
+
+    if (weightDiff === 0) {
+      return "เป้าหมายเท่ากับน้ำหนักปัจจุบัน";
+    }
+
+    if (weightDiff > 0) {
+      return `ต้องการเพิ่ม ${weightDiff.toFixed(1)} กก. จากน้ำหนักปัจจุบัน`;
+    }
+
+    return `ต้องการลด ${Math.abs(weightDiff).toFixed(1)} กก. จากน้ำหนักปัจจุบัน`;
+  }, [currentWeight, weightDiff]);
+
   const handleIncreaseWeight = () => {
     Keyboard.dismiss();
-    const next = Math.min(300, (parsedWeight || 0) + 1);
-    setTargetWeight(String(next));
+    const next = Math.min(300, (parsedTargetWeight || 0) + 1);
+    setTargetWeight(Number.isInteger(next) ? String(next) : next.toFixed(1));
   };
 
   const handleDecreaseWeight = () => {
     Keyboard.dismiss();
-    const next = Math.max(0, (parsedWeight || 0) - 1);
-    setTargetWeight(String(next));
+    const next = Math.max(0, (parsedTargetWeight || 0) - 1);
+    setTargetWeight(Number.isInteger(next) ? String(next) : next.toFixed(1));
   };
 
   const handleChangeWeight = (text: string) => {
@@ -84,13 +133,14 @@ export default function RegisterStep4Screen() {
 
   const handleBlurWeight = () => {
     if (!targetWeight.trim()) {
-      setTargetWeight("0");
+      setTargetWeight(currentWeight > 0 ? currentWeight.toFixed(1) : "0");
       return;
     }
 
     const n = parseFloat(targetWeight);
+
     if (!Number.isFinite(n)) {
-      setTargetWeight("0");
+      setTargetWeight(currentWeight > 0 ? currentWeight.toFixed(1) : "0");
       return;
     }
 
@@ -100,14 +150,38 @@ export default function RegisterStep4Screen() {
     );
   };
 
+  const handleSelectGoal = (goalType: GoalType) => {
+    Keyboard.dismiss();
+    setSelectedGoalType(goalType);
+
+    if (goalType === "maintain" && currentWeight > 0) {
+      setTargetWeight(currentWeight.toFixed(1));
+    }
+  };
+
   const handleNext = () => {
     Keyboard.dismiss();
+
+    const safeTargetWeight = (() => {
+      const n = parseFloat(targetWeight);
+      if (!Number.isFinite(n)) return currentWeight > 0 ? currentWeight : 0;
+      return Math.max(0, Math.min(300, n));
+    })();
+
+    updateForm({
+      goalType: selectedGoalType,
+      targetWeightKg: Number.isInteger(safeTargetWeight)
+        ? String(safeTargetWeight)
+        : safeTargetWeight.toFixed(1),
+      goalDurationWeeks: selectedWeek,
+    });
+
     router.push("/register/step5");
   };
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.headerBar}>
           <Text style={styles.headerBarText}>ลงทะเบียนผู้ใช้งาน</Text>
         </View>
@@ -119,8 +193,31 @@ export default function RegisterStep4Screen() {
             <View style={styles.progressFill} />
           </View>
 
+          <View style={styles.currentInfoCard}>
+            <View style={styles.currentInfoRow}>
+              <Text style={styles.currentInfoLabel}>ส่วนสูง</Text>
+              <Text style={styles.currentInfoValue}>
+                {currentHeightCm > 0 ? `${currentHeightCm} ซม.` : "-"}
+              </Text>
+            </View>
+
+            <View style={styles.currentInfoRow}>
+              <Text style={styles.currentInfoLabel}>น้ำหนักปัจจุบัน</Text>
+              <Text style={styles.currentInfoValue}>
+                {currentWeight > 0 ? `${currentWeight.toFixed(1)} กก.` : "-"}
+              </Text>
+            </View>
+
+            <View style={styles.currentInfoRow}>
+              <Text style={styles.currentInfoLabel}>BMI ปัจจุบัน</Text>
+              <Text style={styles.currentInfoValue}>
+                {currentBmi !== null ? currentBmi.toFixed(1) : "-"}
+              </Text>
+            </View>
+          </View>
+
           <View style={styles.goalHeader}>
-            <Text style={styles.sectionTitle}>เป้าหมาย</Text>
+            <Text style={styles.sectionTitle}>เลือกเป้าหมาย</Text>
 
             <TouchableOpacity
               style={styles.helpRow}
@@ -128,6 +225,7 @@ export default function RegisterStep4Screen() {
                 Keyboard.dismiss();
                 setShowAdviceModal(true);
               }}
+              activeOpacity={0.8}
             >
               <Ionicons name="alert-circle-outline" size={20} color="#111" />
               <Text style={styles.helpText}>คำแนะนำ</Text>
@@ -135,15 +233,18 @@ export default function RegisterStep4Screen() {
             </TouchableOpacity>
           </View>
 
+          <Text style={styles.inlineHint}>{goalHint}</Text>
+
           <View style={styles.goalGrid}>
             {goalOptions.map((goal) => {
-              const active = selectedGoal === goal;
+              const active = selectedGoalType === goal.value;
 
               return (
                 <TouchableOpacity
-                  key={goal}
+                  key={goal.value}
                   style={[styles.goalButton, active && styles.goalButtonActive]}
-                  onPress={() => setSelectedGoal(goal)}
+                  onPress={() => handleSelectGoal(goal.value)}
+                  activeOpacity={0.85}
                 >
                   <Text
                     style={[
@@ -151,16 +252,14 @@ export default function RegisterStep4Screen() {
                       active && styles.goalButtonTextActive,
                     ]}
                   >
-                    {goal}
+                    {goal.label}
                   </Text>
                 </TouchableOpacity>
               );
             })}
           </View>
 
-          <Text style={styles.inputLabel}>
-            เป้าหมายน้ำหนักที่ต้องการเปลี่ยนแปลง (กิโลกรัม)
-          </Text>
+          <Text style={styles.inputLabel}>น้ำหนักเป้าหมาย (กิโลกรัม)</Text>
 
           <View style={styles.weightInputWrap}>
             <TextInput
@@ -170,7 +269,7 @@ export default function RegisterStep4Screen() {
               onBlur={handleBlurWeight}
               keyboardType="decimal-pad"
               returnKeyType="done"
-              placeholder="กรอกน้ำหนัก"
+              placeholder="กรอกน้ำหนักเป้าหมาย"
               placeholderTextColor="#888"
             />
 
@@ -178,6 +277,7 @@ export default function RegisterStep4Screen() {
               <TouchableOpacity
                 style={styles.arrowButton}
                 onPress={handleIncreaseWeight}
+                activeOpacity={0.8}
               >
                 <Ionicons name="chevron-up" size={18} color="#777" />
               </TouchableOpacity>
@@ -185,11 +285,14 @@ export default function RegisterStep4Screen() {
               <TouchableOpacity
                 style={styles.arrowButton}
                 onPress={handleDecreaseWeight}
+                activeOpacity={0.8}
               >
                 <Ionicons name="chevron-down" size={18} color="#777" />
               </TouchableOpacity>
             </View>
           </View>
+
+          <Text style={styles.weightHelperText}>{summaryText}</Text>
 
           <Text style={styles.inputLabel}>ระยะเวลา (สัปดาห์)</Text>
 
@@ -199,6 +302,7 @@ export default function RegisterStep4Screen() {
               Keyboard.dismiss();
               setShowWeekModal(true);
             }}
+            activeOpacity={0.8}
           >
             <Text style={styles.selectText}>{selectedWeek}</Text>
 
@@ -215,11 +319,16 @@ export default function RegisterStep4Screen() {
                 Keyboard.dismiss();
                 router.back();
               }}
+              activeOpacity={0.8}
             >
               <Text style={styles.backButtonText}>ย้อนกลับ</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
+            <TouchableOpacity
+              style={styles.nextButton}
+              onPress={handleNext}
+              activeOpacity={0.8}
+            >
               <Text style={styles.nextButtonText}>ถัดไป</Text>
             </TouchableOpacity>
           </View>
@@ -230,17 +339,20 @@ export default function RegisterStep4Screen() {
             style={styles.modalOverlay}
             onPress={() => setShowAdviceModal(false)}
           >
-            <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>คำแนะนำในการตั้งเป้าหมาย</Text>
-              <Text style={styles.modalBody}>{adviceText}</Text>
+            <Pressable style={styles.modalCard} onPress={() => {}}>
+              <Text style={styles.modalTitle}>
+                คำแนะนำในการตั้งเป้าหมาย {selectedGoalLabel}
+              </Text>
+              <Text style={styles.modalBody}>{recommendedText}</Text>
 
               <TouchableOpacity
                 style={styles.modalCloseButton}
                 onPress={() => setShowAdviceModal(false)}
+                activeOpacity={0.8}
               >
                 <Text style={styles.modalCloseText}>เข้าใจแล้ว</Text>
               </TouchableOpacity>
-            </View>
+            </Pressable>
           </Pressable>
         </Modal>
 
@@ -249,7 +361,7 @@ export default function RegisterStep4Screen() {
             style={styles.modalOverlay}
             onPress={() => setShowWeekModal(false)}
           >
-            <View style={styles.modalCard}>
+            <Pressable style={styles.modalCard} onPress={() => {}}>
               <Text style={styles.modalTitle}>เลือกระยะเวลา</Text>
 
               {weekOptions.map((week) => {
@@ -263,6 +375,7 @@ export default function RegisterStep4Screen() {
                       setSelectedWeek(week);
                       setShowWeekModal(false);
                     }}
+                    activeOpacity={0.8}
                   >
                     <Text
                       style={[
@@ -279,10 +392,11 @@ export default function RegisterStep4Screen() {
               <TouchableOpacity
                 style={styles.modalCancelButton}
                 onPress={() => setShowWeekModal(false)}
+                activeOpacity={0.8}
               >
                 <Text style={styles.modalCancelText}>ยกเลิก</Text>
               </TouchableOpacity>
-            </View>
+            </Pressable>
           </Pressable>
         </Modal>
       </SafeAreaView>
@@ -336,6 +450,35 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
 
+  currentInfoCard: {
+    marginTop: 18,
+    backgroundColor: "#FFF8EC",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#F0D3A3",
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+
+  currentInfoRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 4,
+  },
+
+  currentInfoLabel: {
+    fontSize: 14,
+    color: "#6B5A3D",
+    fontWeight: "700",
+  },
+
+  currentInfoValue: {
+    fontSize: 15,
+    color: "#111",
+    fontWeight: "900",
+  },
+
   goalHeader: {
     marginTop: 20,
     flexDirection: "row",
@@ -362,16 +505,22 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
+  inlineHint: {
+    marginTop: 8,
+    fontSize: 14,
+    color: "#666",
+    lineHeight: 21,
+  },
+
   goalGrid: {
     marginTop: 12,
     flexDirection: "row",
-    flexWrap: "wrap",
     justifyContent: "space-between",
-    rowGap: 12,
+    gap: 12,
   },
 
   goalButton: {
-    width: "31.5%",
+    flex: 1,
     minHeight: 54,
     backgroundColor: "#EA8D20",
     borderRadius: 12,
@@ -412,7 +561,7 @@ const styles = StyleSheet.create({
 
   weightInputWrap: {
     marginTop: 8,
-    backgroundColor: "#fff",
+    backgroundColor: WHITE,
     borderRadius: 10,
     borderWidth: 1.2,
     borderColor: "#333",
@@ -446,9 +595,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
+  weightHelperText: {
+    marginTop: 8,
+    fontSize: 13,
+    color: "#666",
+    lineHeight: 20,
+    fontWeight: "700",
+  },
+
   selectBox: {
     marginTop: 8,
-    backgroundColor: "#fff",
+    backgroundColor: WHITE,
     borderRadius: 12,
     borderWidth: 1.2,
     borderColor: "#333",

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import { useRegister } from "../../context/register-context";
 
 const ORANGE = "#F5A400";
 const BG = "#F3F3F3";
@@ -25,17 +26,32 @@ const MOCK_CUISINES = [
 ];
 
 export default function RegisterStep8Screen() {
-  // 🔴 [BACKEND TODO]: State เก็บ Array ของ ID อาหารที่ผู้ใช้สนใจ เพื่อเตรียมส่งให้ Database
-  const [selectedCuisines, setSelectedCuisines] = useState<string[]>([]);
+  const { form, updateForm } = useRegister();
 
-  // ฟังก์ชันกดเลือก/ยกเลิกการเลือก อาหารที่สนใจ
+  const initialSelected = useMemo(() => {
+    if (!form.interestedCuisines || !Array.isArray(form.interestedCuisines)) {
+      return [];
+    }
+
+    return MOCK_CUISINES.filter((item) =>
+      form.interestedCuisines.includes(item.name)
+    ).map((item) => item.id);
+  }, [form.interestedCuisines]);
+
+  const [selectedCuisines, setSelectedCuisines] =
+    useState<string[]>(initialSelected);
+
   const toggleSelection = (id: string) => {
     if (selectedCuisines.includes(id)) {
-      setSelectedCuisines(selectedCuisines.filter((item) => item !== id));
+      setSelectedCuisines((prev) => prev.filter((item) => item !== id));
     } else {
-      setSelectedCuisines([...selectedCuisines, id]);
+      setSelectedCuisines((prev) => [...prev, id]);
     }
   };
+
+  const selectedCuisineNames = MOCK_CUISINES.filter((item) =>
+    selectedCuisines.includes(item.id)
+  ).map((item) => item.name);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -62,12 +78,15 @@ export default function RegisterStep8Screen() {
         <View style={styles.listContainer}>
           {MOCK_CUISINES.map((cuisine) => {
             const isSelected = selectedCuisines.includes(cuisine.id);
+
             return (
               <TouchableOpacity
                 key={cuisine.id}
                 style={[
                   styles.cuisineItem,
-                  isSelected ? styles.cuisineItemSelected : styles.cuisineItemUnselected,
+                  isSelected
+                    ? styles.cuisineItemSelected
+                    : styles.cuisineItemUnselected,
                 ]}
                 activeOpacity={0.7}
                 onPress={() => toggleSelection(cuisine.id)}
@@ -75,7 +94,9 @@ export default function RegisterStep8Screen() {
                 <Text
                   style={[
                     styles.cuisineText,
-                    isSelected ? styles.cuisineTextSelected : styles.cuisineTextUnselected,
+                    isSelected
+                      ? styles.cuisineTextSelected
+                      : styles.cuisineTextUnselected,
                   ]}
                 >
                   {cuisine.name}
@@ -91,7 +112,7 @@ export default function RegisterStep8Screen() {
         <View style={styles.buttonRow}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => router.back()}
+            onPress={() => router.push("/register/step7" as any)}
           >
             <Text style={styles.backText}>ย้อนกลับ</Text>
           </TouchableOpacity>
@@ -99,11 +120,16 @@ export default function RegisterStep8Screen() {
           <TouchableOpacity
             style={styles.saveButton}
             onPress={() => {
-              // 🔴 [BACKEND TODO]: จุดนี้คือส่งข้อมูลทั้งหมดบันทึกลง Database
-              console.log("อาหารที่สนใจ (ID) เตรียมส่ง DB:", selectedCuisines);
-              
-              // ไปหน้าถัดไป หรือหน้าสรุปผล
-              router.push("/register/step9" as any); 
+              updateForm({
+                interestedCuisines: selectedCuisineNames,
+              });
+
+              console.log(
+                "อาหารที่สนใจ เตรียมส่ง DB:",
+                selectedCuisineNames
+              );
+
+              router.push("/register/step9" as any);
             }}
           >
             <Text style={styles.saveText}>ถัดไป</Text>
@@ -116,29 +142,44 @@ export default function RegisterStep8Screen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
+
   headerBar: {
     backgroundColor: ORANGE,
     paddingVertical: 14,
     alignItems: "center",
   },
-  headerText: { color: "#fff", fontSize: 20, fontWeight: "900" },
+
+  headerText: {
+    color: "#fff",
+    fontSize: 20,
+    fontWeight: "900",
+  },
+
   scroll: { flex: 1 },
+
   scrollContent: {
     padding: 16,
     paddingBottom: 30,
     flexGrow: 1,
   },
-  stepTitle: { fontSize: 26, fontWeight: "900" },
+
+  stepTitle: {
+    fontSize: 26,
+    fontWeight: "900",
+  },
+
   progressTrack: {
     marginTop: 12,
     height: 6,
     backgroundColor: "#D8D0C0",
     borderRadius: 8,
   },
+
   progressFill: {
     height: "100%",
     backgroundColor: ORANGE,
   },
+
   subtitle: {
     marginTop: 24,
     fontSize: 20,
@@ -146,12 +187,12 @@ const styles = StyleSheet.create({
     color: "#222",
     marginBottom: 16,
   },
-  
-  /* --- สไตล์กล่องรายการอาหาร --- */
+
   listContainer: {
     marginTop: 8,
-    gap: 12, // ระยะห่างระหว่างปุ่ม
+    gap: 12,
   },
+
   cuisineItem: {
     paddingVertical: 14,
     paddingHorizontal: 20,
@@ -160,44 +201,45 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
-    elevation: 3, 
+    elevation: 3,
   },
-  // ✅ สถานะที่ยังไม่เลือก (สีส้มทึบ ตาม Mockup)
+
   cuisineItemUnselected: {
     backgroundColor: "#EBA032",
     borderWidth: 1.5,
     borderColor: "#EBA032",
   },
-  // ✅ สถานะตอนที่เลือกแล้ว (พื้นขาว มีขอบส้มบางๆ กันกลืนกับพื้นหลัง)
+
   cuisineItemSelected: {
     backgroundColor: "#FFF",
     borderWidth: 1.5,
-    borderColor: "#EBA032", 
+    borderColor: "#EBA032",
   },
+
   cuisineText: {
     fontSize: 18,
     fontWeight: "700",
   },
-  // ✅ สีตัวหนังสือตอนยังไม่เลือก (สีขาว)
+
   cuisineTextUnselected: {
     color: "#FFF",
   },
-  // ✅ สีตัวหนังสือตอนเลือกแล้ว (สีดำ ตามที่คุณต้องการ)
+
   cuisineTextSelected: {
-    color: "#222", 
+    color: "#222",
   },
 
   spacer: {
     flex: 1,
     minHeight: 80,
   },
-  
-  /* --- ปุ่มด้านล่าง --- */
+
   buttonRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     marginTop: 20,
   },
+
   backButton: {
     backgroundColor: "#FFF",
     borderWidth: 1.5,
@@ -206,12 +248,23 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 28,
   },
-  backText: { fontWeight: "900", color: "#222", fontSize: 16 },
+
+  backText: {
+    fontWeight: "900",
+    color: "#222",
+    fontSize: 16,
+  },
+
   saveButton: {
     backgroundColor: ORANGE,
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 36,
   },
-  saveText: { color: "#fff", fontWeight: "900", fontSize: 16 },
+
+  saveText: {
+    color: "#fff",
+    fontWeight: "900",
+    fontSize: 16,
+  },
 });
