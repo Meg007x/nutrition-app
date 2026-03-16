@@ -114,16 +114,12 @@ export default function RegisterStep9Screen() {
     if (count > newMeals.length) {
       for (let i = newMeals.length; i < count; i++) {
         newMeals.push({
-          id: String(i + 1),
+          id: String(Date.now() + i), // กันบั๊ก ID ซ้ำ
           name:
-            i === 0
-              ? "เช้า"
-              : i === 1
-              ? "กลางวัน"
-              : i === 2
-              ? "เย็น"
-              : i === 3
-              ? "ของว่าง"
+            i === 0 ? "เช้า"
+              : i === 1 ? "กลางวัน"
+              : i === 2 ? "เย็น"
+              : i === 3 ? "ของว่าง"
               : `มื้อที่ ${i + 1}`,
           time: "12:00",
           notify: true,
@@ -134,6 +130,30 @@ export default function RegisterStep9Screen() {
     }
 
     setMeals(newMeals);
+  };
+
+  // 🚀 ฟังก์ชันใหม่: ลบมื้ออาหาร (แบบกดไอคอนถังขยะ)
+  const handleRemoveMeal = (idToRemove: string) => {
+    if (meals.length <= 1) {
+      Alert.alert("ไม่สามารถลบได้", "ต้องมีมื้ออาหารอย่างน้อย 1 มื้อครับ");
+      return;
+    }
+    const updatedMeals = meals.filter((m) => m.id !== idToRemove);
+    setMeals(updatedMeals);
+    setMealCount(updatedMeals.length); // ซิงค์จำนวนตัวเลขกลับไปที่ Dropdown
+  };
+
+  // 🚀 ฟังก์ชันใหม่: เพิ่มมื้ออาหาร (แบบกดปุ่มเพิ่มด้านล่าง)
+  const handleAddMeal = () => {
+    const newMeal: MealItem = {
+      id: String(Date.now()), // สร้าง ID ใหม่
+      name: `มื้อที่ ${meals.length + 1}`,
+      time: "12:00",
+      notify: true,
+    };
+    const updatedMeals = [...meals, newMeal];
+    setMeals(updatedMeals);
+    setMealCount(updatedMeals.length); // ซิงค์จำนวนตัวเลขกลับไปที่ Dropdown
   };
 
   const updateMeal = (
@@ -267,7 +287,14 @@ export default function RegisterStep9Screen() {
         {meals.map((meal) => (
           <View key={meal.id} style={styles.card}>
             <View style={styles.cardHeader}>
-              <Text style={styles.cardTitle}>{meal.name}</Text>
+              {/* 🚀 เพิ่มถังขยะข้างๆ ชื่อมื้ออาหาร */}
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <Text style={styles.cardTitle}>{meal.name}</Text>
+                <TouchableOpacity onPress={() => handleRemoveMeal(meal.id)} style={{ marginLeft: 8 }}>
+                  <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+                </TouchableOpacity>
+              </View>
+
               <View style={styles.switchRow}>
                 <Text style={styles.switchLabel}>เปิดการแจ้งเตือนมื้อนี้</Text>
                 <Switch
@@ -292,7 +319,8 @@ export default function RegisterStep9Screen() {
               </View>
 
               <View style={styles.inputWrapper}>
-                <Text style={styles.inputLabel}>เวลา</Text>
+                {/* 🚀 เปลี่ยนคำว่า เวลา เป็น เริ่มเวลา */}
+                <Text style={styles.inputLabel}>เริ่มเวลา</Text>
 
                 {Platform.OS === "web" ? (
                   <View style={styles.inputBox}>
@@ -320,6 +348,12 @@ export default function RegisterStep9Screen() {
             </View>
           </View>
         ))}
+
+        {/* 🚀 ปุ่มเพิ่มมื้ออาหารแทรกตรงนี้! */}
+        <TouchableOpacity style={styles.addMealBtn} onPress={handleAddMeal}>
+          <Ionicons name="add-circle-outline" size={20} color={ORANGE} />
+          <Text style={styles.addMealBtnText}>เพิ่มมื้ออาหาร</Text>
+        </TouchableOpacity>
 
         <View style={styles.spacer} />
 
@@ -522,6 +556,26 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 28,
+  },
+
+  addMealBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFF4DD",
+    borderWidth: 1,
+    borderColor: ORANGE,
+    borderStyle: "dashed",
+    borderRadius: 12,
+    paddingVertical: 14,
+    marginTop: 8,
+    marginBottom: 20,
+  },
+  addMealBtnText: {
+    color: ORANGE,
+    fontSize: 16,
+    fontWeight: "700",
+    marginLeft: 8,
   },
 
   backText: { fontWeight: "900", color: "#222", fontSize: 16 },

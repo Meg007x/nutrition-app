@@ -10,6 +10,14 @@ export type ActivityLevel =
 
 export type ProteinLevel = 'low' | 'medium' | 'high' | '';
 
+// 🚀 สร้าง Type ใหม่สำหรับเก็บหมวดหมู่อาหาร (ใช้ได้ทั้งแพ้อาหาร และ อาหารที่ไม่ชอบ)
+export type CategorizedFood = {
+  veg: string[];
+  condiment: string[];
+  meat: string[];
+  other: string[];
+};
+
 export type RegisterData = {
   // step1 - account + basic info
   username: string;
@@ -40,10 +48,10 @@ export type RegisterData = {
 
   // step6
   hasAllergies: boolean | null;
-  allergies: string[];
+  allergies: CategorizedFood | any; // 👈 ปรับให้รองรับ Object แยกหมวดหมู่
 
   // step7
-  dislikedFoods: string[];
+  dislikedFoods: CategorizedFood | any; // 👈 เผื่อหน้า 7 ทำเป็นหมวดหมู่ด้วยเลย
 
   // step8
   interestedCuisines: string[];
@@ -81,9 +89,9 @@ export const initialRegisterData: RegisterData = {
   recommendedProteinG: null,
 
   hasAllergies: null,
-  allergies: [],
+  allergies: { veg: [], condiment: [], meat: [], other: [] }, // 👈 เปลี่ยนค่าเริ่มต้นให้เป็น Object
 
-  dislikedFoods: [],
+  dislikedFoods: { veg: [], condiment: [], meat: [], other: [] }, // 👈 เปลี่ยนค่าเริ่มต้นให้เป็น Object
 
   interestedCuisines: [],
 

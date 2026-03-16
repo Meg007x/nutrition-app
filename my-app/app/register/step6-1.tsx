@@ -30,22 +30,44 @@ const NONE_OPTION = "ไม่มีอาการแพ้";
 export default function RegisterStep6Screen() {
   const { form, updateForm } = useRegister();
 
-  const initialSelected = useMemo(() => {
-    if (!form.allergies || !Array.isArray(form.allergies)) return [];
-    return form.allergies;
-  }, [form.allergies]);
-
-  const [selectedAllergies, setSelectedAllergies] =
-    useState<string[]>(initialSelected);
-
-  useEffect(() => {
-    if (!form.allergies || !Array.isArray(form.allergies)) {
-      setSelectedAllergies([]);
-      return;
+  // 1. สร้าง State แบบ Object เพื่อให้คุยกับหน้า 6-2 รู้เรื่อง
+  const [localAllergies, setLocalAllergies] = useState(() => {
+    const fa = form.allergies || {};
+    if (Array.isArray(fa)) {
+      return { veg: [], condiment: [], meat: [], other: fa };
     }
+    return {
+      veg: fa.veg || [],
+      condiment: fa.condiment || [],
+      meat: fa.meat || [],
+      other: fa.other || [],
+    };
+  });
 
-    setSelectedAllergies(form.allergies);
+  // 2. ดึงข้อมูลใหม่เสมอเมื่อ form.allergies ใน Context เปลี่ยน
+  useEffect(() => {
+    const fa = form.allergies || {};
+    if (Array.isArray(fa)) {
+      setLocalAllergies({ veg: [], condiment: [], meat: [], other: fa });
+    } else {
+      setLocalAllergies({
+        veg: fa.veg || [],
+        condiment: fa.condiment || [],
+        meat: fa.meat || [],
+        other: fa.other || [],
+      });
+    }
   }, [form.allergies]);
+
+  // 3. แปลง Object ให้กลับมาเป็น Array ธรรมดา เพื่อให้ UI ของคุณเอาไปใช้งานได้เหมือนเดิมเป๊ะๆ
+  const selectedAllergies = useMemo(() => {
+    return [
+      ...(localAllergies.veg || []),
+      ...(localAllergies.condiment || []),
+      ...(localAllergies.meat || []),
+      ...(localAllergies.other || []),
+    ];
+  }, [localAllergies]);
 
   const hasNoneSelected = selectedAllergies.includes(NONE_OPTION);
   const selectedFoodOnly = selectedAllergies.filter((item) => item !== NONE_OPTION);
@@ -59,16 +81,19 @@ export default function RegisterStep6Screen() {
       return;
     }
 
-    setSelectedAllergies((prev) =>
-      prev.includes(option)
-        ? prev.filter((item) => item !== option)
-        : [...prev, option]
-    );
+    setLocalAllergies((prev: any) => {
+      const prevOther = prev.other || [];
+      if (prevOther.includes(option)) {
+        return { ...prev, other: prevOther.filter((item: string) => item !== option) };
+      } else {
+        return { ...prev, other: [...prevOther, option] };
+      }
+    });
   };
 
   const toggleNone = () => {
     if (hasNoneSelected) {
-      setSelectedAllergies([]);
+      setLocalAllergies({ veg: [], condiment: [], meat: [], other: [] });
       return;
     }
 
@@ -81,14 +106,15 @@ export default function RegisterStep6Screen() {
           {
             text: "ยืนยัน",
             style: "destructive",
-            onPress: () => setSelectedAllergies([NONE_OPTION]),
+            onPress: () =>
+              setLocalAllergies({ veg: [], condiment: [], meat: [], other: [NONE_OPTION] }),
           },
         ]
       );
       return;
     }
 
-    setSelectedAllergies([NONE_OPTION]);
+    setLocalAllergies({ veg: [], condiment: [], meat: [], other: [NONE_OPTION] });
   };
 
   const handleOpenMore = () => {
@@ -100,9 +126,10 @@ export default function RegisterStep6Screen() {
       return;
     }
 
+    // ส่ง Object เข้า Context
     updateForm({
       hasAllergies: true,
-      allergies: selectedAllergies,
+      allergies: localAllergies,
     });
 
     router.push("/register/step6-2" as any);
@@ -117,16 +144,23 @@ export default function RegisterStep6Screen() {
       return;
     }
 
+    // ส่ง Object เข้า Context
     updateForm({
       hasAllergies: !hasNoneSelected,
-      allergies: selectedAllergies,
+      allergies: localAllergies,
     });
 
     router.push("/register/step7" as any);
   };
 
   const removeSelectedItem = (itemToRemove: string) => {
-    setSelectedAllergies((prev) => prev.filter((item) => item !== itemToRemove));
+    // ลบออกจากทุกหมวดหมู่
+    setLocalAllergies((prev: any) => ({
+      veg: (prev.veg || []).filter((item: string) => item !== itemToRemove),
+      condiment: (prev.condiment || []).filter((item: string) => item !== itemToRemove),
+      meat: (prev.meat || []).filter((item: string) => item !== itemToRemove),
+      other: (prev.other || []).filter((item: string) => item !== itemToRemove),
+    }));
   };
 
   const isSelected = (option: string) => selectedAllergies.includes(option);

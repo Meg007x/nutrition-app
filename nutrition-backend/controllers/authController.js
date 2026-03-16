@@ -182,11 +182,13 @@ const registerUser = async (req, res) => {
         tdee_target_kcal: tdeeResult
       },
 
-      // [หน้า 6] การแพ้อาหาร
-      allergies: Array.isArray(d.allergies) ? d.allergies : [],
+// [หน้า 6] การแพ้อาหาร (แก้ให้เป็น Object)
+      allergies: (typeof d.allergies === 'object' && d.allergies !== null && !Array.isArray(d.allergies)) ? 
+        d.allergies : { veg: [], condiment: [], meat: [], other: [] },
 
-      // [หน้า 7] อาหารที่ไม่ชอบ
-      disliked_foods: Array.isArray(d.disliked_foods) ? d.disliked_foods : [],
+      // [หน้า 7] อาหารที่ไม่ชอบ (แก้ให้เป็น Object)
+      disliked_foods: (typeof d.disliked_foods === 'object' && d.disliked_foods !== null && !Array.isArray(d.disliked_foods)) ? 
+        d.disliked_foods : { veg: [], condiment: [], meat: [], other: [] },
 
       // [หน้า 8] สไตล์อาหารที่สนใจ
       interested_cuisines: Array.isArray(d.interested_cuisines) ? d.interested_cuisines : [],
@@ -206,12 +208,29 @@ const registerUser = async (req, res) => {
       updated_at: new Date()
     };
 
+    // 1. บันทึกข้อมูลลง Collection Users
     await db.collection('Users').insertOne(newUser);
+
+    // 🚀 2. สร้าง BodyLogs ประวัติน้ำหนักวันแรก (Day 1) ลง Database ทันที
+    const currentMonth = `${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+    const initialBodyLog = {
+      _id: `body_${newUser.user_id}_${currentMonth}`,
+      user_id: newUser.user_id,
+      history: [
+        {
+          date: new Date(), // วันที่สมัครสมาชิก
+          weight: newUser.weight_kg, // น้ำหนักตั้งต้น
+          bmi: bmiResult.bmi, 
+          source: "manual"
+        }
+      ]
+    };
+    await db.collection('BodyLogs').insertOne(initialBodyLog);
 
     const { password, ...userWithoutPassword } = newUser;
 
     return res.status(201).json({
-      message: "🎉 บันทึกข้อมูลสมาชิกเรียบร้อย!",
+      message: "🎉 บันทึกข้อมูลสมาชิกและประวัติน้ำหนักเรียบร้อย!",
       user: userWithoutPassword
     });
   } catch (error) {

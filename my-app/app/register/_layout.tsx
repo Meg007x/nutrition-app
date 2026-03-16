@@ -8,6 +8,7 @@ export default function RegisterLayout() {
       <Stack.Screen name="step3" />
       <Stack.Screen name="step4" />
       <Stack.Screen name="step5" />
+      <Stack.Screen name="step5-1" />
       <Stack.Screen name="step6-1" />
       <Stack.Screen name="step6-2" />
       <Stack.Screen name="step7" />
