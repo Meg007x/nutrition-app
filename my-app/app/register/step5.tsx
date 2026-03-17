@@ -12,10 +12,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useRegister } from "../../context/register-context";
+import styles, { ORANGE, BG, IOS_GREEN, ROW_COLOR_1, ROW_COLOR_2, WHITE } from "./step5.styles";
 
-const ORANGE = "#F5A400";
-const BG = "#F3F3F3";
-const WHITE = "#FFFFFF";
 
 // อัปเดต Type ให้ตรงกับ Context ของคุณ
 type ActivityLevel = "sedentary" | "light" | "moderate" | "active" | "very_active" ;
@@ -130,37 +128,3 @@ const handleNext = () => {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
-  headerBar: { backgroundColor: ORANGE, paddingVertical: 14, alignItems: "center" },
-  headerBarText: { color: "#fff", fontSize: 20, fontWeight: "900" },
-  content: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 24, flexGrow: 1 },
-  stepTitle: { fontSize: 26, fontWeight: "900", color: "#111" },
-  progressTrack: { marginTop: 12, height: 7, backgroundColor: "#D7CFBF", borderRadius: 10, overflow: "hidden" },
-  progressFill: { height: "100%", backgroundColor: ORANGE, borderRadius: 10 },
-  sectionDesc: { marginTop: 16, fontSize: 16, color: "#555", lineHeight: 24, marginBottom: 8 },
-  optionList: { marginTop: 12, gap: 12 },
-  optionCard: { backgroundColor: WHITE, borderRadius: 14, borderWidth: 1.4, borderColor: "#D9D9D9", padding: 16 },
-  optionCardActive: { backgroundColor: ORANGE, borderColor: "#C97800" },
-  optionTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  optionTitle: { fontSize: 18, fontWeight: "900", color: "#222" },
-  optionTitleActive: { color: "#fff" },
-  optionDesc: { marginTop: 8, fontSize: 14, lineHeight: 20, color: "#555" },
-  optionDescActive: { color: "#FFF7E8" },
-  helpButtonWrap: { marginTop: 12, alignItems: "flex-end" },
-  helperButton: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8 },
-  helperButtonText: { fontSize: 14, color: "#666", fontWeight: "700" },
-  bottomRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 20 },
-  backButton: { width: 120, paddingVertical: 15, borderRadius: 15, borderWidth: 1.8, borderColor: "#333", backgroundColor: "#FFF", alignItems: "center" },
-  backButtonText: { fontWeight: "900", fontSize: 16, color: "#111" },
-  nextButton: { width: 120, backgroundColor: ORANGE, paddingVertical: 15, borderRadius: 15, alignItems: "center" },
-  nextButtonText: { color: "#fff", fontWeight: "900", fontSize: 16 },
-  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", padding: 24 },
-  modalCard: { backgroundColor: "#fff", borderRadius: 20, padding: 22 },
-  modalTitle: { fontSize: 22, fontWeight: "900", textAlign: "center", color: "#111", marginBottom: 14 },
-  modalItem: { marginBottom: 14 },
-  modalItemTitle: { fontSize: 16, fontWeight: "900", color: "#111" },
-  modalItemDesc: { marginTop: 4, fontSize: 14, color: "#555", lineHeight: 21 },
-  modalCloseButton: { marginTop: 16, backgroundColor: ORANGE, paddingVertical: 14, borderRadius: 12, alignItems: "center" },
-  modalCloseText: { color: "#fff", fontWeight: "900", fontSize: 16 },
-});

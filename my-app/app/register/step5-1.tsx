@@ -15,14 +15,16 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useRegister } from "../../context/register-context";
-
-const ORANGE = "#F5A400";
-const BG = "#F3F3F3";
-const WHITE = "#FFFFFF";
-
-// สีสำหรับสถานะการแจ้งเตือน
-const WARN_COLOR = "#FF9500";
-const ERROR_COLOR = "#FF3B30";
+import styles, { 
+  ORANGE, 
+  BG, 
+  IOS_GREEN, 
+  ROW_COLOR_1, 
+  ROW_COLOR_2, 
+  WHITE, 
+  WARN_COLOR, 
+  ERROR_COLOR 
+} from "./step5-1.styles";
 
 type ProteinLevel = "low" | "medium" | "high";
 type ProteinMode = "auto" | "custom";
@@ -255,49 +257,3 @@ export default function RegisterStep5_1Screen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
-  headerBar: { backgroundColor: ORANGE, paddingVertical: 14, alignItems: "center" },
-  headerBarText: { color: "#fff", fontSize: 20, fontWeight: "900" },
-  content: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 24, flexGrow: 1 },
-  stepTitle: { fontSize: 26, fontWeight: "900", color: "#111" },
-  progressTrack: { marginTop: 12, height: 7, backgroundColor: "#D7CFBF", borderRadius: 10, overflow: "hidden" },
-  progressFill: { height: "100%", backgroundColor: ORANGE, borderRadius: 10 },
-  sectionDesc: { marginTop: 16, fontSize: 16, color: "#555", lineHeight: 24, marginBottom: 12 },
-  
-  modeRow: { flexDirection: "row", gap: 12, marginBottom: 16 },
-  modeButton: { flex: 1, backgroundColor: WHITE, borderWidth: 1.4, borderColor: "#D9D9D9", borderRadius: 12, paddingVertical: 12, alignItems: "center" },
-  modeButtonActive: { backgroundColor: ORANGE, borderColor: "#C97800" },
-  modeButtonText: { fontSize: 16, fontWeight: "900", color: "#333" },
-  modeButtonTextActive: { color: "#fff" },
-
-  optionList: { gap: 12 },
-  optionCard: { backgroundColor: WHITE, borderRadius: 14, borderWidth: 1.4, borderColor: "#D9D9D9", padding: 16 },
-  optionCardActive: { backgroundColor: ORANGE, borderColor: "#C97800" },
-  optionTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  optionTitle: { fontSize: 18, fontWeight: "900", color: "#222" },
-  optionTitleActive: { color: "#fff" },
-  optionDesc: { marginTop: 8, fontSize: 14, lineHeight: 20, color: "#555" },
-  optionDescActive: { color: "#FFF7E8" },
-  optionHint: { marginTop: 8, fontSize: 14, fontWeight: "800", color: "#7A5A00" },
-  optionHintActive: { color: "#fff" },
-
-  // --- ปรับสีป้ายแนะนำให้ตัดกันสุดๆ (สีเขียวมรกต + ตัวหนังสือสีขาว) ---
-  badgeRecommend: { backgroundColor: "#10B981", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginLeft: 10 },
-  badgeRecommendText: { fontSize: 12, fontWeight: "800", color: "#FFFFFF" },
-
-  customCard: { backgroundColor: "#fff", borderRadius: 14, borderWidth: 1.5, borderColor: "#D9D9D9", padding: 20, marginTop: 10 },
-  customTitle: { fontSize: 18, fontWeight: "900", color: "#111", marginBottom: 12 },
-  inputRow: { flexDirection: "row", alignItems: "center", backgroundColor: "#F8F8F8", borderRadius: 12, borderWidth: 1.2, borderColor: "#CCC", paddingHorizontal: 16, height: 60 },
-  customInput: { flex: 1, fontSize: 24, fontWeight: "900", color: "#111" },
-  customUnit: { fontSize: 16, fontWeight: "800", color: "#666", marginLeft: 10 },
-  
-  validationMsg: { marginTop: 12, fontSize: 14, fontWeight: "700", lineHeight: 20 },
-  validationMsgNormal: { marginTop: 12, fontSize: 14, color: "#666" },
-
-  bottomRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 20 },
-  backButton: { width: 120, paddingVertical: 15, borderRadius: 15, borderWidth: 1.8, borderColor: "#333", backgroundColor: "#FFF", alignItems: "center" },
-  backButtonText: { fontWeight: "900", fontSize: 16, color: "#111" },
-  nextButton: { width: 120, backgroundColor: ORANGE, paddingVertical: 15, borderRadius: 15, alignItems: "center" },
-  nextButtonText: { color: "#fff", fontWeight: "900", fontSize: 16 },
-});

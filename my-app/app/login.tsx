@@ -15,11 +15,14 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ThemedText } from "../components/themed-text";
 import { loginUser } from "../services/auth";
+import styles, { 
+  ORANGE, 
+  BG, 
+  CARD, 
+  BORDER 
+} from "./login.styles";
 
-const ORANGE = "#F5A400";
-const BG = "#F1F1F1";
-const CARD = "#F6F6F6";
-const BORDER = "#222";
+
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -139,94 +142,3 @@ export default function LoginScreen() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: BG,
-  },
-  headerBar: {
-    backgroundColor: ORANGE,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  headerText: {
-    color: "#fff",
-    fontSize: 22,
-    fontWeight: "900",
-  },
-  content: {
-    flex: 1,
-    justifyContent: "center",
-    padding: 16,
-  },
-  card: {
-    backgroundColor: CARD,
-    borderRadius: 22,
-    borderWidth: 1.4,
-    borderColor: BORDER,
-    padding: 16,
-    shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  label: {
-    fontSize: 18,
-    fontWeight: "900",
-    color: "#111",
-    marginBottom: 6,
-    marginTop: 4,
-  },
-  input: {
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    borderWidth: 1.2,
-    borderColor: "#333",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: "#333",
-    marginBottom: 12,
-  },
-  passwordWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    borderWidth: 1.2,
-    borderColor: "#333",
-    paddingHorizontal: 10,
-  },
-  passwordInput: {
-    flex: 1,
-    fontSize: 16,
-    paddingVertical: 12,
-    color: "#333",
-  },
-  eyeButton: {
-    paddingHorizontal: 6,
-  },
-  loginButton: {
-    marginTop: 20,
-    backgroundColor: ORANGE,
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  loginButtonText: {
-    color: "#fff",
-    fontSize: 20,
-    fontWeight: "900",
-  },
-  registerLink: {
-    marginTop: 16,
-    alignItems: "center",
-  },
-  registerLinkText: {
-    color: "#0A66C2",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-});

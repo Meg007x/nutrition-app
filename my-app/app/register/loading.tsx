@@ -8,6 +8,10 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 
+// กำหนดตัวแปรฟอนต์ไว้ด้านบนสำหรับใช้ในไฟล์นี้
+const FONT_REGULAR = 'NotoSansThai';
+const FONT_BOLD = 'NotoSansThaiBold';
+
 export default function RegisterLoadingScreen() {
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
@@ -116,20 +120,20 @@ const styles = StyleSheet.create({
   icon: {
     fontSize: 130,
     color: '#16EF2C',
-    fontFamily: 'NotoSansThaiBold',
+    fontFamily: FONT_BOLD,
     lineHeight: 140,
   },
   title: {
     fontSize: 30,
     color: '#000',
-    fontFamily: 'NotoSansThaiBold',
+    fontFamily: FONT_BOLD,
     marginBottom: 2,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
     color: '#777',
-    fontFamily: 'NotoSansThaiBold',
+    fontFamily: FONT_REGULAR, // ใช้ฟอนต์ธรรมดาให้อ่านง่าย
     textAlign: 'center',
     marginBottom: 18,
   },
@@ -181,13 +185,13 @@ const styles = StyleSheet.create({
   tipTitle: {
     fontSize: 16,
     color: '#666',
-    fontFamily: 'NotoSansThaiBold',
+    fontFamily: FONT_BOLD,
     marginBottom: 2,
   },
   tipText: {
     fontSize: 14,
     color: '#666',
-    fontFamily: 'NotoSansThaiBold',
+    fontFamily: FONT_REGULAR, // ใช้ฟอนต์ธรรมดาให้อ่านง่าย
     lineHeight: 20,
   },
 });

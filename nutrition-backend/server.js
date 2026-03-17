@@ -8,6 +8,8 @@ const dashboardRoutes = require('./routes/dashboardRoutes');
 const { getIngredients, getDislikedFoods } = require('./controllers/foodController');
 // const foodRoutes = require('./routes/foodRoutes');
 
+const aiRoute = require('./routes/aiRoute');
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -26,6 +28,9 @@ app.use('/api/auth', require('./routes/authRoutes'));
 // app.use('/api', foodRoutes);
 app.get('/api/ingredients', getIngredients);      // อันนี้ของหน้า 6
 app.get('/api/disliked-foods', getDislikedFoods); // 🚀 ต้องมีบรรทัดนี้ของหน้า 7 นะครับ!
+app.use('/api/ai', aiRoute);
+
+
 
 // 4. เปิดเซิร์ฟเวอร์
 app.listen(3000, () => {
