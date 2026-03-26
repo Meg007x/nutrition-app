@@ -1,33 +1,38 @@
 const mongoose = require("mongoose");
 
 // ==========================================
-// [ฟังก์ชันที่ 1] ดึงข้อมูลสำหรับหน้า 6-2 (แพ้อาหาร)
+// [ฟังก์ชันที่ 1] ดึงข้อมูลวัตถุดิบทั้งหมด
+// ใช้สำหรับหน้าเพิ่มส่วนผสม / dropdown / modal
 // ==========================================
 const getIngredients = async (req, res) => {
   try {
     const db = mongoose.connection.db;
-    
-    // ดึงข้อมูลทั้งหมดจาก Collection Ingredients
-    const ingredientsData = await db.collection("Ingredients").find({}).toArray();
 
-    // จัดกลุ่ม (Group) ข้อมูลแยกตามหมวดหมู่
-    const groupedData = {
-      veg: ingredientsData.filter(item => item.category === "veg"),
-      condiment: ingredientsData.filter(item => item.category === "condiment"),
-      meat: ingredientsData.filter(item => item.category === "meat"),
-      other: ingredientsData.filter(item => item.category === "other")
-    };
+    // ดึงเฉพาะรายการที่ยังเปิดใช้งาน และเรียงตามหมวดหลัก > หมวดย่อย > ชื่อ
+    const ingredientsData = await db
+      .collection("Ingredients")
+      .find({
+        $or: [{ is_active: true }, { is_active: { $exists: false } }],
+      })
+      .sort({
+        category_group: 1,
+        sub_category: 1,
+        name: 1,
+      })
+      .toArray();
 
     return res.status(200).json({
+      success: true,
       message: "ดึงข้อมูลวัตถุดิบสำเร็จ",
-      data: groupedData
+      count: ingredientsData.length,
+      data: ingredientsData,
     });
-
   } catch (error) {
     console.error("❌ Get Ingredients Error:", error);
-    return res.status(500).json({ 
-      message: "เกิดข้อผิดพลาดในการดึงข้อมูลวัตถุดิบ", 
-      error: error.message 
+    return res.status(500).json({
+      success: false,
+      message: "เกิดข้อผิดพลาดในการดึงข้อมูลวัตถุดิบ",
+      error: error.message,
     });
   }
 };
@@ -38,7 +43,8 @@ const getIngredients = async (req, res) => {
 const getDislikedFoods = async (req, res) => {
   try {
     const db = mongoose.connection.db;
-    // ดึงข้อมูลจาก Collection Ingredients ถังเดียวกันเลย!
+
+    // ดึงข้อมูลจาก Collection Ingredients ทั้งหมด
     const allFoods = await db.collection("Ingredients").find({}).toArray();
 
     // กำหนดหมวดหมู่หลักสำหรับหน้า 7
@@ -50,35 +56,42 @@ const getDislikedFoods = async (req, res) => {
       { id: "egg_cheese", name: "ไข่และชีส" },
       { id: "bread", name: "ขนมปัง" },
       { id: "sweet", name: "ขนมหวานและน้ำตาล" },
-      { id: "veg_fruit", name: "ผลไม้และผัก" }
+      { id: "veg_fruit", name: "ผลไม้และผัก" },
     ];
 
     // จับคู่ข้อมูลจาก DB เข้าหมวดหมู่ของหน้า 7
-    const groupedData = categories.map(cat => {
+    const groupedData = categories.map((cat) => {
       return {
         id: cat.id,
         name: cat.name,
         foods: allFoods
-          .filter(food => food.category === cat.id) // กรองเอาเฉพาะหมวดนั้นๆ
-          .map(food => ({ id: food._id, name: food.name }))
+          .filter((food) => food.category === cat.id)
+          .map((food) => ({
+            id: food._id,
+            name: food.name,
+          })),
       };
     });
 
     return res.status(200).json({
+      success: true,
       message: "ดึงข้อมูลอาหารที่ไม่ชอบสำเร็จ",
-      data: groupedData
+      data: groupedData,
     });
-
   } catch (error) {
     console.error("❌ Get Disliked Foods Error:", error);
-    return res.status(500).json({ message: "เกิดข้อผิดพลาด" });
+    return res.status(500).json({
+      success: false,
+      message: "เกิดข้อผิดพลาด",
+      error: error.message,
+    });
   }
 };
 
 // ==========================================
-// 🚀 สำคัญมาก: ส่งออกไปใช้งานทั้ง 2 ฟังก์ชัน
+// 🚀 ส่งออกไปใช้งาน
 // ==========================================
-module.exports = { 
-  getIngredients, 
-  getDislikedFoods // เพิ่มตัวนี้เข้ามา เพื่อให้ไฟล์ Route มองเห็น
+module.exports = {
+  getIngredients,
+  getDislikedFoods,
 };

@@ -1,0 +1,220 @@
+const MealLog = require("../models/MealLog");
+const ScanSession = require("../models/ScanSession");
+
+function buildMealKey(mealType) {
+  const map = {
+    เช้า: "breakfast",
+    กลางวัน: "lunch",
+    เย็น: "dinner",
+    คํ่า: "dinner",
+    ค่ำ: "dinner",
+    ดึก: "late_night",
+  };
+
+  return map[String(mealType || "").trim()] || "meal";
+}
+
+function buildMealOrder(mealType) {
+  const map = {
+    เช้า: 1,
+    กลางวัน: 2,
+    เย็น: 3,
+    คํ่า: 4,
+    ค่ำ: 4,
+    ดึก: 5,
+  };
+
+  return map[String(mealType || "").trim()] || 0;
+}
+
+function buildDisplayText(selected_portion = {}) {
+  if (selected_portion.display_text) {
+    return selected_portion.display_text;
+  }
+
+  const gram = Number(selected_portion.gram || 0);
+  const unit = String(selected_portion.unit || "g");
+  const multiplier = Number(selected_portion.multiplier || 1);
+
+  if (unit === "plate") return `${multiplier} จาน (${gram} กรัม)`;
+  if (unit === "bowl") return `${multiplier} ชาม (${gram} กรัม)`;
+  if (unit === "cup") return `${multiplier} ถ้วย (${gram} กรัม)`;
+  if (unit === "piece") return `${multiplier} ชิ้น (${gram} กรัม)`;
+
+  return `${gram} ${unit}`;
+}
+
+exports.finalizeMealLog = async (req, res) => {
+  try {
+    const { user_id, date, meal_type } = req.body;
+
+    if (!user_id) {
+      return res.status(400).json({
+        success: false,
+        error: "ไม่พบ user_id",
+      });
+    }
+
+    if (!date) {
+      return res.status(400).json({
+        success: false,
+        error: "ไม่พบ date",
+      });
+    }
+
+    if (!meal_type) {
+      return res.status(400).json({
+        success: false,
+        error: "ไม่พบ meal_type",
+      });
+    }
+
+    const scanItems = await ScanSession.find({
+      user_id: String(user_id).trim(),
+      date: String(date).trim(),
+      meal_type: String(meal_type).trim(),
+    })
+      .sort({ created_at: 1, _id: 1 })
+      .lean();
+
+    if (!scanItems.length) {
+      return res.status(400).json({
+        success: false,
+        error: "ยังไม่มีรายการอาหารในมื้อนี้",
+      });
+    }
+
+    const meal_key = buildMealKey(meal_type);
+    const meal_order = buildMealOrder(meal_type);
+    const mealLogId = `meal_${user_id}_${date}_${meal_key}`;
+
+    const items = scanItems.map((item, index) => ({
+      item_id: `item_${String(index + 1).padStart(3, "0")}`,
+      scan_session_id: String(item._id),
+      source: item.source || "scan",
+
+      food_id: item.food_id || null,
+      food_name: item.food_name || "",
+      food_name_en: item.food_name_en || "",
+      category: item.category || "",
+      image_uri: item.image_uri || "",
+
+      selected_portion: {
+        display_text: buildDisplayText(item.selected_portion),
+        gram: Number(item?.selected_portion?.gram || 0),
+        unit: item?.selected_portion?.unit || "",
+        multiplier: Number(item?.selected_portion?.multiplier || 1),
+      },
+
+      nutrition: {
+        kcal: Number(item?.nutrition?.kcal || 0),
+        protein_g: Number(item?.nutrition?.protein_g || 0),
+        carb_g: Number(item?.nutrition?.carb_g || 0),
+        fat_g: Number(item?.nutrition?.fat_g || 0),
+        fiber_g: Number(item?.nutrition?.fiber_g || 0),
+        sodium_mg: Number(item?.nutrition?.sodium_mg || 0),
+      },
+
+      ingredients: Array.isArray(item.ingredients_from_master)
+        ? item.ingredients_from_master.map((ing) => ({
+            ingredient_id: ing.ingredient_id || "",
+            name: ing.name || "",
+            qty: Number(ing.qty || 0),
+            unit: ing.unit || "",
+          }))
+        : [],
+
+      extra_ingredients: Array.isArray(item.extra_ingredients)
+        ? item.extra_ingredients.map((ing) => ({
+            ingredient_id: ing.ingredient_id || "",
+            name: ing.name || "",
+            qty: Number(ing.qty || 0),
+            unit: ing.unit || "",
+          }))
+        : [],
+
+      logged_at: item.created_at || new Date(),
+    }));
+
+    const totals = items.reduce(
+      (acc, item) => {
+        acc.kcal += Number(item?.nutrition?.kcal || 0);
+        acc.protein_g += Number(item?.nutrition?.protein_g || 0);
+        acc.fat_g += Number(item?.nutrition?.fat_g || 0);
+        acc.carb_g += Number(item?.nutrition?.carb_g || 0);
+        acc.fiber_g += Number(item?.nutrition?.fiber_g || 0);
+        acc.sodium_mg += Number(item?.nutrition?.sodium_mg || 0);
+        return acc;
+      },
+      {
+        kcal: 0,
+        protein_g: 0,
+        fat_g: 0,
+        carb_g: 0,
+        fiber_g: 0,
+        sodium_mg: 0,
+      }
+    );
+
+    const payload = {
+      _id: mealLogId,
+      user_id,
+      date,
+      meal_type,
+      meal_key,
+      meal_order,
+
+      source_plan_id: null,
+      is_from_daily_plan: false,
+
+      daily_targets: {
+        kcal: 0,
+        protein_g: 0,
+        fat_g: 0,
+        carb_g: 0,
+      },
+
+      meal_targets: {
+        kcal: 0,
+        protein_g: 0,
+        fat_g: 0,
+        carb_g: 0,
+        fiber_g: 0,
+        sodium_mg: 0,
+      },
+
+      totals,
+      items,
+      scan_session_ids: scanItems.map((item) => String(item._id)),
+      status: "completed",
+      note: "",
+      updated_at: new Date(),
+    };
+
+    const mealLog = await MealLog.findOneAndUpdate(
+      { _id: mealLogId },
+      {
+        $set: payload,
+        $setOnInsert: {
+          created_at: new Date(),
+        },
+      },
+      {
+        upsert: true,
+        new: true,
+      }
+    );
+
+    return res.json({
+      success: true,
+      message: "บันทึก MealLog สำเร็จ",
+      data: mealLog,
+    });
+  } catch (error) {
+    console.error("❌ finalizeMealLog error:", error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || "เกิดข้อผิดพลาดในการบันทึก MealLog",
+    });
+  }
+};

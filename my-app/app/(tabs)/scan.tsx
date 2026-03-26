@@ -1,15 +1,10 @@
-import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { useEffect } from "react";
+import { router, type Href } from "expo-router";
 
-export default function ScanScreen() {
-  return (
-    <View style={styles.container}>
-      <Text style={styles.text}>Scan Screen</Text>
-    </View>
-  );
+export default function ScanTabRedirect() {
+  useEffect(() => {
+    router.replace("/food-scan" as Href);
+  }, []);
+
+  return null;
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#fff" },
-  text: { fontSize: 24, fontWeight: "800" },
-});
