@@ -162,66 +162,70 @@ exports.addWaterRecord = async (req, res) => {
 };
 
 exports.deleteWaterRecord = async (req, res) => {
-  try {
-    const { userId, date, index } = req.params;
+try {
+const { userId, date, index } = req.params;
 
-    if (!userId || !date || index === undefined) {
-      return res.status(400).json({
-        success: false,
-        error: "ข้อมูลไม่ครบ",
-      });
-    }
+if (!userId || !date || index === undefined) {
+  return res.status(400).json({
+    success: false,
+    error: "ข้อมูลไม่ครบ",
+  });
+}
 
-    const recordIndex = Number(index);
+const recordIndex = Number(index);
 
-    if (Number.isNaN(recordIndex) || recordIndex < 0) {
-      return res.status(400).json({
-        success: false,
-        error: "index ไม่ถูกต้อง",
-      });
-    }
+if (Number.isNaN(recordIndex) || recordIndex < 0) {
+  return res.status(400).json({
+    success: false,
+    error: "index ไม่ถูกต้อง",
+  });
+}
 
-    const doc = await WaterLog.findOne({
-      user_id: userId,
-      date,
-    });
+const doc = await WaterLog.findOne({
+  user_id: userId,
+  date,
+});
 
-    if (!doc) {
-      return res.status(404).json({
-        success: false,
-        error: "ไม่พบข้อมูลการดื่มน้ำของวันนี้",
-      });
-    }
+if (!doc) {
+  return res.status(404).json({
+    success: false,
+    error: "ไม่พบข้อมูลการดื่มน้ำของวันนี้",
+  });
+}
 
-    if (!doc.records[recordIndex]) {
-      return res.status(404).json({
-        success: false,
-        error: "ไม่พบรายการที่ต้องการลบ",
-      });
-    }
+if (!doc.records[recordIndex]) {
+  return res.status(404).json({
+    success: false,
+    error: "ไม่พบรายการที่ต้องการลบ",
+  });
+}
 
-    const removedAmount = Number(doc.records[recordIndex].amount_ml || 0);
+const removedAmount = Number(doc.records[recordIndex].amount_ml || 0);
 
-    doc.records.splice(recordIndex, 1);
-    doc.total_drank_ml = Math.max(
-      0,
-      Number(doc.total_drank_ml || 0) - removedAmount
-    );
+doc.records.splice(recordIndex, 1);
 
-    await doc.save();
+// บรรทัดนี้คือส่วนที่เพิ่มเข้ามาเพื่อให้ Mongoose ยอมบันทึกการลบข้อมูลใน Array
+doc.markModified("records");
 
-    return res.json({
-      success: true,
-      message: "ลบรายการน้ำดื่มเรียบร้อยแล้ว",
-      waterLog: doc,
-    });
-  } catch (error) {
-    console.error("deleteWaterRecord error:", error);
-    return res.status(500).json({
-      success: false,
-      error: "ไม่สามารถลบรายการน้ำดื่มได้",
-    });
-  }
+doc.total_drank_ml = Math.max(
+  0,
+  Number(doc.total_drank_ml || 0) - removedAmount
+);
+
+await doc.save();
+
+return res.json({
+  success: true,
+  message: "ลบรายการน้ำดื่มเรียบร้อยแล้ว",
+  waterLog: doc,
+});
+} catch (error) {
+console.error("deleteWaterRecord error:", error);
+return res.status(500).json({
+success: false,
+error: "ไม่สามารถลบรายการน้ำดื่มได้",
+});
+}
 };
 
 exports.updateTargetWater = async (req, res) => {
