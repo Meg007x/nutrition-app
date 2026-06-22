@@ -1,6 +1,8 @@
 const MealLog = require("../models/MealLog");
 const ScanSession = require("../models/ScanSession");
+const { updateStreak } = require("../utils/streakUpdater");
 
+// 🟢 ฟังก์ชันช่วยจัดการข้อมูลเดิมของระบบ
 function buildMealKey(mealType) {
   const map = {
     เช้า: "breakfast",
@@ -10,7 +12,6 @@ function buildMealKey(mealType) {
     ค่ำ: "dinner",
     ดึก: "late_night",
   };
-
   return map[String(mealType || "").trim()] || "meal";
 }
 
@@ -23,7 +24,6 @@ function buildMealOrder(mealType) {
     ค่ำ: 4,
     ดึก: 5,
   };
-
   return map[String(mealType || "").trim()] || 0;
 }
 
@@ -44,54 +44,47 @@ function buildDisplayText(selected_portion = {}) {
   return `${gram} ${unit}`;
 }
 
-exports.finalizeMealLog = async (req, res) => {
+// ==========================================================
+// 🟢 [ฟังก์ชันที่เพิ่มเข้ามาใหม่]: บันทึกอาหารแบบตะกร้าจากหน้าแอป
+// ==========================================================
+exports.saveMealCart = async (req, res) => {
   try {
-    const { user_id, date, meal_type } = req.body;
+    const { user_id, date, meal_type, items } = req.body;
 
-    if (!user_id) {
+    // 1. ตรวจสอบข้อมูลขั้นต่ำที่ต้องใช้
+    if (!user_id || !date || !meal_type) {
       return res.status(400).json({
         success: false,
-        error: "ไม่พบ user_id",
+        error: "ข้อมูลสำคัญไม่ครบถ้วน (ต้องการ user_id, date, meal_type)",
       });
     }
 
-    if (!date) {
+    if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
         success: false,
-        error: "ไม่พบ date",
+        error: "ตะกร้าอาหารว่างเปล่า ไม่สามารถบันทึกมื้ออาหารได้",
       });
     }
 
-    if (!meal_type) {
-      return res.status(400).json({
-        success: false,
-        error: "ไม่พบ meal_type",
-      });
-    }
+    // 2. คำนวณสารอาหารรวมทั้งหมดในมื้อ (Totals) จากตะกร้าที่ส่งมา ป้องกันการคลาดเคลื่อน
+    const totals = items.reduce(
+      (acc, item) => {
+        acc.kcal += Number(item?.nutrition?.kcal || 0);
+        acc.protein_g += Number(item?.nutrition?.protein_g || 0);
+        acc.fat_g += Number(item?.nutrition?.fat_g || 0);
+        acc.carb_g += Number(item?.nutrition?.carb_g || 0);
+        acc.fiber_g += Number(item?.nutrition?.fiber_g || 0);
+        acc.sodium_mg += Number(item?.nutrition?.sodium_mg || 0);
+        return acc;
+      },
+      { kcal: 0, protein_g: 0, fat_g: 0, carb_g: 0, fiber_g: 0, sodium_mg: 0 }
+    );
 
-    const scanItems = await ScanSession.find({
-      user_id: String(user_id).trim(),
-      date: String(date).trim(),
-      meal_type: String(meal_type).trim(),
-    })
-      .sort({ created_at: 1, _id: 1 })
-      .lean();
-
-    if (!scanItems.length) {
-      return res.status(400).json({
-        success: false,
-        error: "ยังไม่มีรายการอาหารในมื้อนี้",
-      });
-    }
-
-    const meal_key = buildMealKey(meal_type);
-    const meal_order = buildMealOrder(meal_type);
-    const mealLogId = `meal_${user_id}_${date}_${meal_key}`;
-
-    const items = scanItems.map((item, index) => ({
-      item_id: `item_${String(index + 1).padStart(3, "0")}`,
-      scan_session_id: String(item._id),
-      source: item.source || "scan",
+    // ทำการแมปโครงสร้างของ items แต่ละตัวเพื่อให้มั่นใจว่าฟอร์แมต display_text ถูกต้องตามระบบของเพื่อนคุณ
+    const formattedItems = items.map((item, index) => ({
+      item_id: item.item_id || `item_${String(index + 1).padStart(3, "0")}`,
+      scan_session_id: item.scan_session_id || "",
+      source: item.source || "manual", // ถ้ามาจากตะกร้าตรงๆ ให้ค่าเริ่มต้นเป็น manual
 
       food_id: item.food_id || null,
       food_name: item.food_name || "",
@@ -115,47 +108,22 @@ exports.finalizeMealLog = async (req, res) => {
         sodium_mg: Number(item?.nutrition?.sodium_mg || 0),
       },
 
-      ingredients: Array.isArray(item.ingredients_from_master)
-        ? item.ingredients_from_master.map((ing) => ({
-            ingredient_id: ing.ingredient_id || "",
-            name: ing.name || "",
-            qty: Number(ing.qty || 0),
-            unit: ing.unit || "",
-          }))
-        : [],
-
-      extra_ingredients: Array.isArray(item.extra_ingredients)
-        ? item.extra_ingredients.map((ing) => ({
-            ingredient_id: ing.ingredient_id || "",
-            name: ing.name || "",
-            qty: Number(ing.qty || 0),
-            unit: ing.unit || "",
-          }))
-        : [],
-
-      logged_at: item.created_at || new Date(),
+      ingredients: Array.isArray(item.ingredients) ? item.ingredients : [],
+      extra_ingredients: Array.isArray(item.extra_ingredients) ? item.extra_ingredients : [],
+      logged_at: item.logged_at || new Date(),
     }));
 
-    const totals = items.reduce(
-      (acc, item) => {
-        acc.kcal += Number(item?.nutrition?.kcal || 0);
-        acc.protein_g += Number(item?.nutrition?.protein_g || 0);
-        acc.fat_g += Number(item?.nutrition?.fat_g || 0);
-        acc.carb_g += Number(item?.nutrition?.carb_g || 0);
-        acc.fiber_g += Number(item?.nutrition?.fiber_g || 0);
-        acc.sodium_mg += Number(item?.nutrition?.sodium_mg || 0);
-        return acc;
-      },
-      {
-        kcal: 0,
-        protein_g: 0,
-        fat_g: 0,
-        carb_g: 0,
-        fiber_g: 0,
-        sodium_mg: 0,
-      }
-    );
+    // ดึงค่า meal_key และ ID เพื่อความสอดคล้องกับฟังก์ชันสแกนเดิม
+    const meal_key = buildMealKey(meal_type);
+    const meal_order = buildMealOrder(meal_type);
+    const mealLogId = `meal_${user_id}_${date}_${meal_key}`;
 
+    // รวบรวม session ID ทั้งหมดที่มีในรายการไอเทม
+    const scanSessionIds = formattedItems
+      .map((item) => String(item.scan_session_id || ""))
+      .filter((id) => id !== "");
+
+    // จัดเตรียม Payload โครงสร้างเดียวกับที่ใช้ในระบบของคุณ
     const payload = {
       _id: mealLogId,
       user_id,
@@ -163,34 +131,19 @@ exports.finalizeMealLog = async (req, res) => {
       meal_type,
       meal_key,
       meal_order,
-
-      source_plan_id: null,
-      is_from_daily_plan: false,
-
-      daily_targets: {
-        kcal: 0,
-        protein_g: 0,
-        fat_g: 0,
-        carb_g: 0,
-      },
-
-      meal_targets: {
-        kcal: 0,
-        protein_g: 0,
-        fat_g: 0,
-        carb_g: 0,
-        fiber_g: 0,
-        sodium_mg: 0,
-      },
-
+      source_plan_id: req.body.source_plan_id || null,
+      is_from_daily_plan: req.body.is_from_daily_plan || false,
+      daily_targets: req.body.daily_targets || { kcal: 0, protein_g: 0, fat_g: 0, carb_g: 0 },
+      meal_targets: req.body.meal_targets || { kcal: 0, protein_g: 0, fat_g: 0, carb_g: 0, fiber_g: 0, sodium_mg: 0 },
       totals,
-      items,
-      scan_session_ids: scanItems.map((item) => String(item._id)),
+      items: formattedItems,
+      scan_session_ids: scanSessionIds,
       status: "completed",
-      note: "",
+      note: req.body.note || "",
       updated_at: new Date(),
     };
 
+    // 3. ใช้ findOneAndUpdate (Upsert) เหมือนฟังก์ชันเดิม เพื่อป้องกันข้อมูลมื้อเดียวกันซ้ำซ้อน
     const mealLog = await MealLog.findOneAndUpdate(
       { _id: mealLogId },
       {
@@ -204,6 +157,135 @@ exports.finalizeMealLog = async (req, res) => {
         new: true,
       }
     );
+
+    // 🔥 เรียกใช้งานฟังก์ชันอัปเดตไฟ/Streak ของเพื่อนคุณทันทีหลังจากเซฟตะกร้าอาหารสำเร็จ
+    await updateStreak(user_id);
+
+    return res.json({
+      success: true,
+      message: "บันทึกตะกร้าอาหารลงมื้อประวัติสำเร็จเรียบร้อย",
+      data: mealLog,
+    });
+  } catch (error) {
+    console.error("❌ saveMealCart error:", error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || "เกิดข้อผิดพลาดในการบันทึกตะกร้าอาหาร",
+    });
+  }
+};
+
+// ==========================================================
+// 🟢 [ฟังก์ชันเดิมของเพื่อนคุณ]: รวมประวัติจากการบันทึกผลการสแกนกล้อง
+// ==========================================================
+exports.finalizeMealLog = async (req, res) => {
+  try {
+    const { user_id, date, meal_type } = req.body;
+
+    if (!user_id) return res.status(400).json({ success: false, error: "ไม่พบ user_id" });
+    if (!date) return res.status(400).json({ success: false, error: "ไม่พบ date" });
+    if (!meal_type) return res.status(400).json({ success: false, error: "ไม่พบ meal_type" });
+
+    const scanItems = await ScanSession.find({
+      user_id: String(user_id).trim(),
+      date: String(date).trim(),
+      meal_type: String(meal_type).trim(),
+    })
+      .sort({ created_at: 1, _id: 1 })
+      .lean();
+
+    if (!scanItems.length) {
+      return res.status(400).json({ success: false, error: "ยังไม่มีรายการอาหารในมื้อนี้" });
+    }
+
+    const meal_key = buildMealKey(meal_type);
+    const meal_order = buildMealOrder(meal_type);
+    const mealLogId = `meal_${user_id}_${date}_${meal_key}`;
+
+    const items = scanItems.map((item, index) => ({
+      item_id: `item_${String(index + 1).padStart(3, "0")}`,
+      scan_session_id: String(item._id),
+      source: item.source || "scan",
+      food_id: item.food_id || null,
+      food_name: item.food_name || "",
+      food_name_en: item.food_name_en || "",
+      category: item.category || "",
+      image_uri: item.image_uri || "",
+      selected_portion: {
+        display_text: buildDisplayText(item.selected_portion),
+        gram: Number(item?.selected_portion?.gram || 0),
+        unit: item?.selected_portion?.unit || "",
+        multiplier: Number(item?.selected_portion?.multiplier || 1),
+      },
+      nutrition: {
+        kcal: Number(item?.nutrition?.kcal || 0),
+        protein_g: Number(item?.nutrition?.protein_g || 0),
+        carb_g: Number(item?.nutrition?.carb_g || 0),
+        fat_g: Number(item?.nutrition?.fat_g || 0),
+        fiber_g: Number(item?.nutrition?.fiber_g || 0),
+        sodium_mg: Number(item?.nutrition?.sodium_mg || 0),
+      },
+      ingredients: Array.isArray(item.ingredients_from_master)
+        ? item.ingredients_from_master.map((ing) => ({
+            ingredient_id: ing.ingredient_id || "",
+            name: ing.name || "",
+            qty: Number(ing.qty || 0),
+            unit: ing.unit || "",
+          }))
+        : [],
+      extra_ingredients: Array.isArray(item.extra_ingredients)
+        ? item.extra_ingredients.map((ing) => ({
+            ingredient_id: ing.ingredient_id || "",
+            name: ing.name || "",
+            qty: Number(ing.qty || 0),
+            unit: ing.unit || "",
+          }))
+        : [],
+      logged_at: item.created_at || new Date(),
+    }));
+
+    const totals = items.reduce(
+      (acc, item) => {
+        acc.kcal += Number(item?.nutrition?.kcal || 0);
+        acc.protein_g += Number(item?.nutrition?.protein_g || 0);
+        acc.fat_g += Number(item?.nutrition?.fat_g || 0);
+        acc.carb_g += Number(item?.nutrition?.carb_g || 0);
+        acc.fiber_g += Number(item?.nutrition?.fiber_g || 0);
+        acc.sodium_mg += Number(item?.nutrition?.sodium_mg || 0);
+        return acc;
+      },
+      { kcal: 0, protein_g: 0, fat_g: 0, carb_g: 0, fiber_g: 0, sodium_mg: 0 }
+    );
+
+    const payload = {
+      _id: mealLogId,
+      user_id,
+      date,
+      meal_type,
+      meal_key,
+      meal_order,
+      source_plan_id: null,
+      is_from_daily_plan: false,
+      daily_targets: { kcal: 0, protein_g: 0, fat_g: 0, carb_g: 0 },
+      meal_targets: { kcal: 0, protein_g: 0, fat_g: 0, carb_g: 0, fiber_g: 0, sodium_mg: 0 },
+      totals,
+      items,
+      scan_session_ids: scanItems.map((item) => String(item._id)),
+      status: "completed",
+      note: "",
+      updated_at: new Date(),
+    };
+
+    const mealLog = await MealLog.findOneAndUpdate(
+      { _id: mealLogId },
+      {
+        $set: payload,
+        $setOnInsert: { created_at: new Date() },
+      },
+      { upsert: true, new: true }
+    );
+
+    await updateStreak(user_id);
 
     return res.json({
       success: true,

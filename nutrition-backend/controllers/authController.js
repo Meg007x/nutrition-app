@@ -203,9 +203,14 @@ const registerUser = async (req, res) => {
         advice: adviceText,
       },
 
-      onboarding_completed: true,
-      created_at: new Date(),
-      updated_at: new Date()
+        onboarding_completed: true,
+      
+      // 🔥 เติม 2 บรรทัดนี้สำหรับระบบไฟ (Streak) ให้ผู้ใช้ใหม่
+        current_streak: 0,
+        last_active_date: null,
+
+        created_at: new Date(),
+        updated_at: new Date()
     };
 
     // 1. บันทึกข้อมูลลง Collection Users

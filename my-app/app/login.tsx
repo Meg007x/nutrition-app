@@ -20,7 +20,7 @@ import styles, {
   BG, 
   CARD, 
   BORDER 
-} from "./login.styles";
+} from "../style/login.styles";
 
 
 

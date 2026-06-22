@@ -1032,118 +1032,63 @@ export default function ResultScreen() {
     setShowEditModal(false);
   };
 
-  const handleSave = async () => {
-    if (!food || saving) return;
-
-    if (!resolvedUserId) {
-      Alert.alert("ไม่พบข้อมูลผู้ใช้", "กรุณาเข้าสู่ระบบใหม่อีกครั้ง");
+const handleSave = async () => {
+    // 1. ตรวจสอบชื่ออาหาร โดยใช้ชื่อตัวแปรที่ถูกต้อง (food และ customDishName)
+    const finalName = food?.dishName || customDishName || "";
+    if (!finalName.trim()) {
+      Alert.alert("แจ้งเตือน", "กรุณาระบุชื่ออาหาร");
       return;
     }
 
+    setSaving(true);
+
     try {
-      setSaving(true);
+      // 🟢 คำนวณสารอาหารสุทธิจากตัวแปรต้นทางตรงๆ เพื่อป้องกันสไตล์ขีดเส้นใต้สีแดง
+      const kcal = food ? Math.round((food.calories || 0) * portionMultiplier) : 0;
+      const protein = food ? Math.round((food.protein || 0) * portionMultiplier) : 0;
+      const carb = food ? Math.round((food.carb || 0) * portionMultiplier) : 0;
+      const fat = food ? Math.round((food.fat || 0) * portionMultiplier) : 0;
+      const fiber = food ? Math.round((food.fiber || 0) * portionMultiplier) : 0;
+      const sodium = food ? Math.round((food.sodium || 0) * portionMultiplier) : 0;
 
-      const invalidExtraIngredient = extraIngredients.find(
-        (item) =>
-          item.qty === undefined ||
-          item.qty === null ||
-          Number(item.qty) <= 0 ||
-          Number.isNaN(Number(item.qty))
-      );
-
-      if (invalidExtraIngredient) {
-        Alert.alert(
-          "ปริมาณไม่ถูกต้อง",
-          `กรุณาตรวจสอบปริมาณของ ${invalidExtraIngredient.name}`
-        );
-        setSaving(false);
-        return;
-      }
-
-      const today = new Date();
-      const fallbackDate = `${today.getFullYear()}-${String(
-        today.getMonth() + 1
-      ).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-
-      const date = String(routeDate || fallbackDate);
-
-      const payload = {
-        user_id: resolvedUserId,
-        date,
-        meal_type: selectedMeal,
-
-        food_id: food.id,
-        food_name: customDishName || food.dishName,
-        food_name_en: food.dishNameEn || "",
-        source: FORCE_MOCK_MODE ? "mock" : "database",
-
+      // 2. แพ็กข้อมูลอาหารให้ตรงตามโครงสร้างของตะกร้า (Cart)
+      const formattedFood = {
+        item_id: `item_${Date.now()}`,
+        scan_session_id: "", // ในไฟล์นี้ไม่ได้ดักรับค่าไอดีสแกนมา ส่งเป็นค่าว่างได้เลยครับ
+        food_id: food?.id || null,
+        food_name: finalName,
+        food_name_en: food?.dishNameEn || "",
+        category: food?.category || "ทั่วไป",
+        image_uri: imageUri || "", // ตัวแปรนี้ประกาศไว้บนสุดของไฟล์เพื่อน ใช้ได้ชัวร์ครับ!
+        source: "scan",
         selected_portion: {
-          mode:
-            customGram && Number(customGram) > 0 ? "custom_gram" : "portion",
+          display_text: `${portionMultiplier} จาน (${customGram || 0} กรัม)`,
+          gram: Number(customGram) || 0,
+          unit: "จาน",
           multiplier: portionMultiplier,
-          gram: selectedGram,
-          unit: food.portion.unit,
-          base_gram: food.portion.gram,
-          display_text: currentPortionText,
         },
-
         nutrition: {
-          kcal: scaledNutrition.calories,
-          protein_g: scaledNutrition.protein,
-          carb_g: scaledNutrition.carb,
-          fat_g: scaledNutrition.fat,
-          fiber_g: scaledNutrition.fiber,
-          sodium_mg: scaledNutrition.sodium,
+          kcal: kcal,
+          protein_g: protein,
+          carb_g: carb,
+          fat_g: fat,
+          fiber_g: fiber,
+          sodium_mg: sodium,
         },
-
-        ingredients_from_master: food.ingredients,
-        extra_ingredients: extraIngredients,
-        image_uri: imageUri || "",
+        ingredients: food?.ingredients || [], // ดึงจากก้อนข้อมูลอาหารโดยตรง
       };
 
-      const response = await fetch(`${API_BASE}/api/scan-sessions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
+      console.log("🍏 ส่งข้อมูลกลับไปที่ตะกร้าอาหารสำเร็จ:", formattedFood);
+
+      // 3. พาวิ่งกลับไปที่หน้าตะกร้า (Cart) พร้อมส่งก้อนข้อมูลอาหารไปด้วย
+      router.push({
+        pathname: "/cart", 
+        params: { newFood: JSON.stringify(formattedFood) }
       });
 
-      const res = await response.json();
-
-      if (response.status === 409) {
-        throw new Error(res.error || "รายการนี้ถูกบันทึกไปแล้ว");
-      }
-
-      if (!response.ok || !res.success) {
-        throw new Error(res.error || "ไม่สามารถบันทึกมื้ออาหารได้");
-      }
-
-      await fetchDailySummary();
-
-      Alert.alert("บันทึกสำเร็จ", "ระบบได้บันทึกรายการอาหารเรียบร้อยแล้ว");
-
-      requestAnimationFrame(() => {
-        try {
-          if (returnTo === "meal-entry") {
-            router.replace({
-              pathname: "/meal-entry",
-              params: {
-                ...(routeDate ? { date: String(routeDate) } : {}),
-                ...(selectedMeal ? { mealType: String(selectedMeal) } : {}),
-              },
-            });
-            return;
-          }
-
-          router.back();
-        } catch (_) {}
-      });
-    } catch (error: any) {
-      Alert.alert(
-        "เกิดข้อผิดพลาด",
-        error.message || "ไม่สามารถบันทึกข้อมูลได้"
-      );
+    } catch (error) {
+      console.error("❌ Error saving scan result to cart:", error);
+      Alert.alert("เกิดข้อผิดพลาด", "ไม่สามารถเพิ่มอาหารลงตะกร้าได้");
     } finally {
       setSaving(false);
     }

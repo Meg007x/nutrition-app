@@ -24,7 +24,7 @@ const CARD_HEIGHT = Math.min(220, Math.max(200, height * 0.40));
 
 export default function RecordScreen() {
   const handleOpenFoodScan = () => {
-    router.push("/food-scan");
+    router.push("/cart");
   };
 
   const handleOpenWaterLog = () => {

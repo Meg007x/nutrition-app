@@ -15,7 +15,7 @@ import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useRegister } from "../../context/register-context";
-import { scheduleMealNotifications } from "../notifications";
+import { scheduleMealNotifications } from "../../utils/notificationService";
 // นำเข้า styles ทั้งก้อน และนำเข้าสี ORANGE, IOS_GREEN มาใช้กับพวก <Ionicons> หรือ <Switch>
 import styles, { ORANGE, IOS_GREEN } from "./step9.styles";
 

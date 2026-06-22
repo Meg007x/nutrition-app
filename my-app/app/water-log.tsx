@@ -22,7 +22,7 @@ import {
   BLUE,
   BLUE_DARK,
   TEXT,
-} from "./water-log.styles";
+} from "../style/water-log.styles";
 
 const API_BASE = "http://localhost:3000"; 
 
