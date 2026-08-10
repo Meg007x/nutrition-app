@@ -1,18 +1,27 @@
 import React, { useState, useEffect } from "react";
-import { View, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from "react-native";
+import { View, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Animated, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router"; 
 import { Ionicons } from "@expo/vector-icons";
-import { ThemedText } from "@/components/themed-text"; // 👈 กลับมาใช้คอมโพเนนต์ดั้งเดิมของระบบคุณ
+import { ThemedText } from "@/components/themed-text"; 
 import { styles, GREEN, ORANGE } from "@/style/cart.styles";
-
-const API_URL = "http://localhost:3000/api/meal-logs/cart";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { API_BASE_URL } from "../constants/config";
 const INITIAL_CART: any[] = []; 
 
+
 export default function MealCartScreen() {
+  const [userId, setUserId] = useState<string | null>(null);
   const [cartItems, setCartItems] = useState(INITIAL_CART);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const params = useLocalSearchParams();
+
+  const [availableMeals, setAvailableMeals] = useState<string[]>([]);
+  const [selectedMealType, setSelectedMealType] = useState<string>("มื้ออาหาร");
+
+  // 🟢 State สำหรับควบคุม Custom Alert ด้านบนแอป
+  const [showSuccessToast, setShowSuccessToast] = useState(false);
+  const [slideAnim] = useState(new Animated.Value(-100)); // เริ่มต้นซ่อนไว้เหนือขอบจอ -100
 
   useEffect(() => {
     if (params.newFood) {
@@ -25,6 +34,51 @@ export default function MealCartScreen() {
       }
     }
   }, [params.newFood]);
+
+  useEffect(() => {
+    const fetchCartContext = async () => {
+      if (!userId) return;
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        // ดึงเวลาปัจจุบันแบบ HH:MM
+        const now = new Date();
+        const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+        // ในไฟล์ app/cart.tsx ตรง useEffect
+      const res = await fetch(`${API_BASE_URL}/meal-logs/cart?user_id=${userId}&date=${today}&current_time=${currentTime}`);
+        const json = await res.json();
+        
+        if (json.success && json.data) {
+          setAvailableMeals(json.data.available_meals);
+          setSelectedMealType(json.data.default_meal); // เลือกมื้อให้ตรงตามเวลาปัจจุบันทันที!
+        }
+      } catch (error) {
+        console.error("Failed to fetch cart context", error);
+      }
+    };
+    fetchCartContext();
+  }, [userId]);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const userDataStr = await AsyncStorage.getItem("currentUser");
+        if (userDataStr) {
+          const userData = JSON.parse(userDataStr);
+          const resolvedId = userData.user_id || userData.id; 
+          console.log("Cart User ID:", resolvedId); 
+          console.log("Cart Screen - ดึง User ID สำเร็จแล้ว ได้ไอดีเป็น:", resolvedId);
+          
+          if (resolvedId) {
+            setUserId(resolvedId);
+          }
+        }
+      } catch (e) {
+        console.error("Error fetching user from storage:", e);
+      }
+    };
+    fetchUser();
+  }, []);
 
   const totalKcal = cartItems.reduce((sum, item) => sum + (item.nutrition?.kcal || 0), 0);
   const totalProtein = cartItems.reduce((sum, item) => sum + (item.nutrition?.protein_g || 0), 0);
@@ -71,20 +125,59 @@ export default function MealCartScreen() {
       Alert.alert("ตะกร้าว่างเปล่า", "กรุณาเพิ่มอาหารก่อนบันทึก");
       return;
     }
+
+    if (!userId) {
+      Alert.alert("ไม่พบข้อมูลผู้ใช้", "กรุณาลองเข้าสู่ระบบใหม่อีกครั้งเพื่อยืนยันตัวตน");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
+      const today = new Date().toISOString().split('T')[0]; 
+
+      const requestBody = {
+        userId: userId,
+        user_id: userId,
+        items: cartItems,
+        date: today,             
+        meal_type: selectedMealType, // 👈 ใช้ตัวแปรนี้แทน!
+        mealType: selectedMealType      
+      };
+
       const response = await fetch(API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: cartItems }),
+        body: JSON.stringify(requestBody), 
       });
+
       if (response.ok) {
-        Alert.alert("สำเร็จ", "บันทึกมื้ออาหารเรียบร้อยแล้วครับ!", [
-          { text: "ตกลง", onPress: () => router.push("/(tabs)/record") }
-        ]);
+        // 🟢 สั่งให้แสดงผล Custom Alert ตกลงมาจากด้านบนจอทันทีกระทบฝั่งเว็บ
+        setShowSuccessToast(true);
+        Animated.timing(slideAnim, {
+          toValue: 20, // เลื่อนลงมาห่างจากขอบด้านบน 20px
+          duration: 400,
+          useNativeDriver: false,
+        }).start();
+
+        // เคลียร์ตะกร้าอาหาร
         setCartItems([]);
+
+        // หน่วงเวลาให้ผู้ใช้เห็นแจ้งเตือนฟิน ๆ 1.5 วินาทีแล้วเด้งไปหน้า Dashboard
+        setTimeout(() => {
+          Animated.timing(slideAnim, {
+            toValue: -100, // เลื่อนกล่องกลับขึ้นไปซ่อนเหมือนเดิม
+            duration: 300,
+            useNativeDriver: false,
+          }).start(() => {
+            setShowSuccessToast(false);
+            router.replace("/(tabs)/dashboard"); // เร่งเด้งกลับหน้าหลักแดชบอร์ดอย่างปลอดภัย
+          });
+        }, 1500);
+
       } else {
-        Alert.alert("ข้อผิดพลาด", "ไม่สามารถเซฟข้อมูลลงระบบได้");
+        const errorData = await response.text();
+        console.error("Backend Error Detail:", errorData);
+        Alert.alert("ข้อผิดพลาด", `ไม่สามารถเซฟข้อมูลลงระบบได้ (Status: ${response.status})`);
       }
     } catch (error) {
       console.error(error);
@@ -94,8 +187,17 @@ export default function MealCartScreen() {
     }
   };
 
-  return (
+return (
     <SafeAreaView style={styles.container} edges={["top"]}>
+      
+      {/* 🟢 ส่วน Custom Alert แจ้งเตือนด้านบนจอ (สร้างแบบอนิเมชัน สไลด์ตกจากฟ้า) */}
+      {showSuccessToast && (
+        <Animated.View style={[localStyles.toastContainer, { top: slideAnim }]}>
+          <Ionicons name="checkmark-circle" size={24} color="#ffffff" />
+          <ThemedText style={localStyles.toastText}>บันทึกมื้ออาหารสำเร็จแล้วครับ!</ThemedText>
+        </Animated.View>
+      )}
+
       {/* แถบหัวข้อบนสุดคงสีขาวเดิม */}
       <View style={styles.header}>
         <ThemedText type="title" style={styles.textWhite}>ตะกร้าอาหาร</ThemedText>
@@ -108,9 +210,51 @@ export default function MealCartScreen() {
           <View style={styles.summaryTitleWrap}>
             <ThemedText type="subtitle" style={styles.textBlackBold}>รายการและพลังงานรวม</ThemedText>
           </View>
-          
-          <View style={{ alignItems: "center", marginVertical: 14 }}>
-            {/* บังคับสีดำสนิทผ่านสไตล์โดยตรง เพื่อแก้ปัญหา ThemedText จาง */}
+
+          {/* 🎯 [เพิ่มใหม่] แถบปุ่มเลือกมื้ออาหารสุดสมาร์ทดึงจากหลังบ้าน */}
+          <View style={{ marginVertical: 8, paddingHorizontal: 4 }}>
+            <ThemedText type="defaultSemiBold" style={{ marginBottom: 8, color: "#555", fontSize: 14 }}>
+              เลือกมื้อที่จะบันทึก:
+            </ThemedText>
+            <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+              {availableMeals.map((meal) => {
+                const isSelected = selectedMealType === meal;
+                return (
+                  <TouchableOpacity
+                    key={meal}
+                    onPress={() => setSelectedMealType(meal)}
+                    style={{
+                      paddingVertical: 6,
+                      paddingHorizontal: 14,
+                      borderRadius: 20,
+                      borderWidth: 1.5,
+                      borderColor: isSelected ? GREEN : "#ccc",
+                      backgroundColor: isSelected ? "#e8f5e9" : "#fff",
+                    }}
+                  >
+                    <ThemedText
+                      style={{
+                        color: isSelected ? GREEN : "#666",
+                        fontWeight: isSelected ? "900" : "600",
+                        fontSize: 14,
+                      }}
+                    >
+                      มื้อ{meal}
+                    </ThemedText>
+                  </TouchableOpacity>
+                );
+              })}
+              
+              {/* กรณีที่วันนี้บันทึกทานครบหมดทุกมื้อแล้ว */}
+              {availableMeals.length === 0 && (
+                <ThemedText style={{ color: "#FF3B30", fontWeight: "700", fontSize: 13, marginTop: 4 }}>
+                  ⚠️ บันทึกมื้ออาหารของวันนี้ครบถ้วนแล้วครับ
+                </ThemedText>
+              )}
+            </View>
+          </View>
+
+          <View style={{ alignItems: "center", marginVertical: 14, borderTopWidth: 1, borderTopColor: "#eee", paddingTop: 12 }}>
             <ThemedText type="defaultSemiBold" style={styles.textBlack}>พลังงานที่ได้รับในตะกร้านี้</ThemedText>
             <ThemedText style={styles.calNumberText}>
               {totalKcal} <ThemedText style={{ fontSize: 18, color: ORANGE, fontWeight: "900" }}>kcal</ThemedText>
@@ -146,7 +290,6 @@ export default function MealCartScreen() {
             </View>
           )}
 
-          {/* ปุ่มสแกนเพิ่มอาหาร (ข้อความสีขาวบนปุ่ม) */}
           <TouchableOpacity 
             style={[styles.submitButton, { backgroundColor: ORANGE, marginTop: 12 }]} 
             onPress={() => router.push("/(tabs)/scan")}
@@ -158,7 +301,7 @@ export default function MealCartScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* 🟢 การ์ดใบที่ 2: รายละเอียดสารอาหาร (ใช้หัวข้อและเนื้อหาเป็นสีดำสนิททั้งหมด) */}
+        {/* 🟢 การ์ดใบที่ 2: รายละเอียดสารอาหาร */}
         <View style={[styles.summaryBox, { marginTop: 20 }]}>
           <View style={styles.summaryTitleWrap}>
             <ThemedText type="subtitle" style={styles.textBlackBold}>สรุปสารอาหาร</ThemedText>
@@ -222,3 +365,28 @@ export default function MealCartScreen() {
     </SafeAreaView>
   );
 }
+
+// 🟢 สไตล์เฉพาะกิจสำหรับ Custom Toast แจ้งเตือนด้านบนจอแอป
+const localStyles = StyleSheet.create({
+  toastContainer: {
+    position: "absolute",
+    left: 20,
+    right: 20,
+    backgroundColor: "#2e7d32", // สีเขียวเข้มสัญลักษณ์ความสำเร็จ
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    zIndex: 9999, // ดึงให้อยู่ชั้นบนสุดของทุกองค์ประกอบ
+    boxShadow: "0px 4px 10px rgba(0, 0, 0, 0.15)", // ใส่เงาให้กล่องลอยเด่นขึ้นมาบนระบบเว็บและโมบายล์
+    elevation: 5,
+  },
+  toastText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "600",
+  }
+});

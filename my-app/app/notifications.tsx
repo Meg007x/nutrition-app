@@ -13,6 +13,7 @@ import { router } from "expo-router";
 import { ThemedText } from '../components/themed-text'; 
 // นำเข้าไฟล์สไตล์แยก
 import { styles, ORANGE } from "../style/notifications.style";
+import { BASE_URL } from "../constants/config";
 
 interface NotificationItem {
   _id: string;
@@ -52,7 +53,7 @@ export default function NotificationScreen() {
     try {
       setLoading(true);
       // เปลี่ยน URL เป็นของหลังบ้านคุณ และใส่ userId จริงลงไป
-      const response = await fetch(`http://localhost:3000/api/notifications?userId=${userId}`);
+      const response = await fetch(`${BASE_URL}/api/notifications?userId=${userId}`);
       const result = await response.json();
       
       if (result.success) {
@@ -68,7 +69,7 @@ export default function NotificationScreen() {
   // 2. ฟังก์ชันกดลบแจ้งเตือน ยิงตรงไปลบใน MongoDB
   const handleDelete = async (id: string) => {
     try {
-      const response = await fetch(`http://localhost:3000/api/notifications/${id}`, {
+      const response = await fetch(`${BASE_URL}/api/notifications/${id}`, {
         method: 'DELETE'
       });
       const result = await response.json();

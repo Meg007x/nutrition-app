@@ -17,6 +17,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLocalSearchParams, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { BASE_URL } from "../../constants/config";
 
 type IngredientTabKey = "veg_group" | "seasoning_group" | "protein_group";
 type TabKey = "nutrition" | "ingredients";
@@ -237,9 +238,7 @@ function buildPortionLabel(multiplier: number, unit: string, gram: number) {
 }
 
 function getApiBase() {
-  return Platform.OS === "web"
-    ? "http://localhost:3000"
-    : "http://172.16.8.225:3000";
+  return BASE_URL;
 }
 
 function fallbackGroupFromLegacyCategory(category?: string): IngredientTabKey {

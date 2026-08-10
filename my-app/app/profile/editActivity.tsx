@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
+import { BASE_URL } from '../../constants/config';
 
 // ดึงไฟล์ CSS เดิมมาใช้
 import { styles, ORANGE, IOS_GREEN, ERROR_COLOR } from '@/style/editActivity.styles';
@@ -65,7 +66,7 @@ export default function EditActivityScreen() {
       const userObj = JSON.parse(userJson);
       const userId = userObj.user_id || userObj.id || userObj._id;
 
-      const response = await fetch(`http://localhost:3000/api/users/profile?userId=${userId}`);
+      const response = await fetch(`${BASE_URL}/api/users/profile?userId=${userId}`);
       const json = await response.json();
 
       if (json.success && json.data) {
@@ -153,7 +154,7 @@ export default function EditActivityScreen() {
     };
 
     try {
-      const response = await fetch('http://localhost:3000/api/users/update-activity', {
+      const response = await fetch(`${BASE_URL}/api/users/update-activity`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

@@ -54,6 +54,59 @@ const styles = StyleSheet.create({
   doneBtn: { backgroundColor: "#222", borderRadius: 12, paddingVertical: 14, alignItems: "center", marginTop: 24 },
   doneBtnText: { color: "#FFF", fontSize: 16, fontFamily: FONT_BOLD },
 
+  searchToggleBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFF",
+    borderWidth: 1,
+    borderColor: "#E5E5E5",
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: 12,
+    gap: 8,
+  },
+
+  searchToggleText: {
+    fontSize: 14,
+    color: "#333",
+    fontFamily: FONT_BOLD,
+  },
+
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFF",
+    borderWidth: 1,
+    borderColor: "#DDD",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 12,
+  },
+
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: "#333",
+    fontFamily: FONT_REGULAR,
+    paddingVertical: 4,
+  },
+
+  showMoreBtn: {
+    padding: 14,
+    alignItems: "center",
+    backgroundColor: "#FAFAFA",
+    borderTopWidth: 1,
+    borderTopColor: "#EFEFEF",
+  },
+
+  showMoreText: {
+    fontSize: 14,
+    color: ORANGE,
+    fontFamily: FONT_BOLD,
+  },
+
   customInputRow: { flexDirection: "row", padding: 12, backgroundColor: "#FAFAFA", borderTopWidth: 1, borderTopColor: "#EFEFEF" },
   customInput: { flex: 1, height: 40, backgroundColor: "#FFF", borderWidth: 1, borderColor: "#DDD", borderRadius: 8, paddingHorizontal: 12, fontSize: 15, fontFamily: FONT_REGULAR },
   customAddBtn: { marginLeft: 8, backgroundColor: ORANGE, justifyContent: "center", paddingHorizontal: 16, borderRadius: 8 },

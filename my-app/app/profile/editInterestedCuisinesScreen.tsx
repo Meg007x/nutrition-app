@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { styles, ORANGE } from '@/style/editInterestedCuisines.styles';
+import { BASE_URL } from '../../constants/config';
 
 // รายการอาหารอ้างอิงจากโครงสร้าง Step 8 ของคุณ
 const MOCK_CUISINES = [
@@ -53,7 +54,7 @@ export default function EditInterestedCuisinesScreen() {
       setCurrentUserId(userId);
 
       // ดึงโปรไฟล์ล่าสุดจาก API ของคุณ
-      const response = await fetch(`http://localhost:3000/api/users/profile?userId=${userId}`);
+      const response = await fetch(`${BASE_URL}/api/users/profile?userId=${userId}`);
       const json = await response.json();
 
       if (json.success && json.data) {
@@ -86,7 +87,7 @@ export default function EditInterestedCuisinesScreen() {
     };
 
     try {
-      const response = await fetch('http://localhost:3000/api/users/update-interested-cuisines', {
+      const response = await fetch(`${BASE_URL}/api/users/update-interested-cuisines`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

@@ -93,10 +93,10 @@ export default function RegisterSummaryScreen() {
     const bmr = 10 * weight + 6.25 * heightCm - 5 * age + genderFactor;
 
     let activityMultiplier = 1.2;
-    if (form.activityLevel === "light") activityMultiplier = 1.375;
-    if (form.activityLevel === "moderate") activityMultiplier = 1.55;
-    if (form.activityLevel === "active") activityMultiplier = 1.725;
-    if (form.activityLevel === "very_active") activityMultiplier = 1.9;
+    if (form.activityLevel === "light") activityMultiplier = 1.2;
+    if (form.activityLevel === "moderate") activityMultiplier = 1.375;
+    if (form.activityLevel === "active") activityMultiplier = 1.55;
+    if (form.activityLevel === "very_active") activityMultiplier = 1.725;
 
     let tdee = bmr * activityMultiplier;
 

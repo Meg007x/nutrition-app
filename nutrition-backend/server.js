@@ -17,6 +17,7 @@ const scanSessionRoute = require("./routes/scanSessionRoute");
 const startNotificationCron = require('./utils/cronScheduler'); // นำเข้า Cron
 const notificationRoutes = require('./routes/notificationRoutes');
 
+
 const app = express();
 
 // 2. Middleware
@@ -43,7 +44,6 @@ app.use("/api/meal-logs", mealLogRoute);
 app.use("/api/water-logs", waterLogRoute);
 app.use("/api/scan-sessions", scanSessionRoute);
 app.use('/api/notifications', notificationRoutes);
-
 app.get("/api/ingredients", getIngredients);
 app.get("/api/disliked-foods", getDislikedFoods);
 app.use("/api/ai", aiRoute);

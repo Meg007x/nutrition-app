@@ -157,6 +157,48 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
 
+  optionDetail: {
+    marginTop: 6,
+    fontSize: 13,
+    lineHeight: 19,
+    color: "#777",
+    fontFamily: FONT_REGULAR,
+  },
+
+  optionDetailActive: {
+    color: "#FFF0D0",
+  },
+
+  proteinValueCard: {
+    marginTop: 16,
+    backgroundColor: "#FFF8EC",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#F0D3A3",
+    padding: 16,
+    alignItems: "center",
+  },
+
+  proteinValueLabel: {
+    fontSize: 14,
+    color: "#8A5A00",
+    fontFamily: FONT_BOLD,
+    marginBottom: 6,
+  },
+
+  proteinValueNumber: {
+    fontSize: 28,
+    color: ORANGE,
+    fontFamily: FONT_BOLD,
+  },
+
+  proteinValueHint: {
+    marginTop: 6,
+    fontSize: 13,
+    color: "#999",
+    fontFamily: FONT_REGULAR,
+  },
+
   // --- ปรับสีป้ายแนะนำให้ตัดกันสุดๆ (สีเขียวมรกต + ตัวหนังสือสีขาว) ---
   badgeRecommend: {
     backgroundColor: "#10B981",

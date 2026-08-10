@@ -17,6 +17,7 @@ import { ThemedText } from '@/components/themed-text';
 import { styles, ORANGE } from '@/style/updateGoal.styles';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
+import { BASE_URL } from '../../constants/config';
 
 const weekOptions = [
   "1 สัปดาห์", "2 สัปดาห์", "3 สัปดาห์", "4 สัปดาห์",
@@ -58,7 +59,7 @@ export default function UpdateGoalScreen() {
       setCurrentUserId(userId);
 
       // ยิงไปดึงข้อมูลโปรไฟล์ล่าสุดมาเช็ค
-      const response = await fetch(`http://localhost:3000/api/users/profile?userId=${userId}`);
+      const response = await fetch(`${BASE_URL}/api/users/profile?userId=${userId}`);
       const json = await response.json();
 
       if (json.success && json.data && json.data.health_goals) {
@@ -125,7 +126,7 @@ const handleSaveGoal = async () => {
     console.log("📦 กำลังส่งข้อมูลไปหลังบ้าน:", payload);
 
     try {
-      const response = await fetch('http://localhost:3000/api/users/update-goal', {
+      const response = await fetch(`${BASE_URL}/api/users/update-goal`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

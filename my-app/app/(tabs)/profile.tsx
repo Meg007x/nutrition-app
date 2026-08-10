@@ -5,6 +5,7 @@ import { ThemedText } from '@/components/themed-text';
 import { styles } from '../../style/profileScreen.styles'; 
 import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { BASE_URL } from '../../constants/config';
 
 interface MenuItem {
   id: number;
@@ -37,7 +38,7 @@ useFocusEffect(
           const storedUserId = userObj.user_id || userObj.id || userObj._id; 
 
           // ⚠️ อย่าลืมเปลี่ยน localhost เป็น IP เครื่องนะครับ
-          const response = await fetch(`http://localhost:3000/api/users/profile?userId=${storedUserId}`);
+          const response = await fetch(`${BASE_URL}/api/users/profile?userId=${storedUserId}`);
           const json = await response.json();
           if (json.success) {
             setUserData(json.data); 

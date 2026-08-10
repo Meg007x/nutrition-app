@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 
 // --- ฟังก์ชันคำนวณ BMI และ สถานะ ---
 const calculateBMI = (weight, height) => {
@@ -97,9 +98,9 @@ const normalizeGoal = (goal) => {
 const normalizeActivity = (activity) => {
   const map = {
     sedentary: 'น้อย',
-    light: 'ปานกลาง',
-    moderate: 'มาก',
-    active: 'หนัก',
+    light: 'น้อย',
+    moderate: 'ปานกลาง',
+    active: 'มาก',
     very_active: 'หนัก',
     น้อย: 'น้อย',
     ปานกลาง: 'ปานกลาง',
@@ -152,7 +153,7 @@ const registerUser = async (req, res) => {
     const hashedPassword = await bcrypt.hash(d.password, salt);
 
     const newUser = {
-      user_id: "U" + Date.now(),
+      user_id: "U" + crypto.randomUUID(),
 
       // [หน้า 1] ข้อมูลบัญชี
       username: d.username,

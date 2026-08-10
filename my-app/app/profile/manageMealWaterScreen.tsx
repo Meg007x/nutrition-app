@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { styles, ORANGE, IOS_GREEN, ERROR_RED } from '@/style/manageMealWater.styles';
+import { BASE_URL } from '../../constants/config';
 
 interface MealSchedule {
   id: string;
@@ -39,7 +40,7 @@ export default function ManageMealWaterScreen() {
       const userObj = JSON.parse(userJson);
       const userId = userObj.user_id;
 
-      const response = await fetch(`http://localhost:3000/api/users/profile?userId=${userId}`);
+      const response = await fetch(`${BASE_URL}/api/users/profile?userId=${userId}`);
       const json = await response.json();
 
       if (json.success && json.data) {
@@ -101,7 +102,7 @@ export default function ManageMealWaterScreen() {
     }
     setSaving(true);
     try {
-      const response = await fetch('http://localhost:3000/api/users/update-meal-water-settings', {
+      const response = await fetch(`${BASE_URL}/api/users/update-meal-water-settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -2,8 +2,6 @@ const mongoose = require("mongoose");
 const WaterLog = require("../models/WaterLog");
 
 const getDashboardData = async (req, res) => {
-  console.log("🔥 DASHBOARD CONTROLLER HIT - DYNAMIC UPDATED");
-
   try {
     const { userId } = req.params;
 
@@ -16,10 +14,9 @@ const getDashboardData = async (req, res) => {
 
     const db = mongoose.connection.db;
 
-    // 1. หาชื่อคอลเลกชันของ Users ตัวเล็กหรือตัวใหญ่
-    const sampleUsersUpper = await db.collection("Users").findOne({});
-    const sampleUsersLower = await db.collection("users").findOne({});
-    const usersColName = sampleUsersUpper ? "Users" : sampleUsersLower ? "users" : "Users";
+    // หาชื่อคอลเลกชัน Users (รองรับทั้งตัวใหญ่และตัวเล็ก)
+    const collections = await db.listCollections({ name: { $in: ["Users", "users"] } }).toArray();
+    const usersColName = collections.length > 0 ? collections[0].name : "Users";
 
     const user = await db.collection(usersColName).findOne({
       $or: [{ username: userId }, { user_id: userId }, { email: userId }],
@@ -49,8 +46,18 @@ const getDashboardData = async (req, res) => {
     const targetWater = waterLog ? Number(waterLog.target_ml || 2000) : (user?.health_goals?.water_target_ml || 2000);
 
     // 3. 🍳 ดึงข้อมูลอาหารที่บันทึก/สแกน ของวันนี้มาคำนวณแคลและสารอาหารหลักทั้งหมด
-    const scanColName = (await db.listCollections({ name: "ScanSessions" }).hasNext()) ? "ScanSessions" : "scansessions";
+    // ดึงจากทั้ง ScanSessions และ MealLogs
+    const scanColList = await db.listCollections({ name: { $in: ["ScanSessions", "scansessions"] } }).toArray();
+    const scanColName = scanColList.length > 0 ? scanColList[0].name : "ScanSessions";
     const todayScans = await db.collection(scanColName).find({
+      user_id: currentUserId,
+      date: todayStr
+    }).toArray();
+
+    // ดึงจาก MealLogs ด้วย (ตะกร้าอาหาร)
+    const mealLogColList = await db.listCollections({ name: { $in: ["MealLogs", "meallogs"] } }).toArray();
+    const mealLogColName = mealLogColList.length > 0 ? mealLogColList[0].name : "MealLogs";
+    const todayMealLogs = await db.collection(mealLogColName).find({
       user_id: currentUserId,
       date: todayStr
     }).toArray();
@@ -60,12 +67,31 @@ const getDashboardData = async (req, res) => {
     let carbCurrent = 0;
     let fatCurrent = 0;
 
-    // วนลูปเพื่อรวมคะแนนสารอาหารของวันนี้จริง ๆ
+    // วนลูปเพื่อรวมคะแนนสารอาหารจาก ScanSessions
     todayScans.forEach((item) => {
       consumedKcal += Number(item?.nutrition?.kcal || 0);
       proteinCurrent += Number(item?.nutrition?.protein_g || 0);
       carbCurrent += Number(item?.nutrition?.carb_g || 0);
       fatCurrent += Number(item?.nutrition?.fat_g || 0);
+    });
+
+    // วนลูปเพื่อรวมคะแนนสารอาหารจาก MealLogs (ตะกร้าอาหาร)
+    todayMealLogs.forEach((mealLog) => {
+      // ใช้ totals เป็นหลัก (ถ้ามี) เพราะ totals คือผลรวมของ items อยู่แล้ว
+      // ถ้าไม่มี totals ค่อย sum จาก items
+      if (mealLog.totals) {
+        consumedKcal += Number(mealLog.totals?.kcal || 0);
+        proteinCurrent += Number(mealLog.totals?.protein_g || 0);
+        carbCurrent += Number(mealLog.totals?.carb_g || 0);
+        fatCurrent += Number(mealLog.totals?.fat_g || 0);
+      } else if (mealLog.items && Array.isArray(mealLog.items)) {
+        mealLog.items.forEach((item) => {
+          consumedKcal += Number(item?.nutrition?.kcal || 0);
+          proteinCurrent += Number(item?.nutrition?.protein_g || 0);
+          carbCurrent += Number(item?.nutrition?.carb_g || 0);
+          fatCurrent += Number(item?.nutrition?.fat_g || 0);
+        });
+      }
     });
 
     // คำนวณเป้าหมายสารอาหาร
@@ -77,15 +103,27 @@ const getDashboardData = async (req, res) => {
     const fatTarget = targetKcal > 0 ? Math.round((targetKcal * 0.25) / 9) : 0;
 
     const mealSchedules = user?.meal_settings?.schedules || [];
-    const nextMeal =
-      mealSchedules.length > 0
-        ? {
-            time: mealSchedules[0]?.time || "-",
-            name: mealSchedules[0]?.name || "-",
-            kcal: 0,
-            tag: "ตั้งค่าจากผู้ใช้",
-          }
-        : null;
+
+    // หา "มื้อต่อไป" ที่ใกล้ที่สุดที่ยังไม่ถึง โดยเทียบกับเวลาปัจจุบัน
+    let nextMeal = null;
+    if (mealSchedules.length > 0) {
+      const now = new Date();
+      const currentHHMM = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+
+      // หามื้อที่เวลายังไม่เกิน (time >= current time)
+      const upcomingMeals = mealSchedules
+        .filter((m) => m.time && m.time >= currentHHMM)
+        .sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+
+      const pick = upcomingMeals.length > 0 ? upcomingMeals[0] : mealSchedules[0];
+
+      nextMeal = {
+        time: pick?.time || "-",
+        name: pick?.name || "-",
+        kcal: 0,
+        tag: upcomingMeals.length > 0 ? "มื้อถัดไป" : "มื้อแรกของวัน",
+      };
+    }
 
     // ส่งค่าที่คำนวณได้จริงทั้งหมดกลับไปที่หน้าบ้าน
     return res.json({

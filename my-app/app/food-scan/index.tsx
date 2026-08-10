@@ -39,7 +39,7 @@ export default function ScanFoodScreen() {
     try {
       router.back();
     } catch (_) {
-      router.push("/(tabs)/record");
+      router.push("/(tabs)/dashboard");
     }
   };
 

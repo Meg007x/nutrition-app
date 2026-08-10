@@ -16,6 +16,7 @@ import { ThemedText } from '@/components/themed-text';
 import { styles } from '@/style/editProfile.styles'; 
 import AsyncStorage from '@react-native-async-storage/async-storage'; 
 import { useRouter } from 'expo-router';
+import { BASE_URL } from '../../constants/config';
 
 export default function EditProfileScreen() {
   const router = useRouter();
@@ -65,7 +66,7 @@ export default function EditProfileScreen() {
   const fetchProfileData = async (userIdToFetch: string) => {
     try {
       // ⚠️ แนะนำให้เปลี่ยน localhost เป็นเลข IP เครื่องคอมพิวเตอร์ของคุณถ้าทดสอบผ่านแอปบนมือถือจริง
-      const response = await fetch(`http://localhost:3000/api/users/profile?userId=${userIdToFetch}`);
+      const response = await fetch(`${BASE_URL}/api/users/profile?userId=${userIdToFetch}`);
       const json = await response.json();
       if (json.success) {
         const u = json.data;
@@ -91,7 +92,7 @@ export default function EditProfileScreen() {
 
     setSaving(true);
     try {
-      const response = await fetch('http://localhost:3000/api/users/update-profile', {
+      const response = await fetch(`${BASE_URL}/api/users/update-profile`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -140,7 +141,7 @@ export default function EditProfileScreen() {
 
     try {
       // ยิง API ไปหลังบ้านสำหรับเปลี่ยนรหัสผ่านโดยเฉพาะ
-      const response = await fetch('http://localhost:3000/api/users/change-password', {
+      const response = await fetch(`${BASE_URL}/api/users/change-password`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

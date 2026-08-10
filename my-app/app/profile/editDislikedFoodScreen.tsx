@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { styles, ORANGE } from '@/style/editDislikedFood.styles';
+import { BASE_URL } from '../../constants/config';
 
 // โครงสร้างประเภทข้อมูลที่จัดกลุ่มแล้ว
 type GroupedIngredients = {
@@ -57,8 +58,8 @@ export default function EditDislikedFoodScreen() {
 
       // 🟢 ดึงข้อมูลโปรไฟล์ และ วัตถุดิบ พร้อมกันเพื่อให้ไวขึ้น
       const [profileRes, ingredientsRes] = await Promise.all([
-        fetch(`http://localhost:3000/api/users/profile?userId=${userId}`),
-        fetch(`http://localhost:3000/api/ingredients`) // 👈 ต้องมี API ดึงวัตถุดิบทั้งหมด
+        fetch(`${BASE_URL}/api/users/profile?userId=${userId}`),
+        fetch(`${BASE_URL}/api/ingredients`) // 👈 ต้องมี API ดึงวัตถุดิบทั้งหมด
       ]);
 
       const profileJson = await profileRes.json();
@@ -119,7 +120,7 @@ export default function EditDislikedFoodScreen() {
     };
 
     try {
-      const response = await fetch('http://localhost:3000/api/users/update-disliked-foods', {
+      const response = await fetch(`${BASE_URL}/api/users/update-disliked-foods`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

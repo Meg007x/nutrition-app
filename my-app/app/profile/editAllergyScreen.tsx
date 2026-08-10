@@ -11,7 +11,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import { styles, ORANGE } from '@/style/editAllergy.styles'; // นำเข้าสไตล์ชีทเดิม
+import { styles, ORANGE } from '@/style/editAllergy.styles';
+import { BASE_URL } from '../../constants/config';
 
 const ALLERGIES = ["แพ้ถั่ว", "แพ้อาหารทะเล", "แพ้นมวัว", "แพ้กลูเตน", "แพ้ไข่", "แพ้แป้งสาลี"];
 const NONE_OPTION = "ไม่มีอาการแพ้";
@@ -48,7 +49,7 @@ export default function EditAllergyScreen() {
       setCurrentUserId(userId);
 
       // ยิงไปหาพาร์ทหลังบ้านของคุณพร้อมส่ง ?userId= ผ่านทาง Query Parameter ตามโค้ดที่คุณให้มาเป๊ะๆ
-      const response = await fetch(`http://localhost:3000/api/users/profile?userId=${userId}`);
+      const response = await fetch(`${BASE_URL}/api/users/profile?userId=${userId}`);
       const json = await response.json();
 
       if (json.success && json.data) {
@@ -94,7 +95,7 @@ export default function EditAllergyScreen() {
     };
 
     try {
-      const response = await fetch('http://localhost:3000/api/users/update-allergies', {
+      const response = await fetch(`${BASE_URL}/api/users/update-allergies`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

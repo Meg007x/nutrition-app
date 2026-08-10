@@ -7,7 +7,6 @@ import {
   NotoSansThai_700Bold,
 } from '@expo-google-fonts/noto-sans-thai';
 import * as SplashScreen from 'expo-splash-screen';
-import { RegisterProvider } from '../context/register-context';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -34,15 +33,13 @@ export default function RootLayout() {
   if (!loaded) return null;
 
   return (
-    <RegisterProvider>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="login" />
-        <Stack.Screen name="notifications" />
-        <Stack.Screen name="weekly" />
-        <Stack.Screen name="register" />
-        <Stack.Screen name="(tabs)" />
-      </Stack>
-    </RegisterProvider>
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="index" />
+      <Stack.Screen name="login" />
+      <Stack.Screen name="notifications" />
+      <Stack.Screen name="weekly" />
+      <Stack.Screen name="register" />
+      <Stack.Screen name="(tabs)" />
+    </Stack>
   );
 }

@@ -1,6 +1,7 @@
 const MealLog = require("../models/MealLog");
 const ScanSession = require("../models/ScanSession");
 const { updateStreak } = require("../utils/streakUpdater");
+const User = require("../models/User");
 
 // 🟢 ฟังก์ชันช่วยจัดการข้อมูลเดิมของระบบ
 function buildMealKey(mealType) {
@@ -298,5 +299,59 @@ exports.finalizeMealLog = async (req, res) => {
       success: false,
       error: error.message || "เกิดข้อผิดพลาดในการบันทึก MealLog",
     });
+  }
+};
+
+exports.getCartContext = async (req, res) => {
+  try {
+    const { user_id, date, current_time } = req.query; // current_time ส่งมาเป็น "12:45"
+
+    if (!user_id || !date) {
+      return res.status(400).json({ success: false, error: "Missing user_id or date" });
+    }
+
+    // 1. ไปดึงตารางเวลาอาหารจากโปรไฟล์ผู้ใช้
+    const user = await User.findOne({ user_id: String(user_id) }).lean();
+    if (!user || !user.meal_settings || !user.meal_settings.schedules) {
+      return res.status(404).json({ success: false, error: "ไม่พบข้อมูลการตั้งค่ามื้ออาหาร" });
+    }
+    const schedules = user.meal_settings.schedules; // เช่น [{name: "กลางวัน", time: "12:30"}, {name: "เย็น", time: "18:30"}]
+
+    // 2. ไปเช็คว่า "วันนี้" บันทึกมื้อไหนไปแล้วบ้าง
+    const todayLogs = await MealLog.find({ user_id: String(user_id), date: String(date) }).lean();
+    const loggedMealTypes = todayLogs.map(log => log.meal_type); 
+
+    // 3. กรองเอามื้อที่ "ยังไม่ได้บันทึก" (ตัดมื้อที่กินไปแล้วทิ้ง หน้าบ้านจะได้กดไม่ได้)
+    const availableMeals = schedules.filter(s => !loggedMealTypes.includes(s.name));
+
+    // 4. คำนวณหา "มื้อตั้งต้น (Default)" โดยเทียบกับเวลาปัจจุบัน
+    // ลอจิก: หามื้อที่เวลายังไม่เกิน หรือเพิ่งเลยมาสดๆ ร้อนๆ
+    let defaultMealName = availableMeals.length > 0 ? availableMeals[0].name : "มื้ออาหาร";
+    
+    if (current_time) {
+      let matchedMeal = null;
+      for (let meal of availableMeals) {
+        // ถ้าเวลาปัจจุบัน มากกว่าหรือเท่ากับ เวลาที่ตั้งไว้ ให้ถือว่าเป็นมื้อนั้น
+        if (current_time >= meal.time) {
+          matchedMeal = meal.name;
+        }
+      }
+      if (matchedMeal) {
+        defaultMealName = matchedMeal;
+      }
+    }
+
+    // 5. ส่งผลลัพธ์กลับไปให้หน้าบ้านแบบสำเร็จรูป
+    return res.json({
+      success: true,
+      data: {
+        available_meals: availableMeals.map(m => m.name), // คืนค่าเป็น Array เช่น ["เช้า", "กลางวัน"]
+        default_meal: defaultMealName // คืนค่ามื้อที่ควรเลือกให้เป็น Default เช่น "กลางวัน"
+      }
+    });
+
+  } catch (error) {
+    console.error("❌ getCartContext error:", error);
+    return res.status(500).json({ success: false, error: "เกิดข้อผิดพลาดในการดึงบริบทตะกร้า" });
   }
 };
