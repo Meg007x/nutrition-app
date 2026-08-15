@@ -1,72 +1,50 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Image, 
-  TouchableOpacity, 
-  ScrollView, 
-  SafeAreaView, 
-  ActivityIndicator, 
-  TextInput,
-  Modal,
-  Alert,
-  StyleSheet
-} from 'react-native';
+import { View, Image, TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator, TextInput, Modal, Alert, StyleSheet } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/themed-text';
-import { styles } from '@/style/editProfile.styles'; 
-import AsyncStorage from '@react-native-async-storage/async-storage'; 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { BASE_URL } from '../../constants/config';
+import * as ImagePicker from 'expo-image-picker';
+
+const ORANGE = '#E67E22';
+const LIGHT_BG = '#F8F8F8';
 
 export default function EditProfileScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [currentUserId, setCurrentUserId] = useState('');
-  
-  // 🟢 State ข้อมูลฟอร์มหลัก (ให้แก้ไขได้ทุกค่า)
   const [username, setUsername] = useState('');
   const [weight, setWeight] = useState('');
   const [height, setHeight] = useState('');
   const [tdee, setTdee] = useState(0);
-  const [dob, setDob] = useState(''); // เพิ่มกล่องใส่ วันเกิด (เช่น ค.ศ. หรือข้อความ)
-  const [email, setEmail] = useState(''); // เปิดให้อัปเดตอีเมลได้
-  const [gender, setGender] = useState(''); // เพิ่มให้กรอกหรือแก้ไขเพศได้
-
-  // 🔒 State สำหรับจัดการ Popup เปลี่ยนรหัสผ่าน (Modal)
+  const [dob, setDob] = useState('');
+  const [email, setEmail] = useState('');
+  const [gender, setGender] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [isPasswordModalVisible, setIsPasswordModalVisible] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showModalPassword, setShowModalPassword] = useState(false);
 
-  useEffect(() => {
-    loadUserIdAndFetchData();
-  }, []);
+  useEffect(() => { loadUserIdAndFetchData(); }, []);
 
   const loadUserIdAndFetchData = async () => {
     try {
       const userJson = await AsyncStorage.getItem('currentUser');
-      if (!userJson) {
-        console.warn("ไม่พบข้อมูล currentUser");
-        setLoading(false);
-        return;
-      }
-      
+      if (!userJson) { setLoading(false); return; }
       const userObj = JSON.parse(userJson);
       const storedUserId = userObj.user_id || userObj.id || userObj._id;
-      
-      setCurrentUserId(storedUserId); 
+      setCurrentUserId(storedUserId);
       fetchProfileData(storedUserId);
-    } catch (error) {
-      console.error("Error loading user ID:", error);
-      setLoading(false);
-    }
+    } catch (error) { setLoading(false); }
   };
 
-  const fetchProfileData = async (userIdToFetch: string) => {
+  const fetchProfileData = async (uid) => {
     try {
-      // ⚠️ แนะนำให้เปลี่ยน localhost เป็นเลข IP เครื่องคอมพิวเตอร์ของคุณถ้าทดสอบผ่านแอปบนมือถือจริง
-      const response = await fetch(`${BASE_URL}/api/users/profile?userId=${userIdToFetch}`);
+      const response = await fetch(BASE_URL + '/api/users/profile?userId=' + uid);
       const json = await response.json();
       if (json.success) {
         const u = json.data;
@@ -74,397 +52,163 @@ export default function EditProfileScreen() {
         setWeight(u.weight_kg ? u.weight_kg.toString() : '');
         setHeight(u.height_cm ? u.height_cm.toString() : '');
         setTdee(u.health_goals?.tdee_target_kcal || 0);
-        // เก็บรูปแบบวันที่เป็น string เพื่อให้พิมพ์แก้ไขในฟิลด์ได้ง่ายขึ้น หรือนำมาตั้งต้น
         setDob(u.date_of_birth ? new Date(u.date_of_birth).toISOString().split('T')[0] : '');
         setEmail(u.email || '');
         setGender(u.gender || '');
+        setAvatarUrl(u.avatar_url || '');
       }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
+    } catch (error) { console.error(error); } finally { setLoading(false); }
   };
 
-  // 🟢 ฟังก์ชันบันทึกข้อมูลหลักทั้งหมด
-  const handleSave = async () => {
-    if (!currentUserId) return; 
+  const handlePickAvatar = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) { Alert.alert('ต้องการสิทธิ์', 'กรุณาอนุญาตเข้าถึงรูปภาพ'); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.7 });
+    if (!result.canceled && result.assets?.length > 0) { await uploadAvatar(result.assets[0].uri); }
+  };
 
+  const handleTakeAvatar = async () => {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) { Alert.alert('ต้องการสิทธิ์', 'กรุณาอนุญาตใช้กล้อง'); return; }
+    const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.7 });
+    if (!result.canceled && result.assets?.length > 0) { await uploadAvatar(result.assets[0].uri); }
+  };
+
+  const uploadAvatar = async (uri) => {
+    setUploadingAvatar(true);
+    try {
+      const response = await fetch(BASE_URL + '/api/users/upload-avatar', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUserId, avatar_url: uri })
+      });
+      const json = await response.json();
+      if (json.success) {
+        setAvatarUrl(uri);
+        const userJson = await AsyncStorage.getItem('currentUser');
+        if (userJson) { const u = JSON.parse(userJson); u.avatar_url = uri; await AsyncStorage.setItem('currentUser', JSON.stringify(u)); }
+        Alert.alert('สำเร็จ', 'อัปเดตรูปโปรไฟล์แล้ว');
+      } else { Alert.alert('ไม่สำเร็จ', json.message || 'เกิดข้อผิดพลาด'); }
+    } catch (error) { Alert.alert('ข้อผิดพลาด', 'ไม่สามารถอัปโหลดรูปได้'); } finally { setUploadingAvatar(false); }
+  };
+
+  const showAvatarOptions = () => {
+    Alert.alert('รูปโปรไฟล์', 'เลือกแหล่งที่มา', [
+      { text: 'ถ่ายรูป', onPress: handleTakeAvatar },
+      { text: 'เลือกจากคลัง', onPress: handlePickAvatar },
+      { text: 'ยกเลิก', style: 'cancel' },
+    ]);
+  };
+
+  const handleSave = async () => {
+    if (!currentUserId) return;
     setSaving(true);
     try {
-      const response = await fetch(`${BASE_URL}/api/users/update-profile`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: currentUserId, 
-          username,
-          weight_kg: parseFloat(weight) || 0,
-          height_cm: parseFloat(height) || 0,
-          email,        // 👈 ส่งค่าอีเมลไปบันทึกที่หลังบ้าน
-          gender,       // 👈 ส่งค่าเพศไปบันทึกที่หลังบ้าน
-          date_of_birth: dob // 👈 ส่งข้อมูลวันเกิดที่คุณแก้ไขไปบันทึก
-        })
+      const response = await fetch(BASE_URL + '/api/users/update-profile', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUserId, username, weight_kg: parseFloat(weight) || 0, height_cm: parseFloat(height) || 0, email, gender, date_of_birth: dob })
       });
       const json = await response.json();
       if (json.success) {
         Alert.alert('สำเร็จ', 'บันทึกข้อมูลเรียบร้อยแล้ว!');
         setTdee(json.data.health_goals?.tdee_target_kcal || tdee);
-        
-        // อัปเดตข้อมูลในคลัง currentUser บนเครื่องเพื่อให้หน้าอื่นๆ ดึงค่าล่าสุดไปใช้ถูก
-        const userJson = await AsyncStorage.getItem('currentUser');
-        if (userJson) {
-          const userObj = JSON.parse(userJson);
-          const updatedUser = { ...userObj, username, email };
-          await AsyncStorage.setItem('currentUser', JSON.stringify(updatedUser));
-        }
-      } else {
-        Alert.alert('บันทึกไม่สำเร็จ', json.message || 'เกิดข้อผิดพลาดจากเซิร์ฟเวอร์');
-      }
-    } catch (error) {
-      Alert.alert('ข้อผิดพลาด', 'เกิดข้อผิดพลาดในการบันทึกข้อมูล');
-    } finally {
-      setSaving(false);
-    }
+      } else { Alert.alert('บันทึกไม่สำเร็จ', json.message || 'เกิดข้อผิดพลาด'); }
+    } catch (error) { Alert.alert('ข้อผิดพลาด', 'เกิดข้อผิดพลาดในการบันทึก'); } finally { setSaving(false); }
   };
 
-  // 🔒 ฟังก์ชันเปลี่ยนรหัสผ่านหลังตรวจสอบ Popup เสร็จสิ้น
   const handleChangePasswordSubmit = async () => {
-    if (!newPassword || !confirmPassword) {
-      Alert.alert("กรอกข้อมูลไม่ครบ", "กรุณากรอกรหัสผ่านให้ครบทั้งสองช่อง");
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      Alert.alert("รหัสผ่านไม่ตรงกัน", "รหัสผ่านใหม่และรหัสผ่านยืนยันไม่ตรงกัน กรุณาตรวจสอบอีกครั้ง");
-      return;
-    }
-
+    if (!newPassword || !confirmPassword) { Alert.alert('กรอกข้อมูลไม่ครบ', 'กรุณากรอกรหัสผ่านให้ครบทั้งสองช่อง'); return; }
+    if (newPassword !== confirmPassword) { Alert.alert('รหัสผ่านไม่ตรงกัน', 'กรุณาตรวจสอบอีกครั้ง'); return; }
     try {
-      // ยิง API ไปหลังบ้านสำหรับเปลี่ยนรหัสผ่านโดยเฉพาะ
-      const response = await fetch(`${BASE_URL}/api/users/change-password`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: currentUserId,
-          password: newPassword
-        })
+      const response = await fetch(BASE_URL + '/api/users/change-password', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUserId, password: newPassword })
       });
       const json = await response.json();
-
-      if (json.success) {
-        Alert.alert("สำเร็จ", "เปลี่ยนรหัสผ่านเสร็จสิ้นเรียบร้อยแล้ว");
-        // เคลียร์ค่าในกล่อง
-        setNewPassword('');
-        setConfirmPassword('');
-        setIsPasswordModalVisible(false); // ปิด Popup ล็อคหน้าจอ
-      } else {
-        Alert.alert("เปลี่ยนรหัสผ่านไม่สำเร็จ", json.message || "กรุณาลองใหม่อีกครั้ง");
-      }
-    } catch (error) {
-      Alert.alert("เกิดข้อผิดพลาด", "ไม่สามารถติดต่อเซิร์ฟเวอร์เพื่อเปลี่ยนรหัสผ่านได้");
-    }
+      if (json.success) { Alert.alert('สำเร็จ', 'เปลี่ยนรหัสผ่านเรียบร้อย'); setNewPassword(''); setConfirmPassword(''); setIsPasswordModalVisible(false); }
+      else { Alert.alert('ไม่สำเร็จ', json.message || 'กรุณาลองใหม่'); }
+    } catch (error) { Alert.alert('ข้อผิดพลาด', 'ไม่สามารถติดต่อเซิร์ฟเวอร์'); }
   };
-
-  if (loading) {
-    return <View style={styles.loadingContainer}><ActivityIndicator size="large" color="#E67E22" /></View>;
-  }
-
+  if (loading) return <View style={s.loadingContainer}><ActivityIndicator size="large" color={ORANGE} /></View>;
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.headerBar}>
-        <TouchableOpacity onPress={() => {
-          if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
-            document.activeElement.blur(); 
-          }
-          router.back(); 
-        }}>
-          <Ionicons name="chevron-back" size={28} color="black" />
-        </TouchableOpacity>
-        <ThemedText style={styles.headerTitle}>โปรไฟล์/แก้ไขข้อมูลส่วนตัว</ThemedText>
+    <SafeAreaView style={s.container}>
+      <View style={s.headerBar}>
+        <TouchableOpacity onPress={() => router.back()} style={s.headerBtn}><Ionicons name="chevron-back" size={26} color="#FFF" /></TouchableOpacity>
+        <ThemedText style={s.headerTitle}>แก้ไขโปรไฟล์</ThemedText>
+        <View style={s.headerBtn} />
       </View>
-
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
-        {/* รูปโปรไฟล์และชื่อ */}
-        <View style={styles.avatarSection}>
-          <View style={styles.avatarWrapper}>
-            <Image source={{ uri: 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png' }} style={styles.avatar} />
-          </View>
-         
-          <View style={styles.nameRow}>
-            <ThemedText style={{ fontSize: 22, fontWeight: 'bold', color: '#000' }}>คุณ </ThemedText>
-            <TextInput 
-              style={styles.nameInput}
-              value={username}
-              onChangeText={setUsername}
-              placeholder="ชื่อของคุณ"
-            />
-            <Ionicons name="pencil" size={20} color="black" style={{ marginLeft: 4 }} />
-          </View>
-          <ThemedText style={styles.emailSub}>{email}</ThemedText>
-        </View>
-
-        {/* 📦 กล่อง น้ำหนัก / ส่วนสูง */}
-        <View style={styles.rowWeightHeight}>
-          <View style={styles.measurementBox}>
-            <ThemedText style={styles.boxLabel}>น้ำหนัก</ThemedText>
-            <View style={styles.numberSelector}>
-              <TextInput 
-                style={styles.weightInput}
-                value={weight}
-                onChangeText={setWeight}
-                keyboardType="numeric"
-              />
-              <View style={styles.unitContainer}>
-                <Ionicons name="swap-vertical" size={18} color="#007AFF" />
-                <ThemedText style={styles.unitTextWeight}>kg</ThemedText>
-              </View>
+      <ScrollView contentContainerStyle={s.scrollContent}>
+        <View style={s.avatarSection}>
+          <TouchableOpacity onPress={showAvatarOptions} activeOpacity={0.8}>
+            <View style={s.avatarWrapper}>
+              {avatarUrl ? <Image source={{ uri: avatarUrl }} style={s.avatar} /> : <View style={s.avatarPlaceholder}><Ionicons name="person" size={48} color="#CCC" /></View>}
+              <View style={s.cameraBadge}>{uploadingAvatar ? <ActivityIndicator size="small" color="#FFF" /> : <Ionicons name="camera" size={16} color="#FFF" />}</View>
             </View>
-          </View>
-
-          <View style={styles.measurementBox}>
-            <ThemedText style={styles.boxLabel}>ส่วนสูง</ThemedText>
-            <View style={styles.numberSelector}>
-              <TextInput 
-                style={styles.heightInput}
-                value={height}
-                onChangeText={setHeight}
-                keyboardType="numeric"
-              />
-              <View style={styles.unitContainer}>
-                <Ionicons name="swap-vertical" size={18} color="#34C759" />
-                <ThemedText style={styles.unitTextHeight}>cm</ThemedText>
-              </View>
-            </View>
-          </View>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={showAvatarOptions}><ThemedText style={s.changePhotoText}>เปลี่ยนรูปโปรไฟล์</ThemedText></TouchableOpacity>
         </View>
-
-        {/* รายการข้อมูลด้านล่างที่ขยายให้แก้ไขพิมพ์ค่าเข้าไปได้ทั้งหมด */}
-        <View style={styles.infoRowItem}>
-          <MaterialCommunityIcons name="chart-pie" size={28} color="#00E676" />
-          <View style={styles.infoTextGroup}>
-            <ThemedText style={styles.infoLabel}>TDEE (คำนวณอัตโนมัติ)</ThemedText>
-            <ThemedText style={styles.infoValue}>{tdee.toLocaleString()} แคลอรี่ต่อวัน</ThemedText>
-          </View>
+        <View style={s.inputGroup}><ThemedText style={s.label}>ชื่อผู้ใช้</ThemedText><TextInput style={s.input} value={username} onChangeText={setUsername} placeholder="กรอกชื่อ" /></View>
+        <View style={s.row}>
+          <View style={[s.inputGroup, { flex: 1, marginRight: 8 }]}><ThemedText style={s.label}>น้ำหนัก (kg)</ThemedText><TextInput style={s.input} value={weight} onChangeText={setWeight} keyboardType="numeric" /></View>
+          <View style={[s.inputGroup, { flex: 1, marginLeft: 8 }]}><ThemedText style={s.label}>ส่วนสูง (cm)</ThemedText><TextInput style={s.input} value={height} onChangeText={setHeight} keyboardType="numeric" /></View>
         </View>
-
-        {/* 🟢 แก้ไขวันเกิดได้ */}
-        <View style={styles.infoRowItem}>
-          <MaterialCommunityIcons name="calendar" size={28} color="#FF7043" />
-          <View style={styles.infoTextGroup}>
-            <ThemedText style={styles.infoLabel}>วันเกิด (ปปปป-ดด-วว)</ThemedText>
-            <TextInput
-              style={{ fontSize: 16, color: '#000', padding: 0, marginTop: 2 }}
-              value={dob}
-              onChangeText={setDob}
-              placeholder="ตัวอย่าง 2004-05-14"
-            />
-          </View>
-        </View>
-
-        {/* 🟢 แก้ไขอีเมลได้ */}
-        <View style={styles.infoRowItem}>
-          <MaterialCommunityIcons name="email" size={28} color="#29B6F6" />
-          <View style={styles.infoTextGroup}>
-            <ThemedText style={styles.infoLabel}>อีเมล</ThemedText>
-            <TextInput
-              style={{ fontSize: 16, color: '#000', padding: 0, marginTop: 2 }}
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-          </View>
-        </View>
-
-        {/* 🟢 แก้ไขเพศได้ */}
-        <View style={styles.infoRowItem}>
-          <MaterialCommunityIcons name="gender-male-female" size={28} color="#5C6BC0" />
-          <View style={styles.infoTextGroup}>
-            <ThemedText style={styles.infoLabel}>เพศ (ชาย / หญิง)</ThemedText>
-            <TextInput
-              style={{ fontSize: 16, color: '#000', padding: 0, marginTop: 2 }}
-              value={gender}
-              onChangeText={setGender}
-              placeholder="กรอก ชาย หรือ หญิง"
-            />
-          </View>
-        </View>
-
-        {/* 🔒 ส่วนของรหัสผ่าน: กดแล้วจะเปิดเด้ง Popup ทันทีตามที่คุณต้องการ */}
-        <TouchableOpacity 
-          style={styles.infoRowItem} 
-          onPress={() => setIsPasswordModalVisible(true)}
-        >
-          <MaterialCommunityIcons name="lock" size={28} color="#78909C" />
-          <View style={styles.infoTextGroup}>
-            <ThemedText style={styles.infoLabel}>รหัสผ่าน</ThemedText>
-            <ThemedText style={{ fontSize: 14, color: '#007AFF', fontWeight: 'bold', marginTop: 2 }}>
-              กดที่นี่เพื่อเปลี่ยนรหัสผ่านตัวใหม่
-            </ThemedText>
-          </View>
-          <Ionicons name="create-outline" size={20} color="#007AFF" />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.tdeeHelpRow}>
-          <MaterialCommunityIcons name="alert-circle-outline" size={28} color="black" />
-          <ThemedText style={styles.helpText}>TDEE คืออะไร ?</ThemedText>
-          <Ionicons name="chevron-forward" size={24} color="black" />
-        </TouchableOpacity>
-
-        {/* ปุ่มบันทึกข้อมูลทั้งหมด */}
-        <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={saving}>
-          {saving ? <ActivityIndicator color="white" /> : <ThemedText style={styles.saveButtonText}>บันทึกข้อมูลโปรไฟล์</ThemedText>}
-        </TouchableOpacity>
+        <View style={s.infoCard}><MaterialCommunityIcons name="fire" size={22} color={ORANGE} /><View style={{ marginLeft: 12, flex: 1 }}><ThemedText style={s.infoLabel}>TDEE</ThemedText><ThemedText style={s.infoValue}>{tdee ? tdee.toLocaleString() : '—'} แคลอรี่/วัน</ThemedText></View></View>
+        <View style={s.inputGroup}><ThemedText style={s.label}>วันเกิด</ThemedText><TextInput style={s.input} value={dob} onChangeText={setDob} placeholder="2004-05-14" /></View>
+        <View style={s.inputGroup}><ThemedText style={s.label}>อีเมล</ThemedText><TextInput style={s.input} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" /></View>
+        <View style={s.inputGroup}><ThemedText style={s.label}>เพศ</ThemedText><View style={s.genderRow}>{["ชาย", "หญิง"].map((g) => (<TouchableOpacity key={g} style={[s.genderBtn, gender === g && s.genderBtnActive]} onPress={() => setGender(g)}><ThemedText style={[s.genderText, gender === g && s.genderTextActive]}>{g}</ThemedText></TouchableOpacity>))}</View></View>
+        <TouchableOpacity style={s.passwordRow} onPress={() => setIsPasswordModalVisible(true)}><Ionicons name="lock-closed-outline" size={20} color="#666" /><ThemedText style={s.passwordText}>เปลี่ยนรหัสผ่าน</ThemedText><Ionicons name="chevron-forward" size={20} color="#CCC" /></TouchableOpacity>
+        <TouchableOpacity style={[s.saveBtn, saving && { opacity: 0.6 }]} onPress={handleSave} disabled={saving}>{saving ? <ActivityIndicator color="#FFF" /> : <ThemedText style={s.saveBtnText}>บันทึกข้อมูล</ThemedText>}</TouchableOpacity>
       </ScrollView>
-
-      {/* 🔒 ================== POPUP (MODAL) สำหรับเปลี่ยนรหัสผ่านผู้ใช้ ================== */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={isPasswordModalVisible}
-        onRequestClose={() => setIsPasswordModalVisible(false)}
-      >
-        <View style={localStyles.modalOverlay}>
-          <View style={localStyles.modalContainer}>
-            <View style={localStyles.modalHeader}>
-              <MaterialCommunityIcons name="shield-lock" size={26} color="#E67E22" />
-              <ThemedText style={localStyles.modalTitle}>ตั้งค่ารหัสผ่านใหม่</ThemedText>
-            </View>
-
-            <ThemedText style={localStyles.modalLabel}>รหัสผ่านใหม่</ThemedText>
-            <View style={localStyles.inputWrapper}>
-              <TextInput
-                style={localStyles.modalInput}
-                placeholder="กรอกรหัสผ่านใหม่"
-                secureTextEntry={!showModalPassword}
-                value={newPassword}
-                onChangeText={setNewPassword}
-                autoCapitalize="none"
-              />
-              <TouchableOpacity onPress={() => setShowModalPassword(!showModalPassword)}>
-                <Ionicons name={showModalPassword ? "eye-outline" : "eye-off-outline"} size={20} color="#666" />
-              </TouchableOpacity>
-            </View>
-
-            <ThemedText style={localStyles.modalLabel}>ยืนยันรหัสผ่านใหม่อีกครั้ง</ThemedText>
-            <View style={localStyles.inputWrapper}>
-              <TextInput
-                style={localStyles.modalInput}
-                placeholder="กรอกรหัสผ่านใหม่อีกครั้ง"
-                secureTextEntry={!showModalPassword}
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                autoCapitalize="none"
-              />
-            </View>
-
-            {/* ปุ่มกดกดยืนยัน หรือยกเลิก */}
-            <View style={localStyles.modalButtonRow}>
-              <TouchableOpacity 
-                style={[localStyles.modalButton, localStyles.btnCancel]} 
-                onPress={() => {
-                  setNewPassword('');
-                  setConfirmPassword('');
-                  setIsPasswordModalVisible(false);
-                }}
-              >
-                <ThemedText style={localStyles.btnTextCancel}>ยกเลิก</ThemedText>
-              </TouchableOpacity>
-
-              <TouchableOpacity 
-                style={[localStyles.modalButton, localStyles.btnConfirm]} 
-                onPress={handleChangePasswordSubmit}
-              >
-                <ThemedText style={localStyles.btnTextConfirm}>ยืนยันการเปลี่ยน</ThemedText>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <Modal visible={isPasswordModalVisible} transparent animationType="fade"><View style={s.modalOverlay}><View style={s.modalContainer}>
+        <View style={s.modalHeader}><Ionicons name="lock-closed" size={22} color={ORANGE} /><ThemedText style={s.modalTitle}>เปลี่ยนรหัสผ่าน</ThemedText></View>
+        <ThemedText style={s.modalLabel}>รหัสผ่านใหม่</ThemedText><View style={s.modalInputWrapper}><TextInput style={s.modalInput} secureTextEntry={!showModalPassword} value={newPassword} onChangeText={setNewPassword} autoCapitalize="none" /><TouchableOpacity onPress={() => setShowModalPassword(!showModalPassword)}><Ionicons name={showModalPassword ? "eye-outline" : "eye-off-outline"} size={20} color="#666" /></TouchableOpacity></View>
+        <ThemedText style={s.modalLabel}>ยืนยันรหัสผ่าน</ThemedText><View style={s.modalInputWrapper}><TextInput style={s.modalInput} secureTextEntry={!showModalPassword} value={confirmPassword} onChangeText={setConfirmPassword} autoCapitalize="none" /><TouchableOpacity onPress={() => setShowModalPassword(!showModalPassword)}><Ionicons name={showModalPassword ? "eye-outline" : "eye-off-outline"} size={20} color="#666" /></TouchableOpacity></View>
+        <View style={s.modalBtnRow}><TouchableOpacity style={[s.modalBtn, s.modalBtnCancel]} onPress={() => { setNewPassword(''); setConfirmPassword(''); setIsPasswordModalVisible(false); }}><ThemedText style={s.modalBtnCancelText}>ยกเลิก</ThemedText></TouchableOpacity><TouchableOpacity style={[s.modalBtn, s.modalBtnConfirm]} onPress={handleChangePasswordSubmit}><ThemedText style={s.modalBtnConfirmText}>ยืนยัน</ThemedText></TouchableOpacity></View>
+      </View></View></Modal>
     </SafeAreaView>
   );
+
 }
 
-// สไตล์ตกแต่งภายในสำหรับตัวหน้าต่างเด้ง Popup รหัสผ่าน (Modal)
-const localStyles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20
-  },
-  modalContainer: {
-    width: '100%',
-    maxWidth: 340,
-    backgroundColor: '#FFF',
-    borderRadius: 20,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 5,
-    elevation: 5,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginLeft: 8,
-    color: '#333'
-  },
-  modalLabel: {
-    fontSize: 14,
-    color: '#555',
-    marginBottom: 6,
-    fontWeight: '600'
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#D1D1D6',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    height: 46,
-    marginBottom: 16,
-    backgroundColor: '#F9F9F9'
-  },
-  modalInput: {
-    flex: 1,
-    fontSize: 15,
-    color: '#000',
-  },
-  modalButtonRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 8,
-  },
-  modalButton: {
-    flex: 1,
-    height: 44,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  btnCancel: {
-    backgroundColor: '#E5E5EA',
-    marginRight: 8,
-  },
-  btnConfirm: {
-    backgroundColor: '#E67E22',
-    marginLeft: 8,
-  },
-  btnTextCancel: {
-    color: '#333',
-    fontWeight: '600',
-  },
-  btnTextConfirm: {
-    color: '#FFF',
-    fontWeight: '600',
-  },
+const s = StyleSheet.create({
+  container: { flex: 1, backgroundColor: LIGHT_BG },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: LIGHT_BG },
+  headerBar: { height: 56, backgroundColor: ORANGE, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
+  headerBtn: { width: 40, alignItems: 'center' },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#FFF' },
+  scrollContent: { padding: 20, paddingBottom: 40 },
+  avatarSection: { alignItems: 'center', marginBottom: 28 },
+  avatarWrapper: { width: 100, height: 100, borderRadius: 50, position: 'relative' },
+  avatar: { width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: ORANGE },
+  avatarPlaceholder: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#E8E8E8', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#DDD' },
+  cameraBadge: { position: 'absolute', bottom: 0, right: 0, width: 32, height: 32, borderRadius: 16, backgroundColor: ORANGE, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFF' },
+  changePhotoText: { color: ORANGE, fontSize: 14, marginTop: 8, fontWeight: '600' },
+  inputGroup: { marginBottom: 16 },
+  label: { fontSize: 13, color: '#888', marginBottom: 6, fontWeight: '600' },
+  input: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 10, paddingHorizontal: 14, height: 46, fontSize: 16, color: '#222' },
+  row: { flexDirection: 'row', marginBottom: 16 },
+  infoCard: { flexDirection: 'row', backgroundColor: '#FFF', padding: 16, borderRadius: 10, alignItems: 'center', marginBottom: 16, borderWidth: 1, borderColor: '#E0E0E0' },
+  infoLabel: { fontSize: 12, color: '#888', marginBottom: 2 },
+  infoValue: { fontSize: 16, fontWeight: 'bold', color: '#222' },
+  genderRow: { flexDirection: 'row', gap: 10 },
+  genderBtn: { flex: 1, height: 46, borderRadius: 10, borderWidth: 1, borderColor: '#E0E0E0', backgroundColor: '#FFF', justifyContent: 'center', alignItems: 'center' },
+  genderBtnActive: { borderColor: ORANGE, backgroundColor: '#FFF5E6' },
+  genderText: { fontSize: 16, color: '#666' },
+  genderTextActive: { color: ORANGE, fontWeight: 'bold' },
+  passwordRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', padding: 16, borderRadius: 10, marginBottom: 20, borderWidth: 1, borderColor: '#E0E0E0' },
+  passwordText: { flex: 1, marginLeft: 12, fontSize: 16, color: '#333' },
+  saveBtn: { backgroundColor: ORANGE, paddingVertical: 16, borderRadius: 12, alignItems: 'center', elevation: 2 },
+  saveBtnText: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalContainer: { width: '100%', maxWidth: 340, backgroundColor: '#FFF', borderRadius: 16, padding: 24 },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
+  modalTitle: { fontSize: 18, fontWeight: 'bold', marginLeft: 8, color: '#333' },
+  modalLabel: { fontSize: 13, color: '#555', marginBottom: 6, fontWeight: '600' },
+  modalInputWrapper: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#D1D1D6', borderRadius: 10, paddingHorizontal: 12, height: 46, marginBottom: 16, backgroundColor: '#F9F9F9' },
+  modalInput: { flex: 1, fontSize: 15, color: '#000' },
+  modalBtnRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
+  modalBtn: { flex: 1, height: 44, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+  modalBtnCancel: { backgroundColor: '#E5E5EA', marginRight: 8 },
+  modalBtnConfirm: { backgroundColor: ORANGE, marginLeft: 8 },
+  modalBtnCancelText: { color: '#333', fontWeight: '600' },
+  modalBtnConfirmText: { color: '#FFF', fontWeight: '600' },
 });

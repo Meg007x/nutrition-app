@@ -171,17 +171,17 @@ const styles = StyleSheet.create({
 
   proteinValueCard: {
     marginTop: 16,
-    backgroundColor: "#FFF8EC",
+    backgroundColor: WHITE,
     borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#F0D3A3",
+    borderWidth: 1.4,
+    borderColor: "#D9D9D9",
     padding: 16,
     alignItems: "center",
   },
 
   proteinValueLabel: {
     fontSize: 14,
-    color: "#8A5A00",
+    color: "#555",
     fontFamily: FONT_BOLD,
     marginBottom: 6,
   },
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
   proteinValueHint: {
     marginTop: 6,
     fontSize: 13,
-    color: "#999",
+    color: "#777",
     fontFamily: FONT_REGULAR,
   },
 

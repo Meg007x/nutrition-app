@@ -36,11 +36,8 @@ export default function ScanFoodScreen() {
   }>();
 
   const handleBack = () => {
-    try {
-      router.back();
-    } catch (_) {
-      router.push("/(tabs)/dashboard");
-    }
+    // 🔧 บังคับกลับ Dashboard เสมอ ไม่ใช้ router.back() เพราะอาจเด้งกลับหน้า Login
+    router.replace("/(tabs)/dashboard");
   };
 
   const requestCameraPermission = async () => {

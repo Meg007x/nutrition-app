@@ -17,16 +17,14 @@ const styles = StyleSheet.create({
     backgroundColor: BG 
 },
   headerBar: {
-     paddingVertical: 16, 
-     alignItems: "center", 
-     borderBottomWidth: 1, 
-     borderBottomColor: "#E5E5E5",
-      backgroundColor: "#FFF" },
+     paddingVertical: 16,
+     alignItems: "center",
+     backgroundColor: ORANGE },
 
-  headerText: { 
-    fontSize: 18, 
-    color: "#333",
-     fontFamily: FONT_BOLD },
+  headerText: {
+    fontSize: 18,
+    color: "#FFF",
+    fontFamily: FONT_BOLD },
   scroll: { flex: 1 },
   scrollContent: { padding: 24, paddingBottom: 60 },
   stepTitle: { fontSize: 22, color: "#222", marginBottom: 16, fontFamily: FONT_BOLD },

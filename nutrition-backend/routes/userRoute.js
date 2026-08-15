@@ -12,7 +12,8 @@ const {
     updateUserAllergies,
     updateUserDislikedFoods,
     updateUserInterestedCuisines,
-    updateMealWaterSettings
+    updateMealWaterSettings,
+    uploadAvatar
 } = require("../controllers/userController");
 
 // 2. เรียกใช้งานชื่อฟังก์ชันที่ดึงมาตรง ๆ ได้เลย (ห้ามใส่ userController. นำหน้า)
@@ -27,5 +28,6 @@ router.put('/update-allergies', updateUserAllergies); // 👈 แก้ไข
 router.put('/update-disliked-foods', updateUserDislikedFoods); // 👈 แก้ไข
 router.put('/update-interested-cuisines', updateUserInterestedCuisines); // 👈 แก้ไข
 router.put('/update-meal-water-settings', updateMealWaterSettings); // 👈 แก้ไข
+router.put('/upload-avatar', uploadAvatar); // 👈 อัปโหลดรูปโปรไฟล์
 
 module.exports = router;

@@ -358,7 +358,7 @@ export default function RegisterStep9Screen() {
         <View style={styles.buttonRow}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => router.push("/register/step8" as any)}
+            onPress={() => router.back()}
           >
             <Text style={styles.backText}>ย้อนกลับ</Text>
           </TouchableOpacity>

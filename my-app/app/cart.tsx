@@ -144,7 +144,7 @@ export default function MealCartScreen() {
         mealType: selectedMealType      
       };
 
-      const response = await fetch(API_URL, {
+      const response = await fetch(`${API_BASE_URL}/meal-logs/cart`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody), 
@@ -201,6 +201,15 @@ return (
       {/* แถบหัวข้อบนสุดคงสีขาวเดิม */}
       <View style={styles.header}>
         <ThemedText type="title" style={styles.textWhite}>ตะกร้าอาหาร</ThemedText>
+      </View>
+
+      {/* 🟢 Header พร้อมปุ่มกลับ */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#eee' }}>
+        <TouchableOpacity onPress={() => router.replace('/(tabs)/dashboard')} style={{ padding: 4 }}>
+          <Ionicons name="close" size={28} color="#111" />
+        </TouchableOpacity>
+        <ThemedText type="title" style={{ flex: 1, textAlign: 'center', fontSize: 18 }}>ตะกร้ามื้ออาหาร</ThemedText>
+        <View style={{ width: 36 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>

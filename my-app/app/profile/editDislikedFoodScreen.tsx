@@ -52,29 +52,29 @@ export default function EditDislikedFoodScreen() {
       if (!userJson) return;
       const userObj = JSON.parse(userJson);
       
-      const userId = userObj.user_id; // 🟢 ป้องกัน 404: หยิบ user_id ตรงๆ
+      const userId = userObj.user_id;
       if (!userId) return;
       setCurrentUserId(userId);
 
-      // 🟢 ดึงข้อมูลโปรไฟล์ และ วัตถุดิบ พร้อมกันเพื่อให้ไวขึ้น
-      const [profileRes, ingredientsRes] = await Promise.all([
+      // 🟢 ดึงข้อมูลโปรไฟล์ และ รายการอาหารที่ไม่ชอบ พร้อมกัน
+      const [profileRes, dislikedRes] = await Promise.all([
         fetch(`${BASE_URL}/api/users/profile?userId=${userId}`),
-        fetch(`${BASE_URL}/api/ingredients`) // 👈 ต้องมี API ดึงวัตถุดิบทั้งหมด
+        fetch(`${BASE_URL}/api/disliked-foods`)
       ]);
 
       const profileJson = await profileRes.json();
-      const ingredientsJson = await ingredientsRes.json();
+      const dislikedJson = await dislikedRes.json();
 
-      // 1. นำวัตถุดิบมาจัดหมวดหมู่
-      if (ingredientsJson.success && ingredientsJson.data) {
+      // 1. แปลงข้อมูลจาก API เป็นโครงสร้าง GroupedIngredients
+      if (dislikedJson.success && Array.isArray(dislikedJson.data)) {
         const grouped: GroupedIngredients = {};
-        ingredientsJson.data.forEach((ing: any) => {
-          if (!ing.is_active) return;
-          const cat = ing.category; // เช่น "nuts"
-          const label = ing.sub_category_label || ing.category_group_label || cat;
-          
-          if (!grouped[cat]) grouped[cat] = { title: label, items: [] };
-          grouped[cat].items.push(ing.name);
+        dislikedJson.data.forEach((cat: any) => {
+          if (cat.foods && cat.foods.length > 0) {
+            grouped[cat.id] = {
+              title: cat.name,
+              items: cat.foods.map((f: any) => f.name)
+            };
+          }
         });
         setGroupedIngredients(grouped);
       }

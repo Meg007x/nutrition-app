@@ -6,6 +6,7 @@ const UserSchema = new mongoose.Schema(
     username: String,
     email: String,
     password: String,
+    avatar_url: { type: String, default: "" },
     gender: String,
     date_of_birth: Date,
     age: Number,

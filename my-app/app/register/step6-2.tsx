@@ -47,8 +47,8 @@ export default function RegisterStep6OtherScreen() {
         const result = await response.json();
         
         if (result && result.data) {
-          // แปลง _id จาก MongoDB ให้เป็น id ธรรมดาที่หน้าบ้านใช้
-          const formatData = (arr: any[]) => arr.map(item => ({ ...item, id: item._id || item.id }));
+          // แปลง _id จาก MongoDB ให้เป็น id ธรรมดาที่หน้าบ้านใช้ และรับประกันว่าเป็น string เพื่อการตรวจสอบที่ถูกต้อง
+          const formatData = (arr: any[]) => arr.map(item => ({ ...item, id: String(item._id || item.id) }));
           
           const fetchedVeg = formatData(result.data.veg || []);
           const fetchedCond = formatData(result.data.condiment || []);
@@ -150,6 +150,18 @@ export default function RegisterStep6OtherScreen() {
     data: { id: string; name: string }[],
     category: 'veg' | 'condiment' | 'meat',
   ) => {
+    // 🟢 แสดงข้อความเมื่อไม่มีข้อมูลวัตถุดิบในหมวดนี้
+    if (data.length === 0) {
+      return (
+        <View style={styles.listContainer}>
+          <View style={[styles.listItem, { justifyContent: 'center', paddingVertical: 18 }]}>
+            <Text style={{ fontSize: 14, color: '#999', fontFamily: 'NotoSansThai', textAlign: 'center' }}>
+              ยังไม่มีข้อมูลวัตถุดิบในหมวดนี้
+            </Text>
+          </View>
+        </View>
+      );
+    }
     return (
       <View style={styles.listContainer}>
         {data.map((item) => {

@@ -35,32 +35,47 @@ const getDashboardData = async (req, res) => {
     const day = `${now.getDate()}`.padStart(2, "0");
     const todayStr = `${year}-${month}-${day}`;
 
+    // 🔧 ใช้ currentUserId ให้สอดคล้องกันทุก query
     const currentUserId = user.user_id || user.username || userId;
 
-    // 2. 💧 ดึงข้อมูลน้ำดื่มของวันนี้ (กำหนดตัวแปรดึงตรงจากคอลเลกชัน WaterLogs)
-    const waterLog = await db.collection("WaterLogs").findOne({
-      user_id: user.user_id,
-      date: todayStr
-    });
-    const consumedWater = waterLog ? Number(waterLog.total_drank_ml || 0) : 0;
-    const targetWater = waterLog ? Number(waterLog.target_ml || 2000) : (user?.health_goals?.water_target_ml || 2000);
+    // 2. 💧 ดึงข้อมูลน้ำดื่มของวันนี้ (wrap ใน try-catch แยก)
+    let consumedWater = 0;
+    let targetWater = 2000;
+    try {
+      const waterLog = await db.collection("WaterLogs").findOne({
+        user_id: currentUserId,
+        date: todayStr
+      });
+      consumedWater = waterLog ? Number(waterLog.total_drank_ml || 0) : 0;
+      targetWater = waterLog ? Number(waterLog.target_ml || 2000) : (user?.health_goals?.water_target_ml || 2000);
+    } catch (e) {
+      console.warn("⚠️ WaterLogs query error:", e.message);
+    }
 
-    // 3. 🍳 ดึงข้อมูลอาหารที่บันทึก/สแกน ของวันนี้มาคำนวณแคลและสารอาหารหลักทั้งหมด
-    // ดึงจากทั้ง ScanSessions และ MealLogs
-    const scanColList = await db.listCollections({ name: { $in: ["ScanSessions", "scansessions"] } }).toArray();
-    const scanColName = scanColList.length > 0 ? scanColList[0].name : "ScanSessions";
-    const todayScans = await db.collection(scanColName).find({
-      user_id: currentUserId,
-      date: todayStr
-    }).toArray();
+    // 3. 🍳 ดึงข้อมูลอาหารที่บันทึก/สแกน (wrap ใน try-catch แยก)
+    let todayScans = [];
+    try {
+      const scanColList = await db.listCollections({ name: { $in: ["ScanSessions", "scansessions"] } }).toArray();
+      const scanColName = scanColList.length > 0 ? scanColList[0].name : "ScanSessions";
+      todayScans = await db.collection(scanColName).find({
+        user_id: currentUserId,
+        date: todayStr
+      }).toArray();
+    } catch (e) {
+      console.warn("⚠️ ScanSessions query error:", e.message);
+    }
 
-    // ดึงจาก MealLogs ด้วย (ตะกร้าอาหาร)
-    const mealLogColList = await db.listCollections({ name: { $in: ["MealLogs", "meallogs"] } }).toArray();
-    const mealLogColName = mealLogColList.length > 0 ? mealLogColList[0].name : "MealLogs";
-    const todayMealLogs = await db.collection(mealLogColName).find({
-      user_id: currentUserId,
-      date: todayStr
-    }).toArray();
+    let todayMealLogs = [];
+    try {
+      const mealLogColList = await db.listCollections({ name: { $in: ["MealLogs", "meallogs"] } }).toArray();
+      const mealLogColName = mealLogColList.length > 0 ? mealLogColList[0].name : "MealLogs";
+      todayMealLogs = await db.collection(mealLogColName).find({
+        user_id: currentUserId,
+        date: todayStr
+      }).toArray();
+    } catch (e) {
+      console.warn("⚠️ MealLogs query error:", e.message);
+    }
 
     let consumedKcal = 0;
     let proteinCurrent = 0;

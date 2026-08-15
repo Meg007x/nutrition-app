@@ -394,17 +394,38 @@ const updateUserInterestedCuisines = async (req, res) => {
   }
 };
 
-// 🟢 อย่าลืมใส่ชื่อฟังก์ชันเพิ่มใน exports บรรทัดล่างสุด
-module.exports = {
-  getMealSettings,
-  getUserProfile,
-  updateUserProfile,
-  changePassword,
-  updateUserGoal,
-  updateUserActivity,
-  updateUserAllergies,
-  updateUserDislikedFoods,
-  updateUserInterestedCuisines
+// 🟢 เพิ่มฟังก์ชันอัปเดตรูปโปรไฟล์
+const uploadAvatar = async (req, res) => {
+  try {
+    const { userId, avatar_url } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ success: false, message: "กรุณาส่ง userId" });
+    }
+
+    if (!avatar_url) {
+      return res.status(400).json({ success: false, message: "กรุณาส่ง avatar_url" });
+    }
+
+    const updated = await User.findOneAndUpdate(
+      { user_id: userId },
+      { $set: { avatar_url, updated_at: new Date() } },
+      { new: true }
+    );
+
+    if (!updated) {
+      return res.status(404).json({ success: false, message: "ไม่พบข้อมูลผู้ใช้" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "อัปเดตรูปโปรไฟล์สำเร็จ",
+      data: { avatar_url: updated.avatar_url }
+    });
+  } catch (error) {
+    console.error("❌ Upload Avatar Error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
 };
 
 const updateMealWaterSettings = async (req, res) => {
@@ -496,5 +517,6 @@ module.exports = {
   updateUserAllergies,
   updateUserDislikedFoods,
   updateUserInterestedCuisines,
-  updateMealWaterSettings // 👈 เพิ่มฟังก์ชันอัปเดตมื้ออาหารและน้ำดื่มลงใน export
+  updateMealWaterSettings,
+  uploadAvatar
 };

@@ -135,11 +135,14 @@ export default function RegisterStep6Screen() {
   };
 
   const handleNext = () => {
+    // ถ้าผู้ใช้ไม่เลือกอะไรเลย ให้ Set default เป็น "ไม่มี" อัตโนมัติ
     if (selectedAllergies.length === 0) {
-      Alert.alert(
-        "ยังไม่ได้เลือกข้อมูล",
-        "กรุณาเลือกรายการ หรือเลือก 'ไม่มี'"
-      );
+      const defaultAllergies = { veg: [], condiment: [], meat: [], other: ["ไม่มี"] };
+      updateForm({
+        hasAllergies: false,
+        allergies: defaultAllergies,
+      });
+      router.push("/register/step7" as any);
       return;
     }
 
