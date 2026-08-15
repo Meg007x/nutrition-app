@@ -17,8 +17,7 @@ function generatePlanId() {
 // ======================================================
 
 function formatDate(date) {
-  const year =
-    date.getFullYear();
+  const year = date.getFullYear();
 
   const month = String(
     date.getMonth() + 1
@@ -31,10 +30,7 @@ function formatDate(date) {
   return `${year}-${month}-${day}`;
 }
 
-function addDays(
-  dateString,
-  days
-) {
+function addDays(dateString, days) {
   const date = new Date(
     `${dateString}T00:00:00`
   );
@@ -46,12 +42,9 @@ function addDays(
   return formatDate(date);
 }
 
-function isValidDate(
-  dateString
-) {
+function isValidDate(dateString) {
   if (
-    typeof dateString !==
-    "string"
+    typeof dateString !== "string"
   ) {
     return false;
   }
@@ -72,8 +65,7 @@ function isValidDate(
     !Number.isNaN(
       date.getTime()
     ) &&
-    formatDate(date) ===
-      dateString
+    formatDate(date) === dateString
   );
 }
 
@@ -82,12 +74,9 @@ function isValidDate(
 // ======================================================
 
 function number(value) {
-  const result =
-    Number(value);
+  const result = Number(value);
 
-  return Number.isFinite(
-    result
-  )
+  return Number.isFinite(result)
     ? result
     : 0;
 }
@@ -98,8 +87,7 @@ function number(value) {
 
 function getNutrition(food) {
   const nutrition =
-    food?.nutrition_per_portion ||
-    {};
+    food?.nutrition_per_portion || {};
 
   return {
     kcal: number(
@@ -412,11 +400,8 @@ function findAddons({
       break;
     }
 
-    let bestFood =
-      null;
-
-    let bestScore =
-      Infinity;
+    let bestFood = null;
+    let bestScore = Infinity;
 
     for (
       const food of candidates
@@ -609,7 +594,57 @@ function createMealSlot({
 }
 
 // ======================================================
+// Check Existing Plans
+// ======================================================
+//
+// ตรวจสอบว่า user มีแผนที่วันที่ซ้อนกับช่วงใหม่หรือไม่
+//
+// ตัวอย่าง
+// มีแผน 16-22
+// จะสร้าง 18-20
+// => พบแผนซ้อน
+//
+// จะสร้าง 23-25
+// => ไม่ซ้อน
+//
+// ======================================================
+
+async function findOverlappingPlans(
+  user_id,
+  start_date,
+  totalDays
+) {
+  const end_date =
+    addDays(
+      start_date,
+      totalDays - 1
+    );
+
+  const plans =
+    await DailyPlan.find({
+      user_id,
+      plan_status: "active",
+
+      date: {
+        $gte: start_date,
+        $lte: end_date,
+      },
+    })
+      .sort({
+        date: 1,
+      })
+      .lean();
+
+  return {
+    start_date,
+    end_date,
+    plans,
+  };
+}
+
+// ======================================================
 // POST /api/meal/plans
+// Create Meal Plans
 // ======================================================
 
 async function createMealPlans(
@@ -650,7 +685,7 @@ async function createMealPlans(
     } = req.body;
 
     // ==================================================
-    // Validate
+    // Validate user
     // ==================================================
 
     if (!user_id) {
@@ -660,6 +695,10 @@ async function createMealPlans(
           "กรุณาระบุ user_id",
       });
     }
+
+    // ==================================================
+    // Validate date
+    // ==================================================
 
     if (
       !isValidDate(
@@ -672,6 +711,10 @@ async function createMealPlans(
           "start_date ต้องอยู่ในรูปแบบ YYYY-MM-DD",
       });
     }
+
+    // ==================================================
+    // Validate days
+    // ==================================================
 
     const totalDays =
       Number(days);
@@ -687,6 +730,52 @@ async function createMealPlans(
         success: false,
         message:
           "days ต้องเป็นจำนวนเต็มระหว่าง 1-7",
+      });
+    }
+
+    // ==================================================
+    // Check overlapping plans
+    // ==================================================
+
+    const overlap =
+      await findOverlappingPlans(
+        user_id,
+        start_date,
+        totalDays
+      );
+
+    if (
+      overlap.plans.length > 0
+    ) {
+      const existingPlanIds = [
+        ...new Set(
+          overlap.plans.map(
+            (plan) =>
+              plan.plan_id
+          )
+        ),
+      ];
+
+      return res.status(409).json({
+        success: false,
+
+        code:
+          "PLAN_OVERLAP",
+
+        message:
+          "มีแผนอาหารอยู่แล้วในช่วงวันที่เลือก",
+
+        start_date:
+          overlap.start_date,
+
+        end_date:
+          overlap.end_date,
+
+        existing_plan_ids:
+          existingPlanIds,
+
+        existing_plans:
+          overlap.plans,
       });
     }
 
@@ -733,8 +822,9 @@ async function createMealPlans(
     );
 
     const masterFoods =
-      await MasterFood.find({})
-        .lean();
+      await MasterFood.find(
+        {}
+      ).lean();
 
     console.log(
       "🍽️ MasterFood:",
@@ -966,8 +1056,7 @@ async function createMealPlans(
 
     for (
       let dayIndex = 0;
-      dayIndex <
-      totalDays;
+      dayIndex < totalDays;
       dayIndex++
     ) {
       const date =
@@ -1156,6 +1245,7 @@ async function createMealPlans(
 
 // ======================================================
 // GET /api/meal/plans/:plan_id
+// Get Plans By Plan ID
 // ======================================================
 
 async function getPlansByPlanId(
@@ -1221,6 +1311,372 @@ async function getPlansByPlanId(
 }
 
 // ======================================================
+// GET /api/meal/user/:user_id
+// Get All Plans By User ID
+// ======================================================
+
+async function getPlansByUserId(
+  req,
+  res
+) {
+  try {
+    const {
+      user_id,
+    } = req.params;
+
+    console.log(
+      "================================"
+    );
+
+    console.log(
+      "📥 GET PLANS BY USER"
+    );
+
+    console.log(
+      "USER ID:",
+      user_id
+    );
+
+    console.log(
+      "================================"
+    );
+
+    if (!user_id) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "กรุณาระบุ user_id",
+      });
+    }
+
+    const plans =
+      await DailyPlan.find({
+        user_id,
+
+        plan_status:
+          "active",
+      })
+        .sort({
+          date: 1,
+        })
+        .lean();
+
+    console.log(
+      "📊 พบแผนทั้งหมด:",
+      plans.length
+    );
+
+    return res.json({
+      success: true,
+
+      user_id,
+
+      total_days:
+        plans.length,
+
+      plans,
+    });
+  } catch (error) {
+    console.error(
+      "❌ Get Plans By User Error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+
+      message:
+        "ไม่สามารถโหลดแผนอาหารของผู้ใช้ได้",
+
+      error:
+        error.message,
+    });
+  }
+}
+
+// ======================================================
+// DELETE /api/meal/plans/:plan_id
+// Delete Plan By Plan ID
+// ======================================================
+//
+// สำคัญ:
+// 1 plan_id = หลาย DailyPlans
+//
+// เช่น
+//
+// PLAN_ABC
+//  ├── 2026-08-16
+//  ├── 2026-08-17
+//  ├── 2026-08-18
+//  ├── 2026-08-19
+//  ├── 2026-08-20
+//  ├── 2026-08-21
+//  └── 2026-08-22
+//
+// ดังนั้นต้อง deleteMany()
+// ไม่ใช่ deleteOne()
+//
+// ======================================================
+
+async function deletePlanByPlanId(
+  req,
+  res
+) {
+  try {
+    const {
+      plan_id,
+    } = req.params;
+
+    const {
+      user_id,
+    } = req.query;
+
+    console.log(
+      "================================"
+    );
+
+    console.log(
+      "🗑️ DELETE MEAL PLAN"
+    );
+
+    console.log(
+      "PLAN ID:",
+      plan_id
+    );
+
+    console.log(
+      "USER ID:",
+      user_id
+    );
+
+    console.log(
+      "================================"
+    );
+
+    // ==================================================
+    // Validate plan_id
+    // ==================================================
+
+    if (!plan_id) {
+      return res.status(400).json({
+        success: false,
+
+        message:
+          "กรุณาระบุ plan_id",
+      });
+    }
+
+    // ==================================================
+    // Build query
+    // ==================================================
+
+    const query = {
+      plan_id,
+    };
+
+    // ถ้าส่ง user_id มาด้วย
+    // จะตรวจสอบเจ้าของแผนด้วย
+
+    if (user_id) {
+      query.user_id =
+        user_id;
+    }
+
+    // ==================================================
+    // Check existing plan
+    // ==================================================
+
+    const existingPlans =
+      await DailyPlan.find(
+        query
+      )
+        .select(
+          "plan_id user_id date plan_status"
+        )
+        .lean();
+
+    console.log(
+      "🔎 EXISTING PLANS:",
+      existingPlans.length
+    );
+
+    if (
+      existingPlans.length === 0
+    ) {
+      return res.status(404).json({
+        success: false,
+
+        message:
+          "ไม่พบแผนอาหารที่ต้องการลบ",
+
+        plan_id,
+      });
+    }
+
+    // ==================================================
+    // Delete ALL documents
+    // with same plan_id
+    // ==================================================
+
+    const result =
+      await DailyPlan.deleteMany(
+        query
+      );
+
+    console.log(
+      "🗑️ DELETED:",
+      result.deletedCount
+    );
+
+    // ==================================================
+    // Verify deletion
+    // ==================================================
+
+    const remaining =
+      await DailyPlan.countDocuments(
+        query
+      );
+
+    console.log(
+      "🔍 REMAINING:",
+      remaining
+    );
+
+    if (
+      remaining > 0
+    ) {
+      return res.status(500).json({
+        success: false,
+
+        message:
+          "ลบแผนไม่สำเร็จ ยังพบข้อมูลแผนอยู่",
+
+        plan_id,
+
+        deleted_count:
+          result.deletedCount,
+
+        remaining,
+      });
+    }
+
+    // ==================================================
+    // Success
+    // ==================================================
+
+    return res.json({
+      success: true,
+
+      message:
+        "ลบแผนอาหารสำเร็จ",
+
+      plan_id,
+
+      deleted_count:
+        result.deletedCount,
+    });
+  } catch (error) {
+    console.error(
+      "❌ Delete Plan Error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+
+      message:
+        "ไม่สามารถลบแผนอาหารได้",
+
+      error:
+        error.message,
+    });
+  }
+}
+
+// ======================================================
+// DELETE /api/meal/user/:user_id
+// Delete ALL Plans Of User
+// ======================================================
+//
+// ใช้กรณีต้องการล้างแผนทั้งหมดของ user
+//
+// ======================================================
+
+async function deleteAllPlansByUserId(
+  req,
+  res
+) {
+  try {
+    const {
+      user_id,
+    } = req.params;
+
+    console.log(
+      "================================"
+    );
+
+    console.log(
+      "🗑️ DELETE ALL USER PLANS"
+    );
+
+    console.log(
+      "USER ID:",
+      user_id
+    );
+
+    console.log(
+      "================================"
+    );
+
+    if (!user_id) {
+      return res.status(400).json({
+        success: false,
+
+        message:
+          "กรุณาระบุ user_id",
+      });
+    }
+
+    const result =
+      await DailyPlan.deleteMany({
+        user_id,
+      });
+
+    console.log(
+      "🗑️ DELETED:",
+      result.deletedCount
+    );
+
+    return res.json({
+      success: true,
+
+      message:
+        "ลบแผนอาหารทั้งหมดของผู้ใช้สำเร็จ",
+
+      user_id,
+
+      deleted_count:
+        result.deletedCount,
+    });
+  } catch (error) {
+    console.error(
+      "❌ Delete All User Plans Error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+
+      message:
+        "ไม่สามารถลบแผนอาหารของผู้ใช้ได้",
+
+      error:
+        error.message,
+    });
+  }
+}
+
+// ======================================================
 // Generate Meal Plan
 // ======================================================
 
@@ -1242,4 +1698,9 @@ module.exports = {
   createMealPlans,
   generateMealPlan,
   getPlansByPlanId,
+  getPlansByUserId,
+
+  // DELETE
+  deletePlanByPlanId,
+  deleteAllPlansByUserId,
 };

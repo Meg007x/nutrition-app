@@ -24,12 +24,7 @@ import {
 
 import axios from "axios";
 
-// ======================================================
-// API
-// ======================================================
-
-const API_URL =
-  "http://172.16.8.172:3000";
+import { BASE_URL } from "../../constants/config";
 
 // ======================================================
 // Types
@@ -95,14 +90,8 @@ type DailyPlan = {
 // Helpers
 // ======================================================
 
-function parseDate(
-  dateString: string
-) {
-  const [
-    year,
-    month,
-    day,
-  ] = dateString
+function parseDate(dateString: string) {
+  const [year, month, day] = dateString
     .split("-")
     .map(Number);
 
@@ -113,11 +102,8 @@ function parseDate(
   );
 }
 
-function formatShortDate(
-  dateString: string
-) {
-  const date =
-    parseDate(dateString);
+function formatShortDate(dateString: string) {
+  const date = parseDate(dateString);
 
   return `${String(
     date.getDate()
@@ -126,11 +112,8 @@ function formatShortDate(
   ).padStart(2, "0")}`;
 }
 
-function getThaiDay(
-  dateString: string
-) {
-  const date =
-    parseDate(dateString);
+function getThaiDay(dateString: string) {
+  const date = parseDate(dateString);
 
   const days = [
     "อา.",
@@ -142,47 +125,40 @@ function getThaiDay(
     "ส.",
   ];
 
-  return days[
-    date.getDay()
-  ];
+  return days[date.getDay()];
 }
 
 function createDateList(
   startDate: string,
   days: number
 ) {
-  if (!startDate) {
+  if (!startDate || days <= 0) {
     return [];
   }
 
-  const start =
-    parseDate(startDate);
+  const start = parseDate(startDate);
 
   return Array.from(
     {
       length: days,
     },
     (_, index) => {
-      const date =
-        new Date(start);
+      const date = new Date(start);
 
       date.setDate(
-        start.getDate() +
-          index
+        start.getDate() + index
       );
 
       const year =
         date.getFullYear();
 
-      const month =
-        String(
-          date.getMonth() + 1
-        ).padStart(2, "0");
+      const month = String(
+        date.getMonth() + 1
+      ).padStart(2, "0");
 
-      const day =
-        String(
-          date.getDate()
-        ).padStart(2, "0");
+      const day = String(
+        date.getDate()
+      ).padStart(2, "0");
 
       return `${year}-${month}-${day}`;
     }
@@ -214,32 +190,46 @@ export default function Step2Screen() {
   const planDays =
     Number(params.days) || 0;
 
-  const dateTabs =
-    useMemo(
-      () =>
-        createDateList(
-          startDate,
-          planDays
-        ),
-      [startDate, planDays]
-    );
+  // ====================================================
+  // Date Tabs
+  // ====================================================
+
+  const dateTabs = useMemo(
+    () =>
+      createDateList(
+        startDate,
+        planDays
+      ),
+    [startDate, planDays]
+  );
 
   const [
     selectedDay,
     setSelectedDay,
   ] = useState(0);
 
+  // ====================================================
+  // State
+  // ====================================================
+
   const [
     plans,
     setPlans,
-  ] = useState<
-    DailyPlan[]
-  >([]);
+  ] = useState<DailyPlan[]>([]);
 
   const [
     loading,
     setLoading,
   ] = useState(true);
+
+  const [
+    saving,
+    setSaving,
+  ] = useState(false);
+
+  // ====================================================
+  // Selected Date
+  // ====================================================
 
   const selectedDate =
     dateTabs[selectedDay];
@@ -270,7 +260,7 @@ export default function Step2Screen() {
       }
 
       const url =
-        `${API_URL}/api/meal/plans/${planId}`;
+        `${BASE_URL}/api/meal/plans/${planId}`;
 
       console.log(
         "📤 GET:",
@@ -300,8 +290,7 @@ export default function Step2Screen() {
       }
 
       setPlans(
-        response.data.plans ||
-          []
+        response.data.plans || []
       );
     } catch (error: any) {
       console.error(
@@ -331,19 +320,29 @@ export default function Step2Screen() {
   // ====================================================
 
   function handleSave() {
-    Alert.alert(
-      "บันทึกสำเร็จ",
-      "บันทึกแผนอาหารเรียบร้อยแล้ว",
-      [
-        {
-          text: "ตกลง",
-          onPress: () =>
-            router.replace(
-              "/(tabs)/plan"
-            ),
-        },
-      ]
+    if (saving) {
+      return;
+    }
+
+    console.log(
+      "💾 SAVE PLAN"
     );
+
+    console.log(
+      "PLAN ID:",
+      planId
+    );
+
+    setSaving(true);
+
+    router.replace({
+      pathname: "/(tabs)/plan",
+      params: {
+        refresh:
+          Date.now().toString(),
+        plan_id: planId,
+      },
+    });
   }
 
   // ====================================================
@@ -353,26 +352,31 @@ export default function Step2Screen() {
   if (loading) {
     return (
       <SafeAreaView
-        style={
-          styles.container
-        }
+        style={styles.container}
       >
         <View
           style={
             styles.loadingContainer
           }
         >
-          <ActivityIndicator
-            size="large"
-            color="#F29913"
-          />
+          <View
+            style={
+              styles.loadingIcon
+            }
+          >
+            <Ionicons
+              name="restaurant-outline"
+              size={34}
+              color="#F29913"
+            />
+          </View>
 
           <Text
             style={
               styles.loadingText
             }
           >
-            กำลังโหลดแผนอาหาร...
+            กำลังโหลดแผนอาหาร
           </Text>
 
           <Text
@@ -381,8 +385,16 @@ export default function Step2Screen() {
             }
           >
             กำลังเตรียมแผน{" "}
-            {planDays} วัน
+            {planDays} วัน...
           </Text>
+
+          <ActivityIndicator
+            size="small"
+            color="#F29913"
+            style={{
+              marginTop: 18,
+            }}
+          />
         </View>
       </SafeAreaView>
     );
@@ -394,67 +406,202 @@ export default function Step2Screen() {
 
   return (
     <SafeAreaView
-      style={
-        styles.container
-      }
+      style={styles.container}
     >
+      {/* Header */}
+
       <View
         style={styles.header}
       >
         <TouchableOpacity
+          style={
+            styles.backButton
+          }
           onPress={() =>
             router.back()
           }
+          activeOpacity={0.7}
         >
           <Ionicons
             name="arrow-back"
-            size={28}
-            color="#000"
+            size={23}
+            color="#111"
           />
         </TouchableOpacity>
 
-        <Text
+        <View
           style={
-            styles.headerTitle
+            styles.headerCenter
           }
         >
-          สร้างแผนการกิน
-        </Text>
+          <Text
+            style={
+              styles.headerTitle
+            }
+          >
+            สร้างแผนการกิน
+          </Text>
+
+          <Text
+            style={
+              styles.headerStep
+            }
+          >
+            ขั้นตอนที่ 2 จาก 2
+          </Text>
+        </View>
 
         <View
-          style={{
-            width: 28,
-          }}
+          style={
+            styles.headerPlaceholder
+          }
         />
       </View>
 
-      <View
-        style={styles.content}
+      {/* Main Scroll */}
+
+      <ScrollView
+        style={styles.scroll}
+        showsVerticalScrollIndicator={
+          false
+        }
+        contentContainerStyle={
+          styles.scrollContent
+        }
       >
-        <Text
-          style={styles.title}
-        >
-          2. ปรับแต่งมื้ออาหาร
-        </Text>
+        {/* Page Title */}
 
-        <Text
+        <View
           style={
-            styles.subtitle
+            styles.pageTitleSection
           }
         >
-          {startDate} ถึง{" "}
-          {endDate}
-        </Text>
+          <View
+            style={
+              styles.titleIcon
+            }
+          >
+            <Ionicons
+              name="restaurant-outline"
+              size={25}
+              color="#F29913"
+            />
+          </View>
 
-        <Text
+          <View
+            style={
+              styles.titleTextContainer
+            }
+          >
+            <Text
+              style={
+                styles.title
+              }
+            >
+              ปรับแต่งมื้ออาหาร
+            </Text>
+
+            <Text
+              style={
+                styles.subtitle
+              }
+            >
+              เลือกดูอาหารในแต่ละวัน
+            </Text>
+          </View>
+        </View>
+
+        {/* Plan Information */}
+
+        <View
           style={
-            styles.planIdText
+            styles.planInfoCard
           }
         >
-          Plan ID: {planId}
-        </Text>
+          <View
+            style={
+              styles.planInfoTop
+            }
+          >
+            <View
+              style={
+                styles.planInfoIcon
+              }
+            >
+              <Ionicons
+                name="calendar-outline"
+                size={22}
+                color="#F29913"
+              />
+            </View>
 
-        {/* Date Tabs */}
+            <View
+              style={
+                styles.planInfoText
+              }
+            >
+              <Text
+                style={
+                  styles.planInfoTitle
+                }
+              >
+                แผนการกิน {planDays} วัน
+              </Text>
+
+              <Text
+                style={
+                  styles.planInfoDate
+                }
+              >
+                {startDate} ถึง {endDate}
+              </Text>
+            </View>
+
+            <View
+              style={
+                styles.activeBadge
+              }
+            >
+              <View
+                style={
+                  styles.activeDot
+                }
+              />
+
+              <Text
+                style={
+                  styles.activeBadgeText
+                }
+              >
+                พร้อมใช้งาน
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Date Selector */}
+
+        <View
+          style={
+            styles.sectionHeader
+          }
+        >
+          <Text
+            style={
+              styles.sectionTitle
+            }
+          >
+            เลือกวัน
+          </Text>
+
+          <Text
+            style={
+              styles.sectionHint
+            }
+          >
+            {selectedDay + 1}/{planDays}
+          </Text>
+        </View>
 
         <ScrollView
           horizontal
@@ -494,6 +641,7 @@ export default function Step2Screen() {
                       index
                     )
                   }
+                  activeOpacity={0.8}
                 >
                   <Text
                     style={[
@@ -521,9 +669,11 @@ export default function Step2Screen() {
 
                   {hasPlan && (
                     <View
-                      style={
-                        styles.planDot
-                      }
+                      style={[
+                        styles.planDot,
+                        active &&
+                          styles.activePlanDot,
+                      ]}
                     />
                   )}
                 </TouchableOpacity>
@@ -532,14 +682,53 @@ export default function Step2Screen() {
           )}
         </ScrollView>
 
-        <Text
+        {/* Selected Date */}
+
+        <View
           style={
-            styles.selectedDate
+            styles.selectedDateHeader
           }
         >
-          แผนวันที่{" "}
-          {selectedDate}
-        </Text>
+          <View>
+            <Text
+              style={
+                styles.selectedDateLabel
+              }
+            >
+              เมนูประจำวัน
+            </Text>
+
+            <Text
+              style={
+                styles.selectedDate
+              }
+            >
+              {selectedDate}
+            </Text>
+          </View>
+
+          {selectedPlan && (
+            <View
+              style={
+                styles.mealCountBadge
+              }
+            >
+              <Ionicons
+                name="restaurant"
+                size={15}
+                color="#F29913"
+              />
+
+              <Text
+                style={
+                  styles.mealCountText
+                }
+              >
+                {selectedPlan.meals_per_day} มื้อ
+              </Text>
+            </View>
+          )}
+        </View>
 
         {!selectedPlan ? (
           <View
@@ -547,11 +736,17 @@ export default function Step2Screen() {
               styles.emptyContainer
             }
           >
-            <Ionicons
-              name="restaurant-outline"
-              size={50}
-              color="#999"
-            />
+            <View
+              style={
+                styles.emptyIcon
+              }
+            >
+              <Ionicons
+                name="restaurant-outline"
+                size={42}
+                color="#B5B5B5"
+              />
+            </View>
 
             <Text
               style={
@@ -560,13 +755,17 @@ export default function Step2Screen() {
             >
               ไม่พบแผนอาหารวันนี้
             </Text>
+
+            <Text
+              style={
+                styles.emptySubText
+              }
+            >
+              กรุณาลองเลือกวันอื่น
+            </Text>
           </View>
         ) : (
-          <ScrollView
-            showsVerticalScrollIndicator={
-              false
-            }
-          >
+          <>
             {/* Daily Target */}
 
             {selectedPlan.daily_target_summary && (
@@ -575,97 +774,251 @@ export default function Step2Screen() {
                   styles.summaryCard
                 }
               >
-                <Text
-                  style={
-                    styles.summaryTitle
-                  }
-                >
-                  เป้าหมายประจำวัน
-                </Text>
-
                 <View
                   style={
-                    styles.summaryRow
+                    styles.summaryHeader
                   }
                 >
-                  <Text>
-                    พลังงาน
-                  </Text>
-
-                  <Text
+                  <View
                     style={
-                      styles.summaryValue
+                      styles.summaryIcon
                     }
                   >
-                    {
-                      selectedPlan
-                        .daily_target_summary
-                        .kcal
-                    }{" "}
-                    kcal
-                  </Text>
+                    <Ionicons
+                      name="analytics-outline"
+                      size={20}
+                      color="#F29913"
+                    />
+                  </View>
+
+                  <View>
+                    <Text
+                      style={
+                        styles.summaryTitle
+                      }
+                    >
+                      เป้าหมายประจำวัน
+                    </Text>
+
+                    <Text
+                      style={
+                        styles.summarySubtitle
+                      }
+                    >
+                      ปริมาณสารอาหารที่แนะนำ
+                    </Text>
+                  </View>
                 </View>
 
                 <View
                   style={
-                    styles.summaryRow
+                    styles.nutritionGrid
                   }
                 >
-                  <Text>
-                    Protein
-                  </Text>
+                  <View
+                    style={
+                      styles.nutritionItem
+                    }
+                  >
+                    <Text
+                      style={
+                        styles.nutritionLabel
+                      }
+                    >
+                      พลังงาน
+                    </Text>
 
-                  <Text>
-                    {
-                      selectedPlan
-                        .daily_target_summary
-                        .protein_g
-                    }{" "}
-                    g
-                  </Text>
-                </View>
+                    <Text
+                      style={
+                        styles.nutritionValueOrange
+                      }
+                    >
+                      {
+                        selectedPlan
+                          .daily_target_summary
+                          .kcal ?? "-"
+                      }
+                    </Text>
 
-                <View
-                  style={
-                    styles.summaryRow
-                  }
-                >
-                  <Text>
-                    Carbs
-                  </Text>
+                    <Text
+                      style={
+                        styles.nutritionUnit
+                      }
+                    >
+                      kcal
+                    </Text>
+                  </View>
 
-                  <Text>
-                    {
-                      selectedPlan
-                        .daily_target_summary
-                        .carb_g
-                    }{" "}
-                    g
-                  </Text>
-                </View>
+                  <View
+                    style={
+                      styles.nutritionDivider
+                    }
+                  />
 
-                <View
-                  style={
-                    styles.summaryRow
-                  }
-                >
-                  <Text>
-                    Fat
-                  </Text>
+                  <View
+                    style={
+                      styles.nutritionItem
+                    }
+                  >
+                    <Text
+                      style={
+                        styles.nutritionLabel
+                      }
+                    >
+                      Protein
+                    </Text>
 
-                  <Text>
-                    {
-                      selectedPlan
-                        .daily_target_summary
-                        .fat_g
-                    }{" "}
-                    g
-                  </Text>
+                    <Text
+                      style={
+                        styles.nutritionValue
+                      }
+                    >
+                      {
+                        selectedPlan
+                          .daily_target_summary
+                          .protein_g ?? "-"
+                      }
+                    </Text>
+
+                    <Text
+                      style={
+                        styles.nutritionUnit
+                      }
+                    >
+                      g
+                    </Text>
+                  </View>
+
+                  <View
+                    style={
+                      styles.nutritionDivider
+                    }
+                  />
+
+                  <View
+                    style={
+                      styles.nutritionItem
+                    }
+                  >
+                    <Text
+                      style={
+                        styles.nutritionLabel
+                      }
+                    >
+                      Carbs
+                    </Text>
+
+                    <Text
+                      style={
+                        styles.nutritionValue
+                      }
+                    >
+                      {
+                        selectedPlan
+                          .daily_target_summary
+                          .carb_g ?? "-"
+                      }
+                    </Text>
+
+                    <Text
+                      style={
+                        styles.nutritionUnit
+                      }
+                    >
+                      g
+                    </Text>
+                  </View>
+
+                  <View
+                    style={
+                      styles.nutritionDivider
+                    }
+                  />
+
+                  <View
+                    style={
+                      styles.nutritionItem
+                    }
+                  >
+                    <Text
+                      style={
+                        styles.nutritionLabel
+                      }
+                    >
+                      Fat
+                    </Text>
+
+                    <Text
+                      style={
+                        styles.nutritionValue
+                      }
+                    >
+                      {
+                        selectedPlan
+                          .daily_target_summary
+                          .fat_g ?? "-"
+                      }
+                    </Text>
+
+                    <Text
+                      style={
+                        styles.nutritionUnit
+                      }
+                    >
+                      g
+                    </Text>
+                  </View>
                 </View>
               </View>
             )}
 
             {/* Meals */}
+
+            <View
+              style={
+                styles.mealsSectionHeader
+              }
+            >
+              <View>
+                <Text
+                  style={
+                    styles.mealsSectionTitle
+                  }
+                >
+                  รายการอาหาร
+                </Text>
+
+                <Text
+                  style={
+                    styles.mealsSectionSubtitle
+                  }
+                >
+                  อาหารที่แนะนำสำหรับวันนี้
+                </Text>
+              </View>
+
+              <View
+                style={
+                  styles.mealsCount
+                }
+              >
+                <Text
+                  style={
+                    styles.mealsCountText
+                  }
+                >
+                  {selectedPlan.slots?.length || 0}
+                </Text>
+
+                <Text
+                  style={
+                    styles.mealsCountLabel
+                  }
+                >
+                  มื้อ
+                </Text>
+              </View>
+            </View>
 
             {selectedPlan.slots?.map(
               (
@@ -678,32 +1031,84 @@ export default function Step2Screen() {
                     styles.mealCard
                   }
                 >
+                  {/* Meal Header */}
+
                   <View
                     style={
                       styles.mealHeader
                     }
                   >
-                    <Text
+                    <View
                       style={
-                        styles.mealTitle
+                        styles.mealNumber
                       }
                     >
-                      {
-                        slot.slot_name
-                      }
-                    </Text>
+                      <Text
+                        style={
+                          styles.mealNumberText
+                        }
+                      >
+                        {index + 1}
+                      </Text>
+                    </View>
 
-                    <Text
+                    <View
                       style={
-                        styles.kcalText
+                        styles.mealTitleContainer
                       }
                     >
-                      {
-                        slot.target_kcal
-                      }{" "}
-                      kcal
-                    </Text>
+                      <Text
+                        style={
+                          styles.mealTitle
+                        }
+                      >
+                        {
+                          slot.slot_name
+                        }
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.mealTypeText
+                        }
+                      >
+                        {slot.meal_type}
+                      </Text>
+                    </View>
+
+                    <View
+                      style={
+                        styles.kcalBadge
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.kcalText
+                        }
+                      >
+                        {slot.target_kcal ??
+                          0}
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.kcalUnit
+                        }
+                      >
+                        kcal
+                      </Text>
+                    </View>
                   </View>
+
+                  {/* Divider */}
+
+                  <View
+                    style={
+                      styles.cardDivider
+                    }
+                  />
+
+                  {/* Main Food */}
 
                   {slot.main_food && (
                     <View
@@ -718,7 +1123,7 @@ export default function Step2Screen() {
                       >
                         <Ionicons
                           name="restaurant"
-                          size={30}
+                          size={27}
                           color="#F29913"
                         />
                       </View>
@@ -730,8 +1135,17 @@ export default function Step2Screen() {
                       >
                         <Text
                           style={
+                            styles.foodLabel
+                          }
+                        >
+                          อาหารหลัก
+                        </Text>
+
+                        <Text
+                          style={
                             styles.foodName
                           }
+                          numberOfLines={2}
                         >
                           {
                             slot
@@ -748,13 +1162,15 @@ export default function Step2Screen() {
                           {
                             slot
                               .main_food
-                              .kcal
+                              .kcal ?? 0
                           }{" "}
                           kcal
                         </Text>
                       </View>
                     </View>
                   )}
+
+                  {/* Addons */}
 
                   {slot.addons &&
                     slot.addons.length >
@@ -764,77 +1180,173 @@ export default function Step2Screen() {
                           styles.addonContainer
                         }
                       >
-                        <Text
+                        <View
                           style={
-                            styles.addonTitle
+                            styles.addonHeader
                           }
                         >
-                          อาหารเพิ่มเติม
-                        </Text>
+                          <Ionicons
+                            name="add-circle-outline"
+                            size={17}
+                            color="#777"
+                          />
+
+                          <Text
+                            style={
+                              styles.addonTitle
+                            }
+                          >
+                            อาหารเพิ่มเติม
+                          </Text>
+                        </View>
 
                         {slot.addons.map(
                           (
                             addon
                           ) => (
-                            <Text
+                            <View
                               key={
                                 addon.food_id
                               }
                               style={
-                                styles.addonText
+                                styles.addonRow
                               }
                             >
-                              +{" "}
-                              {
-                                addon.name
-                              }{" "}
-                              (
-                              {
-                                addon.kcal
-                              }{" "}
-                              kcal)
-                            </Text>
+                              <View
+                                style={
+                                  styles.addonBullet
+                                }
+                              />
+
+                              <Text
+                                style={
+                                  styles.addonText
+                                }
+                                numberOfLines={
+                                  1
+                                }
+                              >
+                                {
+                                  addon.name
+                                }
+                              </Text>
+
+                              <Text
+                                style={
+                                  styles.addonKcal
+                                }
+                              >
+                                {
+                                  addon.kcal ??
+                                    0
+                                }{" "}
+                                kcal
+                              </Text>
+                            </View>
                           )
                         )}
                       </View>
                     )}
 
-                  <Text
-                    style={
-                      styles.statusText
-                    }
+                  {/* Status */}
+
+                  <View
+                    style={[
+                      styles.statusContainer,
+                      slot.is_swapped &&
+                        styles.statusSwapped,
+                    ]}
                   >
-                    {slot.is_swapped
-                      ? "มีการเปลี่ยนเมนู"
-                      : "เมนูแนะนำ"}
-                  </Text>
+                    <Ionicons
+                      name={
+                        slot.is_swapped
+                          ? "swap-horizontal-outline"
+                          : "checkmark-circle-outline"
+                      }
+                      size={16}
+                      color={
+                        slot.is_swapped
+                          ? "#D97706"
+                          : "#22A06B"
+                      }
+                    />
+
+                    <Text
+                      style={[
+                        styles.statusText,
+                        slot.is_swapped &&
+                          styles.statusSwappedText,
+                      ]}
+                    >
+                      {slot.is_swapped
+                        ? "มีการเปลี่ยนเมนู"
+                        : "เมนูแนะนำ"}
+                    </Text>
+                  </View>
                 </View>
               )
             )}
-          </ScrollView>
+
+            <View
+              style={
+                styles.bottomSpace
+              }
+            />
+          </>
         )}
-      </View>
+      </ScrollView>
 
       {/* Footer */}
 
       <View
-        style={styles.footer}
+        style={
+          styles.footer
+        }
       >
         <TouchableOpacity
-          style={
-            styles.saveButton
-          }
+          style={[
+            styles.saveButton,
+            saving &&
+              styles.saveButtonDisabled,
+          ]}
           onPress={
             handleSave
           }
+          disabled={saving}
+          activeOpacity={0.85}
         >
-          <Text
-            style={
-              styles.saveButtonText
-            }
-          >
-            บันทึกแผน
-          </Text>
+          {saving ? (
+            <>
+              <ActivityIndicator
+                color="#fff"
+                size="small"
+              />
+
+              <Text
+                style={
+                  styles.savingText
+                }
+              >
+                กำลังบันทึก...
+              </Text>
+            </>
+          ) : (
+            <>
+              <Ionicons
+                name="checkmark-circle-outline"
+                size={22}
+                color="#fff"
+              />
+
+              <Text
+                style={
+                  styles.saveButtonText
+                }
+              >
+                บันทึกแผน
+              </Text>
+            </>
+          )}
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -849,59 +1361,210 @@ const styles =
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: "#fff",
+      backgroundColor: "#F7F7F7",
     },
 
+    // ==================================================
+    // Header
+    // ==================================================
+
     header: {
-      height: 60,
+      height: 68,
       backgroundColor: "#F29913",
       flexDirection: "row",
       alignItems: "center",
-      justifyContent:
-        "space-between",
+      justifyContent: "space-between",
       paddingHorizontal: 18,
     },
 
-    headerTitle: {
-      fontSize: 22,
-      fontWeight: "bold",
+    backButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      backgroundColor:
+        "rgba(255,255,255,0.65)",
+      justifyContent: "center",
+      alignItems: "center",
     },
 
-    content: {
+    headerCenter: {
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    headerTitle: {
+      fontSize: 20,
+      fontWeight: "800",
+      color: "#111",
+    },
+
+    headerStep: {
+      marginTop: 2,
+      fontSize: 11,
+      color: "#5F3A00",
+      fontWeight: "600",
+    },
+
+    headerPlaceholder: {
+      width: 40,
+    },
+
+    // ==================================================
+    // Scroll
+    // ==================================================
+
+    scroll: {
       flex: 1,
-      paddingHorizontal: 20,
+    },
+
+    scrollContent: {
+      paddingHorizontal: 18,
       paddingTop: 20,
+      paddingBottom: 20,
+    },
+
+    // ==================================================
+    // Page Title
+    // ==================================================
+
+    pageTitleSection: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 18,
+    },
+
+    titleIcon: {
+      width: 48,
+      height: 48,
+      borderRadius: 15,
+      backgroundColor: "#FFF1D6",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+
+    titleTextContainer: {
+      flex: 1,
+      marginLeft: 13,
     },
 
     title: {
-      fontSize: 25,
-      fontWeight: "bold",
+      fontSize: 24,
+      fontWeight: "800",
+      color: "#161616",
     },
 
     subtitle: {
+      marginTop: 3,
+      fontSize: 13,
       color: "#777",
-      marginTop: 5,
     },
 
-    planIdText: {
-      fontSize: 11,
-      color: "#999",
-      marginTop: 5,
+    // ==================================================
+    // Plan Info
+    // ==================================================
+
+    planInfoCard: {
+      backgroundColor: "#fff",
+      borderRadius: 17,
+      padding: 16,
+      marginBottom: 24,
+      borderWidth: 1,
+      borderColor: "#EEEEEE",
     },
+
+    planInfoTop: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+
+    planInfoIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 13,
+      backgroundColor: "#FFF5E5",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+
+    planInfoText: {
+      flex: 1,
+      marginLeft: 12,
+    },
+
+    planInfoTitle: {
+      fontSize: 16,
+      fontWeight: "800",
+      color: "#222",
+    },
+
+    planInfoDate: {
+      marginTop: 4,
+      fontSize: 13,
+      color: "#777",
+    },
+
+    activeBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: "#ECFDF5",
+      paddingHorizontal: 9,
+      paddingVertical: 6,
+      borderRadius: 20,
+    },
+
+    activeDot: {
+      width: 7,
+      height: 7,
+      borderRadius: 7,
+      backgroundColor: "#22A06B",
+      marginRight: 5,
+    },
+
+    activeBadgeText: {
+      fontSize: 10,
+      color: "#168052",
+      fontWeight: "700",
+    },
+
+    // ==================================================
+    // Section Header
+    // ==================================================
+
+    sectionHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 10,
+    },
+
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight: "800",
+      color: "#222",
+    },
+
+    sectionHint: {
+      fontSize: 12,
+      color: "#999",
+      fontWeight: "600",
+    },
+
+    // ==================================================
+    // Date Tabs
+    // ==================================================
 
     tabsContainer: {
-      paddingVertical: 18,
-      gap: 8,
+      paddingBottom: 20,
+      gap: 9,
     },
 
     dayTab: {
       width: 64,
-      height: 62,
-      borderRadius: 12,
+      height: 68,
+      borderRadius: 15,
       borderWidth: 1,
-      borderColor: "#DDD",
-      justifyContent:
-        "center",
+      borderColor: "#E2E2E2",
+      justifyContent: "center",
       alignItems: "center",
       backgroundColor: "#fff",
     },
@@ -909,17 +1572,24 @@ const styles =
     activeDayTab: {
       backgroundColor: "#F29913",
       borderColor: "#F29913",
+      transform: [
+        {
+          scale: 1.02,
+        },
+      ],
     },
 
     dayName: {
-      fontSize: 15,
-      fontWeight: "bold",
+      fontSize: 14,
+      fontWeight: "800",
+      color: "#333",
     },
 
     dateText: {
       fontSize: 12,
-      marginTop: 2,
-      color: "#777",
+      marginTop: 3,
+      color: "#888",
+      fontWeight: "500",
     },
 
     activeDayText: {
@@ -930,68 +1600,259 @@ const styles =
       width: 5,
       height: 5,
       borderRadius: 5,
-      backgroundColor:
-        "#22C55E",
-      marginTop: 3,
+      backgroundColor: "#22A06B",
+      marginTop: 4,
+    },
+
+    activePlanDot: {
+      backgroundColor: "#fff",
+    },
+
+    // ==================================================
+    // Selected Date
+    // ==================================================
+
+    selectedDateHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "flex-end",
+      marginBottom: 14,
+    },
+
+    selectedDateLabel: {
+      fontSize: 12,
+      color: "#999",
+      marginBottom: 2,
     },
 
     selectedDate: {
-      fontSize: 18,
-      fontWeight: "bold",
-      marginBottom: 12,
+      fontSize: 19,
+      fontWeight: "800",
+      color: "#222",
     },
 
+    mealCountBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: "#FFF4DF",
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 20,
+      gap: 5,
+    },
+
+    mealCountText: {
+      color: "#D67C00",
+      fontSize: 11,
+      fontWeight: "700",
+    },
+
+    // ==================================================
+    // Summary
+    // ==================================================
+
     summaryCard: {
-      borderRadius: 14,
-      padding: 15,
-      marginBottom: 14,
-      backgroundColor:
-        "#FFF8E8",
+      backgroundColor: "#fff",
+      borderRadius: 17,
+      padding: 16,
+      marginBottom: 22,
+      borderWidth: 1,
+      borderColor: "#EEEEEE",
+    },
+
+    summaryHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 17,
+    },
+
+    summaryIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      backgroundColor: "#FFF4DF",
+      justifyContent: "center",
+      alignItems: "center",
     },
 
     summaryTitle: {
-      fontSize: 17,
-      fontWeight: "bold",
-      marginBottom: 10,
+      marginLeft: 11,
+      fontSize: 16,
+      fontWeight: "800",
+      color: "#222",
     },
 
-    summaryRow: {
+    summarySubtitle: {
+      marginLeft: 11,
+      marginTop: 2,
+      fontSize: 11,
+      color: "#999",
+    },
+
+    nutritionGrid: {
       flexDirection: "row",
-      justifyContent:
-        "space-between",
-      marginTop: 5,
+      alignItems: "center",
+      backgroundColor: "#FAFAFA",
+      borderRadius: 13,
+      paddingVertical: 13,
     },
 
-    summaryValue: {
-      fontWeight: "bold",
+    nutritionItem: {
+      flex: 1,
+      alignItems: "center",
+    },
+
+    nutritionLabel: {
+      fontSize: 10,
+      color: "#888",
+      marginBottom: 4,
+    },
+
+    nutritionValueOrange: {
+      fontSize: 17,
+      fontWeight: "800",
       color: "#F29913",
     },
 
+    nutritionValue: {
+      fontSize: 17,
+      fontWeight: "800",
+      color: "#333",
+    },
+
+    nutritionUnit: {
+      fontSize: 9,
+      color: "#999",
+      marginTop: 1,
+    },
+
+    nutritionDivider: {
+      width: 1,
+      height: 35,
+      backgroundColor: "#E5E5E5",
+    },
+
+    // ==================================================
+    // Meals Section
+    // ==================================================
+
+    mealsSectionHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 12,
+    },
+
+    mealsSectionTitle: {
+      fontSize: 18,
+      fontWeight: "800",
+      color: "#222",
+    },
+
+    mealsSectionSubtitle: {
+      marginTop: 3,
+      fontSize: 11,
+      color: "#999",
+    },
+
+    mealsCount: {
+      minWidth: 40,
+      height: 40,
+      borderRadius: 12,
+      backgroundColor: "#FFF4DF",
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: 7,
+    },
+
+    mealsCountText: {
+      fontSize: 16,
+      fontWeight: "800",
+      color: "#F29913",
+    },
+
+    mealsCountLabel: {
+      fontSize: 8,
+      color: "#999",
+      marginTop: -1,
+    },
+
+    // ==================================================
+    // Meal Card
+    // ==================================================
+
     mealCard: {
-      borderWidth: 1,
-      borderColor: "#E5E5E5",
-      borderRadius: 14,
-      padding: 15,
-      marginBottom: 14,
       backgroundColor: "#fff",
+      borderRadius: 17,
+      padding: 16,
+      marginBottom: 13,
+      borderWidth: 1,
+      borderColor: "#EEEEEE",
     },
 
     mealHeader: {
       flexDirection: "row",
-      justifyContent:
-        "space-between",
-      marginBottom: 12,
+      alignItems: "center",
+    },
+
+    mealNumber: {
+      width: 34,
+      height: 34,
+      borderRadius: 11,
+      backgroundColor: "#FFF1D6",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+
+    mealNumberText: {
+      fontSize: 14,
+      fontWeight: "800",
+      color: "#D67C00",
+    },
+
+    mealTitleContainer: {
+      flex: 1,
+      marginLeft: 11,
     },
 
     mealTitle: {
-      fontSize: 18,
-      fontWeight: "bold",
+      fontSize: 16,
+      fontWeight: "800",
+      color: "#222",
+    },
+
+    mealTypeText: {
+      marginTop: 2,
+      fontSize: 10,
+      color: "#999",
+    },
+
+    kcalBadge: {
+      alignItems: "flex-end",
+      marginLeft: 8,
     },
 
     kcalText: {
       color: "#F29913",
-      fontWeight: "bold",
+      fontSize: 15,
+      fontWeight: "800",
     },
+
+    kcalUnit: {
+      fontSize: 9,
+      color: "#999",
+      marginTop: 1,
+    },
+
+    cardDivider: {
+      height: 1,
+      backgroundColor: "#F0F0F0",
+      marginVertical: 14,
+    },
+
+    // ==================================================
+    // Food
+    // ==================================================
 
     foodRow: {
       flexDirection: "row",
@@ -999,101 +1860,235 @@ const styles =
     },
 
     foodImage: {
-      width: 60,
-      height: 60,
-      borderRadius: 12,
-      backgroundColor:
-        "#FFF3D8",
-      justifyContent:
-        "center",
+      width: 64,
+      height: 64,
+      borderRadius: 15,
+      backgroundColor: "#FFF4DF",
+      justifyContent: "center",
       alignItems: "center",
     },
 
     foodInfo: {
-      marginLeft: 12,
       flex: 1,
+      marginLeft: 12,
+    },
+
+    foodLabel: {
+      fontSize: 10,
+      color: "#999",
+      marginBottom: 3,
     },
 
     foodName: {
-      fontSize: 16,
-      fontWeight: "600",
+      fontSize: 15,
+      fontWeight: "700",
+      color: "#222",
+      lineHeight: 20,
     },
 
     foodKcal: {
       marginTop: 4,
-      color: "#777",
+      fontSize: 11,
+      color: "#888",
     },
 
+    // ==================================================
+    // Addons
+    // ==================================================
+
     addonContainer: {
-      marginTop: 10,
-      paddingTop: 10,
+      marginTop: 14,
+      paddingTop: 13,
       borderTopWidth: 1,
-      borderTopColor: "#eee",
+      borderTopColor: "#F0F0F0",
+    },
+
+    addonHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 7,
     },
 
     addonTitle: {
-      fontWeight: "600",
-      marginBottom: 4,
+      marginLeft: 6,
+      fontSize: 12,
+      color: "#666",
+      fontWeight: "700",
+    },
+
+    addonRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 4,
+    },
+
+    addonBullet: {
+      width: 5,
+      height: 5,
+      borderRadius: 5,
+      backgroundColor: "#F29913",
+      marginRight: 8,
     },
 
     addonText: {
+      flex: 1,
       color: "#666",
-      marginTop: 3,
+      fontSize: 12,
+    },
+
+    addonKcal: {
+      marginLeft: 8,
+      color: "#999",
+      fontSize: 10,
+    },
+
+    // ==================================================
+    // Status
+    // ==================================================
+
+    statusContainer: {
+      marginTop: 13,
+      flexDirection: "row",
+      alignItems: "center",
+      alignSelf: "flex-start",
+      backgroundColor: "#ECFDF5",
+      borderRadius: 20,
+      paddingHorizontal: 9,
+      paddingVertical: 5,
+    },
+
+    statusSwapped: {
+      backgroundColor: "#FFF7E6",
     },
 
     statusText: {
-      marginTop: 12,
-      fontSize: 12,
-      color: "#999",
+      marginLeft: 5,
+      fontSize: 10,
+      color: "#168052",
+      fontWeight: "700",
     },
 
+    statusSwappedText: {
+      color: "#B76B00",
+    },
+
+    // ==================================================
+    // Empty
+    // ==================================================
+
     emptyContainer: {
+      backgroundColor: "#fff",
+      borderRadius: 17,
       alignItems: "center",
-      justifyContent:
-        "center",
-      paddingTop: 80,
+      justifyContent: "center",
+      paddingVertical: 55,
+      borderWidth: 1,
+      borderColor: "#EEEEEE",
+    },
+
+    emptyIcon: {
+      width: 75,
+      height: 75,
+      borderRadius: 25,
+      backgroundColor: "#F3F3F3",
+      justifyContent: "center",
+      alignItems: "center",
     },
 
     emptyText: {
-      marginTop: 10,
-      color: "#777",
+      marginTop: 15,
+      color: "#555",
+      fontSize: 15,
+      fontWeight: "700",
     },
+
+    emptySubText: {
+      marginTop: 5,
+      color: "#999",
+      fontSize: 12,
+    },
+
+    // ==================================================
+    // Loading
+    // ==================================================
 
     loadingContainer: {
       flex: 1,
-      justifyContent:
-        "center",
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: 30,
+    },
+
+    loadingIcon: {
+      width: 75,
+      height: 75,
+      borderRadius: 25,
+      backgroundColor: "#FFF4DF",
+      justifyContent: "center",
       alignItems: "center",
     },
 
     loadingText: {
-      marginTop: 12,
-      fontSize: 16,
-      fontWeight: "600",
+      marginTop: 18,
+      fontSize: 18,
+      fontWeight: "800",
+      color: "#222",
     },
 
     loadingSubText: {
       marginTop: 6,
-      color: "#777",
+      color: "#888",
+      fontSize: 13,
     },
 
+    // ==================================================
+    // Footer
+    // ==================================================
+
     footer: {
-      padding: 20,
+      paddingHorizontal: 18,
+      paddingTop: 10,
+      paddingBottom: 16,
+      backgroundColor: "#fff",
+      borderTopWidth: 1,
+      borderTopColor: "#EEEEEE",
     },
 
     saveButton: {
       height: 55,
-      borderRadius: 12,
-      backgroundColor:
-        "#F9A800",
-      justifyContent:
-        "center",
+      borderRadius: 15,
+      backgroundColor: "#F29913",
+      flexDirection: "row",
+      justifyContent: "center",
       alignItems: "center",
+      gap: 8,
+      shadowOffset: {
+        width: 0,
+        height: 3,
+      },
+      shadowOpacity: 0.15,
+      shadowRadius: 5,
+      elevation: 3,
+    },
+
+    saveButtonDisabled: {
+      opacity: 0.6,
     },
 
     saveButtonText: {
       color: "#fff",
-      fontSize: 20,
-      fontWeight: "bold",
+      fontSize: 17,
+      fontWeight: "800",
+    },
+
+    savingText: {
+      color: "#fff",
+      fontSize: 15,
+      fontWeight: "700",
+      marginLeft: 8,
+    },
+
+    bottomSpace: {
+      height: 10,
     },
   });
