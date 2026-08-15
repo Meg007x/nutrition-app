@@ -16,6 +16,7 @@ const waterLogRoute = require("./routes/waterLogRoute");
 const scanSessionRoute = require("./routes/scanSessionRoute");
 const startNotificationCron = require('./utils/cronScheduler'); // นำเข้า Cron
 const notificationRoutes = require('./routes/notificationRoutes');
+const mealRoutes =require("./routes/mealRoutes");
 
 
 const app = express();
@@ -47,6 +48,7 @@ app.use('/api/notifications', notificationRoutes);
 app.get("/api/ingredients", getIngredients);
 app.get("/api/disliked-foods", getDislikedFoods);
 app.use("/api/ai", aiRoute);
+app.use("/api/meal",mealRoutes);
 
 // 5. เริ่มเซิร์ฟเวอร์หลังเชื่อมต่อ DB สำเร็จ
 async function startServer() {
