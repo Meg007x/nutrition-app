@@ -713,7 +713,15 @@ export default function ResultScreen() {
       const res: AnalyzeResponse = await response.json();
 
       if (!response.ok || !res.success || !res.data) {
-        throw new Error(res.error || "ไม่สามารถวิเคราะห์อาหารได้");
+        // 🔧 กรณีสแกนไม่เจอ — แจ้งเตือนแล้วกลับหน้าสแกน
+        const notFoundMsg = res.error || "ไม่พบเมนูนี้ในฐานข้อมูล";
+        console.warn("⚠️ Food not found:", notFoundMsg, "| AI Detection:", JSON.stringify(res.aiDetection));
+        Alert.alert(
+          "ไม่พบข้อมูลอาหาร",
+          notFoundMsg + "\nกรุณาลองถ่ายรูปใหม่",
+          [{ text: "ตกลง", onPress: () => router.replace("/food-scan") }]
+        );
+        return;
       }
 
       setFood(res.data);

@@ -2,79 +2,89 @@ const mongoose = require("mongoose");
 const WaterLog = require("../models/WaterLog");
 
 const getDashboardData = async (req, res) => {
+  const LP = "🔍 [DASHBOARD]";
   try {
     const { userId } = req.params;
 
+    console.log(`${LP} ====== REQUEST START ======`);
+    console.log(`${LP} Input userId:`, JSON.stringify(userId), `| type: ${typeof userId} | len: ${userId?.length}`);
+
+    if (!userId || userId === "null" || userId === "undefined" || String(userId).trim() === "") {
+      console.error(`${LP} ❌ INVALID userId`);
+      return res.status(400).json({ message: "Dashboard Error", error: "userId is required" });
+    }
+
     if (!mongoose.connection || !mongoose.connection.db) {
-      return res.status(500).json({
-        message: "Dashboard Error",
-        error: "MongoDB is not connected yet",
-      });
+      console.error(`${LP} ❌ MongoDB not connected`);
+      return res.status(500).json({ message: "Dashboard Error", error: "MongoDB is not connected yet" });
     }
 
     const db = mongoose.connection.db;
+    console.log(`${LP} DB name:`, db.databaseName);
 
-    // หาชื่อคอลเลกชัน Users (รองรับทั้งตัวใหญ่และตัวเล็ก)
-    const collections = await db.listCollections({ name: { $in: ["Users", "users"] } }).toArray();
-    const usersColName = collections.length > 0 ? collections[0].name : "Users";
+    // 🔧 FIX: ไม่ใช้ $in กับ listCollections เพราะ MongoDB driver บางเวอร์ชันไม่รองรับ
+    // ให้ list ทั้งหมดแล้ว filter ด้วย JavaScript แทน
+    const allCollections = await db.listCollections().toArray();
+    const allColNames = allCollections.map(c => c.name);
+    console.log(`${LP} All collections:`, allColNames);
 
-    const user = await db.collection(usersColName).findOne({
-      $or: [{ username: userId }, { user_id: userId }, { email: userId }],
-    });
+    const usersColName = allColNames.includes("Users") ? "Users" : (allColNames.includes("users") ? "users" : "Users");
+    console.log(`${LP} Using Users col:`, usersColName);
+
+    const userFilter = { $or: [{ username: userId }, { user_id: userId }, { email: userId }] };
+    console.log(`${LP} User filter:`, JSON.stringify(userFilter));
+
+    const user = await db.collection(usersColName).findOne(userFilter);
+    console.log(`${LP} User found:`, user ? `YES (user_id=${user.user_id}, username=${user.username})` : "NO");
 
     if (!user) {
-      return res.status(404).json({
-        message: "ไม่พบข้อมูลผู้ใช้",
-      });
+      console.error(`${LP} ❌ User not found for:`, userId);
+      return res.status(404).json({ message: "ไม่พบข้อมูลผู้ใช้" });
     }
 
-    // --- หาวันที่ปัจจุบันในรูปแบบ YYYY-MM-DD เพื่อใช้ค้นหาข้อมูลของวันนี้ ---
     const now = new Date();
-    const year = now.getFullYear();
-    const month = `${now.getMonth() + 1}`.padStart(2, "0");
-    const day = `${now.getDate()}`.padStart(2, "0");
-    const todayStr = `${year}-${month}-${day}`;
-
-    // 🔧 ใช้ currentUserId ให้สอดคล้องกันทุก query
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
     const currentUserId = user.user_id || user.username || userId;
+    console.log(`${LP} today:`, todayStr, `| currentUserId:`, JSON.stringify(currentUserId));
 
-    // 2. 💧 ดึงข้อมูลน้ำดื่มของวันนี้ (wrap ใน try-catch แยก)
+    // ดึงข้อมูลน้ำดื่ม
     let consumedWater = 0;
     let targetWater = 2000;
     try {
-      const waterLog = await db.collection("WaterLogs").findOne({
-        user_id: currentUserId,
-        date: todayStr
-      });
+      const waterFilter = { user_id: currentUserId, date: todayStr };
+      console.log(`${LP} WaterLogs filter:`, JSON.stringify(waterFilter));
+      const waterLog = await db.collection("WaterLogs").findOne(waterFilter);
+      console.log(`${LP} WaterLog:`, waterLog ? `found (drank=${waterLog.total_drank_ml}, target=${waterLog.target_ml})` : "null");
       consumedWater = waterLog ? Number(waterLog.total_drank_ml || 0) : 0;
       targetWater = waterLog ? Number(waterLog.target_ml || 2000) : (user?.health_goals?.water_target_ml || 2000);
     } catch (e) {
-      console.warn("⚠️ WaterLogs query error:", e.message);
+      console.error(`${LP} ⚠️ WaterLogs error:`, e.message);
     }
 
-    // 3. 🍳 ดึงข้อมูลอาหารที่บันทึก/สแกน (wrap ใน try-catch แยก)
+    // ดึง ScanSessions
     let todayScans = [];
     try {
-      const scanColList = await db.listCollections({ name: { $in: ["ScanSessions", "scansessions"] } }).toArray();
-      const scanColName = scanColList.length > 0 ? scanColList[0].name : "ScanSessions";
-      todayScans = await db.collection(scanColName).find({
-        user_id: currentUserId,
-        date: todayStr
-      }).toArray();
+      const scanColName = allColNames.includes("ScanSessions") ? "ScanSessions" : (allColNames.includes("scansessions") ? "scansessions" : null);
+      console.log(`${LP} Scan col:`, scanColName);
+      if (scanColName) {
+        todayScans = await db.collection(scanColName).find({ user_id: currentUserId, date: todayStr }).toArray();
+        console.log(`${LP} Scans count:`, todayScans.length);
+      }
     } catch (e) {
-      console.warn("⚠️ ScanSessions query error:", e.message);
+      console.error(`${LP} ⚠️ ScanSessions error:`, e.message);
     }
 
+    // ดึง MealLogs
     let todayMealLogs = [];
     try {
-      const mealLogColList = await db.listCollections({ name: { $in: ["MealLogs", "meallogs"] } }).toArray();
-      const mealLogColName = mealLogColList.length > 0 ? mealLogColList[0].name : "MealLogs";
-      todayMealLogs = await db.collection(mealLogColName).find({
-        user_id: currentUserId,
-        date: todayStr
-      }).toArray();
+      const mealLogColName = allColNames.includes("MealLogs") ? "MealLogs" : (allColNames.includes("meallogs") ? "meallogs" : null);
+      console.log(`${LP} MealLog col:`, mealLogColName);
+      if (mealLogColName) {
+        todayMealLogs = await db.collection(mealLogColName).find({ user_id: currentUserId, date: todayStr }).toArray();
+        console.log(`${LP} MealLogs count:`, todayMealLogs.length);
+      }
     } catch (e) {
-      console.warn("⚠️ MealLogs query error:", e.message);
+      console.error(`${LP} ⚠️ MealLogs error:`, e.message);
     }
 
     let consumedKcal = 0;
@@ -117,7 +127,8 @@ const getDashboardData = async (req, res) => {
     const carbTarget = targetKcal > 0 ? Math.round((targetKcal * 0.5) / 4) : 0;
     const fatTarget = targetKcal > 0 ? Math.round((targetKcal * 0.25) / 9) : 0;
 
-    const mealSchedules = user?.meal_settings?.schedules || [];
+    const mealSchedules = Array.isArray(user?.meal_settings?.schedules) ? user.meal_settings.schedules : [];
+    console.log(`${LP} mealSchedules:`, mealSchedules.length, `| health_goals:`, JSON.stringify(user?.health_goals));
 
     // หา "มื้อต่อไป" ที่ใกล้ที่สุดที่ยังไม่ถึง โดยเทียบกับเวลาปัจจุบัน
     let nextMeal = null;
@@ -183,7 +194,8 @@ const getDashboardData = async (req, res) => {
       },
     });
   } catch (error) {
-    console.log("❌ Dashboard Error:", error);
+    console.error(`${LP} ❌ UNCAUGHT ERROR:`, error.message);
+    console.error(`${LP} ❌ STACK:`, error.stack);
     return res.status(500).json({
       message: "Dashboard Error",
       error: error.message,
