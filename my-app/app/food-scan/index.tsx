@@ -274,6 +274,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#111",
     lineHeight: 34,
+    fontFamily: "NotoSansThaiBold",
   },
 
   subtitle: {
@@ -282,6 +283,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     color: "#666",
     fontWeight: "500",
+    fontFamily: "NotoSansThai",
   },
 
   previewSection: {
@@ -318,6 +320,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "#888",
     fontWeight: "600",
+    fontFamily: "NotoSansThai",
   },
 
   cornerTL: {
@@ -424,6 +427,7 @@ const styles = StyleSheet.create({
     color: WHITE,
     fontSize: 20,
     fontWeight: "900",
+    fontFamily: "NotoSansThaiBold",
   },
 
   manualButton: {
@@ -443,5 +447,6 @@ const styles = StyleSheet.create({
     color: WHITE,
     fontSize: 18,
     fontWeight: "800",
+    fontFamily: "NotoSansThaiBold",
   },
 });

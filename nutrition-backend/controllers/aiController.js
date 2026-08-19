@@ -3,8 +3,9 @@ const fs = require("fs");
 const MasterFood = require("../models/MasterFood");
 const Ingredient = require("../models/Ingredient");
 
-function escapeRegex(text = "") {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function escapeRegex(text) {
+  const str = String(text || "");
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 async function detectDishFromImage(ai, imagePath, mimeType) {

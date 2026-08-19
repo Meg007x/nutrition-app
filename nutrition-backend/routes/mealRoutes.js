@@ -1,58 +1,35 @@
 const express = require("express");
-
 const router = express.Router();
 
 const {
   createMealPlans,
-  generateMealPlan,
   getPlansByPlanId,
   getPlansByUserId,
   deletePlanByPlanId,
+  replaceMealInPlan,
+  deleteMealFromPlan,
+  searchFoods,
 } = require("../controllers/mealController");
 
-// ======================================================
+// Search Foods (Fuzzy)
+router.get("/search-foods", searchFoods);
+
 // Create Meal Plans
-// ======================================================
+router.post("/plans", createMealPlans);
 
-router.post(
-  "/plans",
-  createMealPlans
-);
-
-// ======================================================
-// Generate Meal Plan
-// ======================================================
-
-router.post(
-  "/generate",
-  generateMealPlan
-);
-
-// ======================================================
 // Get Plans By Plan ID
-// ======================================================
+router.get("/plans/:plan_id", getPlansByPlanId);
 
-router.get(
-  "/plans/:plan_id",
-  getPlansByPlanId
-);
+// Delete Plans By Plan ID
+router.delete("/plans/:plan_id", deletePlanByPlanId);
 
-// ======================================================
-// DELETE Plans By Plan ID
-// ======================================================
-
-router.delete(
-  "/plans/:plan_id",
-  deletePlanByPlanId
-);
-
-// ======================================================
 // Get Plans By User ID
-// ======================================================
+router.get("/user/:user_id", getPlansByUserId);
 
-router.get(
-  "/user/:user_id",
-  getPlansByUserId
-);
+// Replace/Edit Meal in Plan
+router.put("/plans/:planId/meal", replaceMealInPlan);
+
+// Delete Meal from Plan
+router.delete("/plans/:planId/meal/:mealId", deleteMealFromPlan);
 
 module.exports = router;

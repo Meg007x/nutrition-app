@@ -16,7 +16,7 @@ const waterLogRoute = require("./routes/waterLogRoute");
 const scanSessionRoute = require("./routes/scanSessionRoute");
 const startNotificationCron = require('./utils/cronScheduler'); // นำเข้า Cron
 const notificationRoutes = require('./routes/notificationRoutes');
-const mealRoutes =require("./routes/mealRoutes");
+const mealRoutes = require("./routes/mealRoutes");
 
 
 const app = express();
@@ -48,7 +48,7 @@ app.use('/api/notifications', notificationRoutes);
 app.get("/api/ingredients", getIngredients);
 app.get("/api/disliked-foods", getDislikedFoods);
 app.use("/api/ai", aiRoute);
-app.use("/api/meal",mealRoutes);
+app.use("/api/meal", mealRoutes);
 
 // 5. เริ่มเซิร์ฟเวอร์หลังเชื่อมต่อ DB สำเร็จ
 async function startServer() {
@@ -64,6 +64,18 @@ async function startServer() {
     console.log(`👤 ตรวจสอบ meal settings ได้ที่: http://localhost:${PORT}/api/users/:uid/meal-settings`);
     console.log(`🍽️ บันทึก Scan Session ได้ที่: http://localhost:${PORT}/api/scan-sessions`);
     console.log(`📊 ดูสรุปรายวันได้ที่: http://localhost:${PORT}/api/scan-sessions/daily-summary/:user_id`);
+
+    // Print registered routes
+    console.log("\n📋 Registered Routes:");
+    console.log("─────────────────────────────────────");
+    console.log("  GET      /api/meal/user/:userId");
+    console.log("  POST     /api/meal/plans");
+    console.log("  GET      /api/meal/plans/:planId");
+    console.log("  DELETE   /api/meal/plans/:planId");
+    console.log("  PUT      /api/meal/plans/:planId/meal");
+    console.log("  DELETE   /api/meal/plans/:planId/meal/:mealId");
+    console.log("  GET      /api/meal/search-foods");
+    console.log("─────────────────────────────────────\n");
   });
 }
 

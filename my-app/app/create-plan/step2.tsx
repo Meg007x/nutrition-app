@@ -24,8 +24,6 @@ import {
 
 import axios from "axios";
 
-import AsyncStorage from "@react-native-async-storage/async-storage";
-
 import { BASE_URL } from "../../constants/config";
 
 // ======================================================
@@ -93,10 +91,9 @@ type DailyPlan = {
 // ======================================================
 
 function parseDate(dateString: string) {
-  const [year, month, day] =
-    dateString
-      .split("-")
-      .map(Number);
+  const [year, month, day] = dateString
+    .split("-")
+    .map(Number);
 
   return new Date(
     year,
@@ -105,11 +102,8 @@ function parseDate(dateString: string) {
   );
 }
 
-function formatShortDate(
-  dateString: string
-) {
-  const date =
-    parseDate(dateString);
+function formatShortDate(dateString: string) {
+  const date = parseDate(dateString);
 
   return `${String(
     date.getDate()
@@ -118,11 +112,8 @@ function formatShortDate(
   ).padStart(2, "0")}`;
 }
 
-function getThaiDay(
-  dateString: string
-) {
-  const date =
-    parseDate(dateString);
+function getThaiDay(dateString: string) {
+  const date = parseDate(dateString);
 
   const days = [
     "อา.",
@@ -141,41 +132,33 @@ function createDateList(
   startDate: string,
   days: number
 ) {
-  if (
-    !startDate ||
-    days <= 0
-  ) {
+  if (!startDate || days <= 0) {
     return [];
   }
 
-  const start =
-    parseDate(startDate);
+  const start = parseDate(startDate);
 
   return Array.from(
     {
       length: days,
     },
     (_, index) => {
-      const date =
-        new Date(start);
+      const date = new Date(start);
 
       date.setDate(
-        start.getDate() +
-          index
+        start.getDate() + index
       );
 
       const year =
         date.getFullYear();
 
-      const month =
-        String(
-          date.getMonth() + 1
-        ).padStart(2, "0");
+      const month = String(
+        date.getMonth() + 1
+      ).padStart(2, "0");
 
-      const day =
-        String(
-          date.getDate()
-        ).padStart(2, "0");
+      const day = String(
+        date.getDate()
+      ).padStart(2, "0");
 
       return `${year}-${month}-${day}`;
     }
@@ -211,60 +194,14 @@ export default function Step2Screen() {
   // Date Tabs
   // ====================================================
 
-  const dateTabsFromParams =
-    useMemo(
-      () =>
-        createDateList(
-          startDate,
-          planDays
-        ),
-      [
+  const dateTabs = useMemo(
+    () =>
+      createDateList(
         startDate,
-        planDays,
-      ]
-    );
-
-  const [
-    plans,
-    setPlans,
-  ] = useState<DailyPlan[]>([]);
-
-  const dateTabsFromPlans =
-    useMemo(() => {
-      if (
-        dateTabsFromParams.length > 0
-      ) {
-        return [];
-      }
-
-      // ==================================================
-      // ถ้า params ว่าง → สร้างจาก plans จริง
-      // ==================================================
-
-      const dates = [
-        ...new Set(
-          plans.map(
-            (plan) => plan.date
-          )
-        ),
-      ];
-
-      dates.sort(
-        (a, b) =>
-          new Date(a).getTime() -
-          new Date(b).getTime()
-      );
-
-      return dates;
-    }, [
-      plans,
-      dateTabsFromParams,
-    ]);
-
-  const dateTabs =
-    dateTabsFromParams.length > 0
-      ? dateTabsFromParams
-      : dateTabsFromPlans;
+        planDays
+      ),
+    [startDate, planDays]
+  );
 
   const [
     selectedDay,
@@ -274,6 +211,11 @@ export default function Step2Screen() {
   // ====================================================
   // State
   // ====================================================
+
+  const [
+    plans,
+    setPlans,
+  ] = useState<DailyPlan[]>([]);
 
   const [
     loading,
@@ -304,47 +246,6 @@ export default function Step2Screen() {
   // ====================================================
 
   useEffect(() => {
-    console.log(
-      "================================"
-    );
-
-    console.log(
-      "ℹ️ STEP 2 OPENED"
-    );
-
-    console.log(
-      "📋 PARAMS:",
-      JSON.stringify(
-        params,
-        null,
-        2
-      )
-    );
-
-    console.log(
-      "📋 PLAN ID:",
-      planId
-    );
-
-    console.log(
-      "📅 START DATE:",
-      startDate
-    );
-
-    console.log(
-      "📅 END DATE:",
-      endDate
-    );
-
-    console.log(
-      "📅 DAYS:",
-      planDays
-    );
-
-    console.log(
-      "================================"
-    );
-
     loadPlans();
   }, [planId]);
 
@@ -352,201 +253,53 @@ export default function Step2Screen() {
     try {
       setLoading(true);
 
-      let plansData: DailyPlan[] =
-        [];
-
-      // ==================================================
-      // ถ้ามี plan_id → โหลดด้วย plan_id
-      // ==================================================
-
-      if (planId) {
-        const url =
-          `${BASE_URL}/api/meal/plans/${planId}`;
-
-        console.log(
-          "📤 GET BY PLAN ID:",
-          url
+      if (!planId) {
+        throw new Error(
+          "ไม่พบ plan_id"
         );
-
-        const response =
-          await axios.get(
-            url,
-            {
-              timeout: 30000,
-            }
-          );
-
-        console.log(
-          "📥 RESPONSE:",
-          JSON.stringify(
-            response.data,
-            null,
-            2
-          )
-        );
-
-        if (
-          response.data?.success
-        ) {
-          plansData =
-            response.data.plans ||
-            [];
-        }
-      } else {
-        // ==================================================
-        // ไม่มี plan_id → โหลดจาก user_id
-        // ==================================================
-
-        console.log(
-          "⚠️ ไม่มี plan_id - โหลดจาก user_id"
-        );
-
-        const userId =
-          await AsyncStorage.getItem(
-            "currentUser"
-          ).then((raw) => {
-            if (!raw) return null;
-
-            try {
-              const user =
-                JSON.parse(raw);
-
-              return (
-                user?.user_id ||
-                user?.uid ||
-                user?.id ||
-                user?.email ||
-                null
-              );
-            } catch {
-              return null;
-            }
-          });
-
-        if (userId) {
-          const url =
-            `${BASE_URL}/api/meal/user/${userId}`;
-
-          console.log(
-            "📤 GET BY USER ID:",
-            url
-          );
-
-          const response =
-            await axios.get(
-              url,
-              {
-                timeout: 30000,
-              }
-            );
-
-          console.log(
-            "📥 RESPONSE:",
-            JSON.stringify(
-              response.data,
-              null,
-              2
-            )
-          );
-
-          if (
-            response.data?.success
-          ) {
-            const allPlans =
-              response.data.plans ||
-              [];
-
-            // ==================================================
-            // เรียงตามวันที่ล่าสุด
-            // ==================================================
-
-            allPlans.sort(
-              (
-                a: DailyPlan,
-                b: DailyPlan
-              ) =>
-                new Date(
-                  b.date
-                ).getTime() -
-                new Date(
-                  a.date
-                ).getTime()
-            );
-
-            // ==================================================
-            // ใช้ plan_id ล่าสุด
-            // ==================================================
-
-            if (
-              allPlans.length > 0
-            ) {
-              const latestPlanId =
-                allPlans[0].plan_id;
-
-              plansData =
-                allPlans.filter(
-                  (p: DailyPlan) =>
-                    p.plan_id ===
-                    latestPlanId
-                );
-            }
-          }
-        }
       }
 
+      const url =
+        `${BASE_URL}/api/meal/plans/${planId}`;
+
       console.log(
-        "📋 PLANS COUNT:",
-        plansData.length
+        "📤 GET:",
+        url
       );
 
-      plansData.forEach(
-        (
-          plan: DailyPlan,
-          index: number
-        ) => {
-          console.log(
-            `📋 PLAN ${index + 1}:`,
-            {
-              plan_id:
-                plan.plan_id,
-              date: plan.date,
-              slots_count:
-                plan.slots?.length ||
-                0,
-            }
-          );
-        }
+      const response =
+        await axios.get(
+          url,
+          {
+            timeout: 30000,
+          }
+        );
+
+      console.log(
+        "📥 RESPONSE:",
+        response.data
       );
 
-      setPlans(plansData);
+      if (
+        !response.data?.success
+      ) {
+        throw new Error(
+          response.data?.message ||
+            "โหลดแผนอาหารไม่สำเร็จ"
+        );
+      }
+
+      setPlans(
+        response.data.plans || []
+      );
     } catch (error: any) {
       console.error(
         "❌ LOAD PLAN ERROR:",
         error
       );
 
-      if (
-        axios.isAxiosError(error)
-      ) {
-        console.error(
-          "❌ STATUS:",
-          error.response?.status
-        );
-
-        console.error(
-          "❌ RESPONSE:",
-          JSON.stringify(
-            error.response?.data,
-            null,
-            2
-          )
-        );
-      }
-
       const message =
-        axios.isAxiosError(
-          error
-        )
+        axios.isAxiosError(error)
           ? error.response?.data
               ?.message ||
             error.message
@@ -565,88 +318,29 @@ export default function Step2Screen() {
   // ====================================================
   // Save
   // ====================================================
-  // ไม่แก้ Logic Save
-  // ====================================================
 
   function handleSave() {
     if (saving) {
       return;
     }
 
-    // ==================================================
-    // ตรวจสอบ plan_id
-    // ==================================================
-
-    if (!planId) {
-      Alert.alert(
-        "ไม่พบข้อมูลแผนอาหาร",
-        "กรุณาลองสร้างแผนใหม่"
-      );
-
-      return;
-    }
-
-    // ==================================================
-    // Log
-    // ==================================================
-
     console.log(
-      "================================"
+      "💾 SAVE PLAN"
     );
 
     console.log(
-      "💾 SAVE MEAL PLAN"
-    );
-
-    console.log(
-      "📋 PLAN ID:",
+      "PLAN ID:",
       planId
     );
 
-    console.log(
-      "📅 START DATE:",
-      startDate
-    );
-
-    console.log(
-      "📅 END DATE:",
-      endDate
-    );
-
-    console.log(
-      "📅 DAYS:",
-      planDays
-    );
-
-    console.log(
-      "➡️ NAVIGATE TO STEP 3"
-    );
-
-    console.log(
-      "================================"
-    );
-
-    // ==================================================
-    // Navigate to Step 3
-    // ==================================================
-
     setSaving(true);
 
-    router.push({
-      pathname:
-        "/create-plan/step3",
-
+    router.replace({
+      pathname: "/(tabs)/plan",
       params: {
+        refresh:
+          Date.now().toString(),
         plan_id: planId,
-
-        startDate:
-          startDate,
-
-        endDate:
-          endDate,
-
-        days:
-          String(planDays),
       },
     });
   }
@@ -673,7 +367,7 @@ export default function Step2Screen() {
             <Ionicons
               name="restaurant-outline"
               size={34}
-              color="#F29913"
+              color="#666"
             />
           </View>
 
@@ -723,9 +417,14 @@ export default function Step2Screen() {
           style={
             styles.backButton
           }
-          onPress={() =>
-            router.back()
-          }
+          onPress={() => {
+            // 🔧 FIX: ไม่ใช้ router.back() เพราะอาจไม่มี screen ใน stack
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace("/(tabs)/plan");
+            }
+          }}
           activeOpacity={0.7}
         >
           <Ionicons
@@ -790,7 +489,7 @@ export default function Step2Screen() {
             <Ionicons
               name="restaurant-outline"
               size={25}
-              color="#F29913"
+              color="#666"
             />
           </View>
 
@@ -837,7 +536,7 @@ export default function Step2Screen() {
               <Ionicons
                 name="calendar-outline"
                 size={22}
-                color="#F29913"
+                color="#666"
               />
             </View>
 
@@ -851,8 +550,7 @@ export default function Step2Screen() {
                   styles.planInfoTitle
                 }
               >
-                แผนการกิน{" "}
-                {planDays} วัน
+                แผนการกิน {planDays} วัน
               </Text>
 
               <Text
@@ -860,8 +558,7 @@ export default function Step2Screen() {
                   styles.planInfoDate
                 }
               >
-                {startDate} ถึง{" "}
-                {endDate}
+                {startDate} ถึง {endDate}
               </Text>
             </View>
 
@@ -907,8 +604,7 @@ export default function Step2Screen() {
               styles.sectionHint
             }
           >
-            {selectedDay + 1}/
-            {planDays}
+            {selectedDay + 1}/{planDays}
           </Text>
         </View>
 
@@ -950,9 +646,7 @@ export default function Step2Screen() {
                       index
                     )
                   }
-                  activeOpacity={
-                    0.8
-                  }
+                  activeOpacity={0.8}
                 >
                   <Text
                     style={[
@@ -1014,8 +708,7 @@ export default function Step2Screen() {
                 styles.selectedDate
               }
             >
-              {selectedDate ||
-                "-"}
+              {selectedDate}
             </Text>
           </View>
 
@@ -1028,7 +721,7 @@ export default function Step2Screen() {
               <Ionicons
                 name="restaurant"
                 size={15}
-                color="#F29913"
+                color="#666"
               />
 
               <Text
@@ -1036,16 +729,11 @@ export default function Step2Screen() {
                   styles.mealCountText
                 }
               >
-                {
-                  selectedPlan.meals_per_day
-                }{" "}
-                มื้อ
+                {selectedPlan.meals_per_day} มื้อ
               </Text>
             </View>
           )}
         </View>
-
-        {/* No Plan */}
 
         {!selectedPlan ? (
           <View
@@ -1070,7 +758,7 @@ export default function Step2Screen() {
                 styles.emptyText
               }
             >
-              ยังไม่มีแผนอาหาร
+              ไม่พบแผนอาหารวันนี้
             </Text>
 
             <Text
@@ -1078,8 +766,7 @@ export default function Step2Screen() {
                 styles.emptySubText
               }
             >
-              ขั้นตอนนี้เป็นหน้าสำหรับดู
-              และปรับแต่งแผนอาหาร
+              กรุณาลองเลือกวันอื่น
             </Text>
           </View>
         ) : (
@@ -1105,7 +792,7 @@ export default function Step2Screen() {
                     <Ionicons
                       name="analytics-outline"
                       size={20}
-                      color="#F29913"
+                      color="#22A06B"
                     />
                   </View>
 
@@ -1194,8 +881,7 @@ export default function Step2Screen() {
                       {
                         selectedPlan
                           .daily_target_summary
-                          .protein_g ??
-                        "-"
+                          .protein_g ?? "-"
                       }
                     </Text>
 
@@ -1235,8 +921,7 @@ export default function Step2Screen() {
                       {
                         selectedPlan
                           .daily_target_summary
-                          .carb_g ??
-                        "-"
+                          .carb_g ?? "-"
                       }
                     </Text>
 
@@ -1276,8 +961,7 @@ export default function Step2Screen() {
                       {
                         selectedPlan
                           .daily_target_summary
-                          .fat_g ??
-                        "-"
+                          .fat_g ?? "-"
                       }
                     </Text>
 
@@ -1328,11 +1012,7 @@ export default function Step2Screen() {
                     styles.mealsCountText
                   }
                 >
-                  {
-                    selectedPlan
-                      .slots?.length ||
-                    0
-                  }
+                  {selectedPlan.slots?.length || 0}
                 </Text>
 
                 <Text
@@ -1349,12 +1029,27 @@ export default function Step2Screen() {
               (
                 slot,
                 index
-              ) => (
+              ) => {
+                // 🔧 กำหนดสีตามมื้ออาหาร
+                const mealType = (slot.meal_type || slot.slot_name || "").toLowerCase();
+                let mealColorStyle = {};
+                if (mealType.includes("เช้า") || mealType.includes("morning")) {
+                  mealColorStyle = styles.mealCardMorning;
+                } else if (mealType.includes("กลางวัน") || mealType.includes("lunch")) {
+                  mealColorStyle = styles.mealCardLunch;
+                } else if (mealType.includes("เย็น") || mealType.includes("dinner")) {
+                  mealColorStyle = styles.mealCardDinner;
+                } else if (mealType.includes("ว่าง") || mealType.includes("snack")) {
+                  mealColorStyle = styles.mealCardSnack;
+                }
+
+                return (
                 <View
                   key={`${slot.meal_type}-${index}`}
-                  style={
-                    styles.mealCard
-                  }
+                  style={[
+                    styles.mealCard,
+                    mealColorStyle,
+                  ]}
                 >
                   {/* Meal Header */}
 
@@ -1397,37 +1092,66 @@ export default function Step2Screen() {
                           styles.mealTypeText
                         }
                       >
-                        {
-                          slot.meal_type
-                        }
+                        {slot.meal_type}
                       </Text>
                     </View>
 
-                    <View
-                      style={
-                        styles.kcalBadge
-                      }
-                    >
-                      <Text
+                    {/* 🔧 เพิ่มปุ่ม Swap, Detail + kcal */}
+                    <View style={styles.mealHeaderRight}>
+                      <View
                         style={
-                          styles.kcalText
+                          styles.kcalBadge
                         }
                       >
-                        {
-                          slot.target_kcal ??
-                          0
-                        }
-                      </Text>
+                        <Text
+                          style={
+                            styles.kcalText
+                          }
+                        >
+                          {slot.target_kcal ?? 0}
+                        </Text>
+                        <Text
+                          style={
+                            styles.kcalUnit
+                          }
+                        >
+                          kcal
+                        </Text>
+                      </View>
 
-                      <Text
-                        style={
-                          styles.kcalUnit
-                        }
+                      <TouchableOpacity
+                        style={styles.swapBtn}
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          Alert.alert(
+                            "เปลี่ยนเมนู",
+                            `ต้องการเปลี่ยนเมนู "${slot.main_food?.name || slot.slot_name}" ใช่หรือไม่?`,
+                            [
+                              { text: "ยกเลิก", style: "cancel" },
+                              { text: "เปลี่ยน", onPress: () => console.log("🔄 Swap:", slot.slot_name) },
+                            ]
+                          );
+                        }}
                       >
-                        kcal
-                      </Text>
+                        <Ionicons name="swap-horizontal" size={16} color="#555" />
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.detailBtn}
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          Alert.alert(
+                            slot.main_food?.name || slot.slot_name || "รายละเอียด",
+                            `แคลอรี: ${slot.target_kcal ?? slot.main_food?.kcal ?? 0} kcal\nโปรตีน: ${slot.target_nutrition?.protein_g ?? "-"} g\nคาร์บ: ${slot.target_nutrition?.carb_g ?? "-"} g\nไขมัน: ${slot.target_nutrition?.fat_g ?? "-"} g`
+                          );
+                        }}
+                      >
+                        <Ionicons name="information-circle-outline" size={16} color="#555" />
+                      </TouchableOpacity>
                     </View>
                   </View>
+
+                  {/* Divider */}
 
                   <View
                     style={
@@ -1451,7 +1175,7 @@ export default function Step2Screen() {
                         <Ionicons
                           name="restaurant"
                           size={27}
-                          color="#F29913"
+                          color="#666"
                         />
                       </View>
 
@@ -1472,9 +1196,7 @@ export default function Step2Screen() {
                           style={
                             styles.foodName
                           }
-                          numberOfLines={
-                            2
-                          }
+                          numberOfLines={2}
                         >
                           {
                             slot
@@ -1491,8 +1213,7 @@ export default function Step2Screen() {
                           {
                             slot
                               .main_food
-                              .kcal ??
-                            0
+                              .kcal ?? 0
                           }{" "}
                           kcal
                         </Text>
@@ -1568,7 +1289,7 @@ export default function Step2Screen() {
                               >
                                 {
                                   addon.kcal ??
-                                  0
+                                    0
                                 }{" "}
                                 kcal
                               </Text>
@@ -1614,8 +1335,27 @@ export default function Step2Screen() {
                     </Text>
                   </View>
                 </View>
-              )
-            )}
+              )})}
+
+
+            {/* 🔧 ปุ่มเพิ่มมื้ออาหาร */}
+            <TouchableOpacity
+              style={styles.addMealBtn}
+              activeOpacity={0.7}
+              onPress={() => {
+                Alert.alert(
+                  "เพิ่มมื้ออาหาร",
+                  "ต้องการเพิ่มมื้ออาหารใหม่ในวันนี้ใช่หรือไม่?",
+                  [
+                    { text: "ยกเลิก", style: "cancel" },
+                    { text: "เพิ่ม", onPress: () => console.log("➕ Add meal to:", selectedDate) },
+                  ]
+                );
+              }}
+            >
+              <Ionicons name="add-circle-outline" size={22} color="#555" />
+              <Text style={styles.addMealBtnText}>เพิ่มมื้ออาหาร</Text>
+            </TouchableOpacity>
 
             <View
               style={
@@ -1694,13 +1434,16 @@ const styles =
       backgroundColor: "#F7F7F7",
     },
 
+    // ==================================================
+    // Header
+    // ==================================================
+
     header: {
       height: 68,
       backgroundColor: "#F29913",
       flexDirection: "row",
       alignItems: "center",
-      justifyContent:
-        "space-between",
+      justifyContent: "space-between",
       paddingHorizontal: 18,
     },
 
@@ -1710,8 +1453,7 @@ const styles =
       borderRadius: 12,
       backgroundColor:
         "rgba(255,255,255,0.65)",
-      justifyContent:
-        "center",
+      justifyContent: "center",
       alignItems: "center",
     },
 
@@ -1737,6 +1479,10 @@ const styles =
       width: 40,
     },
 
+    // ==================================================
+    // Scroll
+    // ==================================================
+
     scroll: {
       flex: 1,
     },
@@ -1746,6 +1492,10 @@ const styles =
       paddingTop: 20,
       paddingBottom: 20,
     },
+
+    // ==================================================
+    // Page Title
+    // ==================================================
 
     pageTitleSection: {
       flexDirection: "row",
@@ -1778,6 +1528,10 @@ const styles =
       fontSize: 13,
       color: "#777",
     },
+
+    // ==================================================
+    // Plan Info
+    // ==================================================
 
     planInfoCard: {
       backgroundColor: "#fff",
@@ -1842,11 +1596,14 @@ const styles =
       fontWeight: "700",
     },
 
+    // ==================================================
+    // Section Header
+    // ==================================================
+
     sectionHeader: {
       flexDirection: "row",
       alignItems: "center",
-      justifyContent:
-        "space-between",
+      justifyContent: "space-between",
       marginBottom: 10,
     },
 
@@ -1861,6 +1618,10 @@ const styles =
       color: "#999",
       fontWeight: "600",
     },
+
+    // ==================================================
+    // Date Tabs
+    // ==================================================
 
     tabsContainer: {
       paddingBottom: 20,
@@ -1917,10 +1678,13 @@ const styles =
       backgroundColor: "#fff",
     },
 
+    // ==================================================
+    // Selected Date
+    // ==================================================
+
     selectedDateHeader: {
       flexDirection: "row",
-      justifyContent:
-        "space-between",
+      justifyContent: "space-between",
       alignItems: "flex-end",
       marginBottom: 14,
     },
@@ -1940,7 +1704,7 @@ const styles =
     mealCountBadge: {
       flexDirection: "row",
       alignItems: "center",
-      backgroundColor: "#FFF4DF",
+      backgroundColor: "#F0F0F0",
       paddingHorizontal: 10,
       paddingVertical: 6,
       borderRadius: 20,
@@ -1948,10 +1712,14 @@ const styles =
     },
 
     mealCountText: {
-      color: "#D67C00",
+      color: "#555",
       fontSize: 11,
       fontWeight: "700",
     },
+
+    // ==================================================
+    // Summary
+    // ==================================================
 
     summaryCard: {
       backgroundColor: "#fff",
@@ -1972,7 +1740,7 @@ const styles =
       width: 40,
       height: 40,
       borderRadius: 12,
-      backgroundColor: "#FFF4DF",
+      backgroundColor: "#F0F0F0",
       justifyContent: "center",
       alignItems: "center",
     },
@@ -1982,6 +1750,7 @@ const styles =
       fontSize: 16,
       fontWeight: "800",
       color: "#222",
+      fontFamily: "NotoSansThaiBold",
     },
 
     summarySubtitle: {
@@ -1989,6 +1758,7 @@ const styles =
       marginTop: 2,
       fontSize: 11,
       color: "#999",
+      fontFamily: "NotoSansThai",
     },
 
     nutritionGrid: {
@@ -2008,24 +1778,28 @@ const styles =
       fontSize: 10,
       color: "#888",
       marginBottom: 4,
+      fontFamily: "NotoSansThai",
     },
 
     nutritionValueOrange: {
       fontSize: 17,
       fontWeight: "800",
-      color: "#F29913",
+      color: "#333",
+      fontFamily: "NotoSansThaiBold",
     },
 
     nutritionValue: {
       fontSize: 17,
       fontWeight: "800",
       color: "#333",
+      fontFamily: "NotoSansThaiBold",
     },
 
     nutritionUnit: {
       fontSize: 9,
       color: "#999",
       marginTop: 1,
+      fontFamily: "NotoSansThai",
     },
 
     nutritionDivider: {
@@ -2034,11 +1808,14 @@ const styles =
       backgroundColor: "#E5E5E5",
     },
 
+    // ==================================================
+    // Meals Section
+    // ==================================================
+
     mealsSectionHeader: {
       flexDirection: "row",
       alignItems: "center",
-      justifyContent:
-        "space-between",
+      justifyContent: "space-between",
       marginBottom: 12,
     },
 
@@ -2046,19 +1823,21 @@ const styles =
       fontSize: 18,
       fontWeight: "800",
       color: "#222",
+      fontFamily: "NotoSansThaiBold",
     },
 
     mealsSectionSubtitle: {
       marginTop: 3,
       fontSize: 11,
       color: "#999",
+      fontFamily: "NotoSansThai",
     },
 
     mealsCount: {
       minWidth: 40,
       height: 40,
       borderRadius: 12,
-      backgroundColor: "#FFF4DF",
+      backgroundColor: "#F0F0F0",
       justifyContent: "center",
       alignItems: "center",
       paddingHorizontal: 7,
@@ -2067,14 +1846,20 @@ const styles =
     mealsCountText: {
       fontSize: 16,
       fontWeight: "800",
-      color: "#F29913",
+      color: "#333",
+      fontFamily: "NotoSansThaiBold",
     },
 
     mealsCountLabel: {
       fontSize: 8,
       color: "#999",
       marginTop: -1,
+      fontFamily: "NotoSansThai",
     },
+
+    // ==================================================
+    // Meal Card
+    // ==================================================
 
     mealCard: {
       backgroundColor: "#fff",
@@ -2083,6 +1868,26 @@ const styles =
       marginBottom: 13,
       borderWidth: 1,
       borderColor: "#EEEEEE",
+    },
+
+    mealCardMorning: {
+      borderLeftWidth: 4,
+      borderLeftColor: "#F29913",
+    },
+
+    mealCardLunch: {
+      borderLeftWidth: 4,
+      borderLeftColor: "#22A06B",
+    },
+
+    mealCardDinner: {
+      borderLeftWidth: 4,
+      borderLeftColor: "#3B82F6",
+    },
+
+    mealCardSnack: {
+      borderLeftWidth: 4,
+      borderLeftColor: "#8B5CF6",
     },
 
     mealHeader: {
@@ -2094,7 +1899,7 @@ const styles =
       width: 34,
       height: 34,
       borderRadius: 11,
-      backgroundColor: "#FFF1D6",
+      backgroundColor: "#F0F0F0",
       justifyContent: "center",
       alignItems: "center",
     },
@@ -2102,7 +1907,31 @@ const styles =
     mealNumberText: {
       fontSize: 14,
       fontWeight: "800",
-      color: "#D67C00",
+      color: "#555",
+    },
+
+    mealHeaderRight: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+    },
+
+    swapBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 10,
+      backgroundColor: "#F0F0F0",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+
+    detailBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 10,
+      backgroundColor: "#F0F0F0",
+      justifyContent: "center",
+      alignItems: "center",
     },
 
     mealTitleContainer: {
@@ -2128,7 +1957,7 @@ const styles =
     },
 
     kcalText: {
-      color: "#F29913",
+      color: "#333",
       fontSize: 15,
       fontWeight: "800",
     },
@@ -2145,6 +1974,10 @@ const styles =
       marginVertical: 14,
     },
 
+    // ==================================================
+    // Food
+    // ==================================================
+
     foodRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -2154,7 +1987,7 @@ const styles =
       width: 64,
       height: 64,
       borderRadius: 15,
-      backgroundColor: "#FFF4DF",
+      backgroundColor: "#F0F0F0",
       justifyContent: "center",
       alignItems: "center",
     },
@@ -2182,6 +2015,10 @@ const styles =
       fontSize: 11,
       color: "#888",
     },
+
+    // ==================================================
+    // Addons
+    // ==================================================
 
     addonContainer: {
       marginTop: 14,
@@ -2229,6 +2066,10 @@ const styles =
       fontSize: 10,
     },
 
+    // ==================================================
+    // Status
+    // ==================================================
+
     statusContainer: {
       marginTop: 13,
       flexDirection: "row",
@@ -2249,11 +2090,17 @@ const styles =
       fontSize: 10,
       color: "#168052",
       fontWeight: "700",
+      fontFamily: "NotoSansThaiBold",
     },
 
     statusSwappedText: {
       color: "#B76B00",
+      fontFamily: "NotoSansThaiBold",
     },
+
+    // ==================================================
+    // Empty
+    // ==================================================
 
     emptyContainer: {
       backgroundColor: "#fff",
@@ -2261,7 +2108,6 @@ const styles =
       alignItems: "center",
       justifyContent: "center",
       paddingVertical: 55,
-      paddingHorizontal: 25,
       borderWidth: 1,
       borderColor: "#EEEEEE",
     },
@@ -2280,14 +2126,19 @@ const styles =
       color: "#555",
       fontSize: 15,
       fontWeight: "700",
+      fontFamily: "NotoSansThaiBold",
     },
 
     emptySubText: {
       marginTop: 5,
       color: "#999",
       fontSize: 12,
-      textAlign: "center",
+      fontFamily: "NotoSansThai",
     },
+
+    // ==================================================
+    // Loading
+    // ==================================================
 
     loadingContainer: {
       flex: 1,
@@ -2300,7 +2151,7 @@ const styles =
       width: 75,
       height: 75,
       borderRadius: 25,
-      backgroundColor: "#FFF4DF",
+      backgroundColor: "#F0F0F0",
       justifyContent: "center",
       alignItems: "center",
     },
@@ -2310,13 +2161,19 @@ const styles =
       fontSize: 18,
       fontWeight: "800",
       color: "#222",
+      fontFamily: "NotoSansThaiBold",
     },
 
     loadingSubText: {
       marginTop: 6,
       color: "#888",
       fontSize: 13,
+      fontFamily: "NotoSansThai",
     },
+
+    // ==================================================
+    // Footer
+    // ==================================================
 
     footer: {
       paddingHorizontal: 18,
@@ -2352,6 +2209,7 @@ const styles =
       color: "#fff",
       fontSize: 17,
       fontWeight: "800",
+      fontFamily: "NotoSansThaiBold",
     },
 
     savingText: {
@@ -2359,6 +2217,28 @@ const styles =
       fontSize: 15,
       fontWeight: "700",
       marginLeft: 8,
+      fontFamily: "NotoSansThaiBold",
+    },
+
+    addMealBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "#fff",
+      borderRadius: 14,
+      borderWidth: 1.5,
+      borderColor: "#E0E0E0",
+      borderStyle: "dashed",
+      paddingVertical: 14,
+      marginTop: 8,
+      gap: 8,
+    },
+
+    addMealBtnText: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: "#555",
+      fontFamily: "NotoSansThaiBold",
     },
 
     bottomSpace: {

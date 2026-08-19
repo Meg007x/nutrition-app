@@ -57,6 +57,11 @@ export default function LoginScreen() {
 
       await AsyncStorage.setItem("currentUser", JSON.stringify(res.user));
 
+      // 🔧 บันทึก user_id แยกไว้ด้วย เพื่อให้หน้าอื่นๆ (plan.tsx) ดึงได้ทันที
+      if (res.user?.user_id) {
+        await AsyncStorage.setItem("user_id", String(res.user.user_id));
+      }
+
       Alert.alert("สำเร็จ", "เข้าสู่ระบบสำเร็จ");
       router.replace("/(tabs)/dashboard");
     } catch (error: any) {
