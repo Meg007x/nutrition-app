@@ -1,1621 +1,297 @@
-import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import React, { useCallback, useMemo, useState, useRef } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, ActivityIndicator, RefreshControl, Alert, Modal, TextInput, FlatList, Image } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { router, useFocusEffect } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getUserPlan, deletePlan as apiDeletePlan, replaceMeal, deleteMeal, searchFoods, toggleMealStatus, getTodayDate, getTodayPlan, getEatenKcal, getTargetKcal, getEatenCount, type DailyPlan, type SearchResult } from "../../services/mealPlanService";
+
+const ORANGE = "#F29913";
+function parseDate(ds: string) { const [y, m, d] = ds.split("-").map(Number); return new Date(y, m - 1, d); }
+function fmtShort(ds: string) { const d = parseDate(ds); return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`; }
+function thaiDay(ds: string) { return ["อา.", "จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส."][parseDate(ds).getDay()]; }
+function thaiDate(ds: string) { const d = parseDate(ds); const mo = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."]; return `${d.getDate()} ${mo[d.getMonth()]} ${d.getFullYear() + 543}`; }
+function mealIcon(mt: string) { const t = mt.toLowerCase(); if (t.includes("breakfast") || t.includes("เช้า")) return "sunny-outline"; if (t.includes("lunch") || t.includes("กลางวัน")) return "partly-sunny-outline"; if (t.includes("dinner") || t.includes("เย็น")) return "moon-outline"; return "restaurant-outline"; }
 
 export default function PlanScreen() {
-<<<<<<< Updated upstream
-  return (
-    <View style={styles.container}>
-      <Text style={styles.text}>Plan Screen</Text>
-    </View>
-  );
-}
+  const [plans, setPlans] = useState<DailyPlan[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [hasPlan, setHasPlan] = useState(false);
+  const [activeTab, setActiveTab] = useState<"today" | "full">("today");
+  const [dayIdx, setDayIdx] = useState(0);
+  const [showModal, setShowModal] = useState(false);
+  const [selSlot, setSelSlot] = useState<{ planId: string; date: string; idx: number; name: string } | null>(null);
+  const [searchQ, setSearchQ] = useState("");
+  const [searchRes, setSearchRes] = useState<SearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#fff" },
-  text: { fontSize: 24, fontWeight: "800" },
-});
-=======
-  const params =
-    useLocalSearchParams<{
-      refresh?: string;
-      plan_id?: string;
-    }>();
-
-  // ====================================================
-  // State
-  // ====================================================
-
-  const [
-    plans,
-    setPlans,
-  ] = useState<DailyPlan[]>([]);
-
-  const [
-    loading,
-    setLoading,
-  ] = useState(true);
-
-  const [
-    refreshing,
-    setRefreshing,
-  ] = useState(false);
-
-  const [
-    deletingPlanId,
-    setDeletingPlanId,
-  ] = useState<string | null>(
-    null
-  );
-
-  const [
-    userId,
-    setUserId,
-  ] = useState("");
-
-  // ====================================================
-  // Group Plans By plan_id
-  // ====================================================
-
-  const groupedPlans =
-    useMemo(() => {
-      const groups = new Map<
-        string,
-        DailyPlan[]
-      >();
-
-      plans.forEach((plan) => {
-        if (
-          !groups.has(plan.plan_id)
-        ) {
-          groups.set(
-            plan.plan_id,
-            []
-          );
-        }
-
-        groups
-          .get(plan.plan_id)!
-          .push(plan);
-      });
-
-      return Array.from(
-        groups.entries()
-      ).map(
-        ([plan_id, days]) => ({
-          plan_id,
-          days: days.sort(
-            (a, b) =>
-              new Date(
-                a.date
-              ).getTime() -
-              new Date(
-                b.date
-              ).getTime()
-          ),
-        })
-      );
-    }, [plans]);
-
-  // ====================================================
-  // Focus
-  // ====================================================
-
-  useFocusEffect(
-    useCallback(() => {
-      console.log(
-        "================================"
-      );
-
-      console.log(
-        "🔄 PLAN SCREEN FOCUSED"
-      );
-
-      console.log(
-        "REFRESH PARAM:",
-        params.refresh
-      );
-
-      console.log(
-        "PLAN ID PARAM:",
-        params.plan_id
-      );
-
-      console.log(
-        "================================"
-      );
-
-      loadPlan();
-
-      return () => {
-        console.log(
-          "👋 PLAN SCREEN UNFOCUSED"
-        );
-      };
-    }, [
-      params.refresh,
-      params.plan_id,
-    ])
-  );
-
-  // ====================================================
-  // Get User ID
-  // ====================================================
-
-  async function getUserId(): Promise<
-    string | null
-  > {
-    try {
-      // 🔧 1) เช็ก AsyncStorage key "user_id" ก่อน
-      const storedUserId =
-        await AsyncStorage.getItem(
-          "user_id"
-        );
-
-      console.log(
-        "📦 AsyncStorage user_id:",
-        storedUserId
-      );
-
-      if (storedUserId) {
-        console.log(
-          "✅ ใช้ user_id จาก AsyncStorage:",
-          storedUserId
-        );
-
-        return storedUserId;
-      }
-
-      // 🔧 2) Fallback: เช็ก key "currentUser" (แบบเดียวกับ dashboard)
-      const currentUserRaw =
-        await AsyncStorage.getItem(
-          "currentUser"
-        );
-
-      if (currentUserRaw) {
-        const currentUser =
-          JSON.parse(currentUserRaw);
-
-        const fallbackId =
-          currentUser?.user_id ||
-          currentUser?.id ||
-          null;
-
-        if (fallbackId) {
-          console.log(
-            "✅ ใช้ user_id จาก currentUser:",
-            fallbackId
-          );
-
-          // บันทึกกลับ key "user_id" ไว้ใช้ครั้งถัดไป
-          await AsyncStorage.setItem(
-            "user_id",
-            String(fallbackId)
-          );
-
-          return String(fallbackId);
-        }
-      }
-
-      console.log(
-        "⚠️ AsyncStorage ไม่มี user_id"
-      );
-
-      console.log(
-        "📡 กำลังโหลด User Profile..."
-      );
-
-      // 🔧 3) Fallback สุดท้าย: เรียก API /users/profile พร้อม userId
-      //    (ต้องมี userId ถึงจะเรียกได้ ไม่งั้นจะ 400)
-      //    ดังนั้นถ้าไม่มี userId เลย ให้ return null
-      console.error(
-        "❌ ไม่พบ user_id ใน AsyncStorage ทุก key — ไม่สามารถเรียก /api/users/profile ได้"
-      );
-
-      return null;
-    } catch (error: any) {
-      console.error(
-        "❌ GET USER ID ERROR:",
-        error
-      );
-
-      return null;
-    }
+  async function getUid() {
+    for (const k of ["user_id", "userId"]) { const v = await AsyncStorage.getItem(k); if (v) return v; }
+    const raw = await AsyncStorage.getItem("currentUser");
+    if (raw) { const o = JSON.parse(raw); if (o?.user_id) return String(o.user_id); }
+    return null;
   }
-
-  // ====================================================
-  // Load Plan
-  // ====================================================
 
   async function loadPlan() {
     try {
       setLoading(true);
-
-      console.log(
-        "🔎 กำลังตรวจสอบ user_id..."
-      );
-
-      const currentUserId =
-        await getUserId();
-
-      console.log(
-        "👤 FINAL USER ID:",
-        currentUserId
-      );
-
-      if (!currentUserId) {
-        console.log(
-          "❌ ไม่สามารถหา user_id ได้"
-        );
-
-        setPlans([]);
-
-        return;
-      }
-
-      setUserId(
-        currentUserId
-      );
-
-      const url =
-        `${BASE_URL}/api/meal/user/${currentUserId}`;
-
-      console.log(
-        "================================"
-      );
-
-      console.log(
-        "📤 GET USER PLANS"
-      );
-
-      console.log(
-        "USER ID:",
-        currentUserId
-      );
-
-      console.log(
-        "URL:",
-        url
-      );
-
-      console.log(
-        "================================"
-      );
-
-      const response =
-        await axios.get(
-          url,
-          {
-            timeout: 30000,
-          }
-        );
-
-      console.log(
-        "📥 PLAN RESPONSE:",
-        response.data
-      );
-
-      if (
-        !response.data?.success
-      ) {
-        throw new Error(
-          response.data?.message ||
-            "โหลดแผนอาหารไม่สำเร็จ"
-        );
-      }
-
-      const newPlans =
-        Array.isArray(
-          response.data?.plans
-        )
-          ? response.data.plans
-          : [];
-
-      console.log(
-        "📋 PLANS COUNT:",
-        newPlans.length
-      );
-
-      if (
-        newPlans.length > 0
-      ) {
-        console.log(
-          "📋 PLAN LIST:"
-        );
-
-        newPlans.forEach(
-          (
-            plan: DailyPlan,
-            index: number
-          ) => {
-            console.log(
-              `${index + 1}.`,
-              plan.plan_id,
-              plan.date
-            );
-          }
-        );
-      }
-
-      setPlans(
-        newPlans
-      );
-    } catch (error: any) {
-      console.error(
-        "❌ LOAD PLAN ERROR:",
-        error
-      );
-
-      if (
-        axios.isAxiosError(error)
-      ) {
-        console.error(
-          "❌ STATUS:",
-          error.response?.status
-        );
-
-        console.error(
-          "❌ RESPONSE DATA:",
-          error.response?.data
-        );
-      }
-
-      const message =
-        axios.isAxiosError(error)
-          ? error.response?.data
-              ?.message ||
-            error.message
-          : error?.message ||
-            "ไม่สามารถโหลดแผนอาหารได้";
-
-      Alert.alert(
-        "โหลดแผนไม่สำเร็จ",
-        message
-      );
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+      const uid = await getUid();
+      if (!uid) { setPlans([]); setHasPlan(false); return; }
+      const data = await getUserPlan(uid);
+      setHasPlan(data.hasPlan === true);
+      const p = Array.isArray(data.plans) ? data.plans : [];
+      setPlans(p);
+      const ti = p.findIndex((x: DailyPlan) => x.date === getTodayDate());
+      if (ti >= 0) setDayIdx(ti);
+    } catch (e: any) { setHasPlan(false); Alert.alert("โหลดแผนไม่สำเร็จ", e?.message); }
+    finally { setLoading(false); setRefreshing(false); }
   }
 
-  // ====================================================
-  // Delete Plan
-  // ====================================================
+  useFocusEffect(useCallback(() => { loadPlan(); }, []));
 
-  function confirmDeletePlan(
-    plan: DailyPlan
-  ) {
-    console.log(
-      "🗑️ CONFIRM DELETE PLAN"
-    );
+  const todayPlan = useMemo(() => getTodayPlan(plans), [plans]);
+  const eatenKcal = useMemo(() => getEatenKcal(todayPlan), [todayPlan]);
+  const targetKcal = useMemo(() => getTargetKcal(todayPlan), [todayPlan]);
+  const eatenCount = useMemo(() => getEatenCount(todayPlan), [todayPlan]);
+  const selDay = plans[dayIdx] || null;
 
-    console.log(
-      "PLAN ID:",
-      plan.plan_id
-    );
-
-    console.log(
-      "PLATFORM:",
-      Platform.OS
-    );
-
-    console.log(
-      "DELETING PLAN ID:",
-      deletingPlanId
-    );
-
-    if (
-      deletingPlanId
-    ) {
-      console.log(
-        "⚠️ กำลังลบอยู่ ไม่ทำอะไร"
-      );
-
-      return;
-    }
-
-    // ==================================================
-    // Web: ใช้ window.confirm()
-    // เนื่องจาก Alert.alert() callback
-    // ไม่ทำงานบน React Native Web
-    // ==================================================
-
-    if (
-      Platform.OS === "web"
-    ) {
-      const message =
-        `ต้องการลบแผนวันที่ ${plan.date} หรือไม่?\n\nแผนนี้มีทั้งหมด ${getPlanDayCount(
-          plan.plan_id
-        )} วัน และจะถูกลบทั้งหมด`;
-
-      const confirmed =
-        window.confirm(
-          message
-        );
-
-      if (confirmed) {
-        console.log(
-          "✅ USER CONFIRMED DELETE:",
-          plan.plan_id
-        );
-
-        deletePlan(
-          plan.plan_id
-        );
-      } else {
-        console.log(
-          "❌ USER CANCELLED DELETE"
-        );
-      }
-
-      return;
-    }
-
-    // ==================================================
-    // Android / iOS: ใช้ Alert.alert()
-    // ==================================================
-
-    Alert.alert(
-      "ลบแผนอาหาร",
-      `ต้องการลบแผนวันที่ ${plan.date} หรือไม่?\n\nแผนนี้มีทั้งหมด ${getPlanDayCount(
-        plan.plan_id
-      )} วัน และจะถูกลบทั้งหมด`,
-      [
-        {
-          text: "ยกเลิก",
-          style: "cancel",
-        },
-        {
-          text: "ลบแผน",
-          style: "destructive",
-          onPress: () => {
-            console.log(
-              "✅ USER CONFIRMED DELETE:",
-              plan.plan_id
-            );
-
-            deletePlan(
-              plan.plan_id
-            );
-          },
-        },
-      ]
-    );
+  function confirmDel(plan: DailyPlan) {
+    Alert.alert("ลบแผนอาหาร", `ต้องการลบแผน ${plan.plan_id}?`, [
+      { text: "ยกเลิก", style: "cancel" },
+      { text: "ลบ", style: "destructive", onPress: () => handleDeletePlan(plan.plan_id) },
+    ]);
   }
 
-  // ====================================================
-  // Get Number of Days
-  // ====================================================
-
-  function getPlanDayCount(
-    planId: string
-  ) {
-    return plans.filter(
-      (item) =>
-        item.plan_id ===
-        planId
-    ).length;
+  async function handleDeletePlan(planId: string) {
+    try { await apiDeletePlan(planId); setPlans((p) => p.filter((x) => x.plan_id !== planId)); Alert.alert("สำเร็จ", "ลบแผนอาหารแล้ว"); }
+    catch (e: any) { Alert.alert("ลบไม่สำเร็จ", e?.message); }
   }
 
-  // ====================================================
-  // Delete API
-  // ====================================================
-
-  async function deletePlan(
-    planId: string
-  ) {
+  async function handleToggle(pi: string, dt: string, si: number, cs: string) {
     try {
-      console.log(
-        "================================"
-      );
-
-      console.log(
-        "🗑️ DELETE PLAN START"
-      );
-
-      console.log(
-        "PLAN ID:",
-        planId
-      );
-
-      console.log(
-        "PLAN ID TYPE:",
-        typeof planId
-      );
-
-      console.log(
-        "================================"
-      );
-
-      setDeletingPlanId(
-        planId
-      );
-
-      const url =
-        `${BASE_URL}/api/meal/plans/${encodeURIComponent(
-          planId
-        )}`;
-
-      console.log(
-        "📤 DELETE URL:",
-        url
-      );
-
-      const response =
-        await axios.delete(
-          url,
-          {
-            timeout: 30000,
-          }
-        );
-
-      console.log(
-        "📥 DELETE RESPONSE STATUS:",
-        response.status
-      );
-
-      console.log(
-        "📥 DELETE RESPONSE DATA:",
-        JSON.stringify(
-          response.data
-        )
-      );
-
-      if (
-        !response.data?.success
-      ) {
-        throw new Error(
-          response.data?.message ||
-            "ลบแผนไม่สำเร็จ"
-        );
-      }
-
-      const deletedCount =
-        response.data
-          ?.deleted_count ?? 0;
-
-      console.log(
-        "✅ DELETED COUNT:",
-        deletedCount
-      );
-
-      // ==================================================
-      // ลบออกจาก UI ทันที
-      // ==================================================
-
-      setPlans(
-        (currentPlans) => {
-          const filtered =
-            currentPlans.filter(
-              (item) =>
-                item.plan_id !==
-                planId
-            );
-
-          console.log(
-            "📋 PLANS BEFORE FILTER:",
-            currentPlans.length
-          );
-
-          console.log(
-            "📋 PLANS AFTER FILTER:",
-            filtered.length
-          );
-
-          return filtered;
-        }
-      );
-
-      Alert.alert(
-        "ลบสำเร็จ",
-        `ลบแผนอาหารสำเร็จ\nลบทั้งหมด ${deletedCount} วัน`
-      );
-    } catch (error: any) {
-      console.error(
-        "================================"
-      );
-
-      console.error(
-        "❌ DELETE PLAN ERROR"
-      );
-
-      console.error(
-        "ERROR MESSAGE:",
-        error?.message
-      );
-
-      console.error(
-        "ERROR TYPE:",
-        error?.code
-      );
-
-      if (
-        axios.isAxiosError(error)
-      ) {
-        console.error(
-          "❌ AXIOS ERROR STATUS:",
-          error.response?.status
-        );
-
-        console.error(
-          "❌ AXIOS ERROR DATA:",
-          JSON.stringify(
-            error.response?.data
-          )
-        );
-
-        console.error(
-          "❌ AXIOS ERROR URL:",
-          error.config?.url
-        );
-
-        console.error(
-          "❌ AXIOS ERROR METHOD:",
-          error.config?.method
-        );
-      }
-
-      console.error(
-        "================================"
-      );
-
-      const message =
-        axios.isAxiosError(error)
-          ? error.response?.data
-              ?.message ||
-            error.message
-          : error?.message ||
-            "ไม่สามารถลบแผนอาหารได้";
-
-      Alert.alert(
-        "ลบแผนไม่สำเร็จ",
-        message
-      );
-    } finally {
-      console.log(
-        "🔄 DELETE PLAN FINALLY"
-      );
-
-      setDeletingPlanId(
-        null
-      );
-    }
+      const ns = cs === "eaten" ? "pending" : "eaten";
+      await toggleMealStatus(pi, dt, si, ns);
+      setPlans((p) => p.map((pl) => {
+        if (pl.plan_id === pi && pl.date === dt) { const s = [...pl.slots]; s[si] = { ...s[si], status: ns }; return { ...pl, slots: s }; }
+        return pl;
+      }));
+    } catch (e: any) { Alert.alert("อัปเดตไม่สำเร็จ", e?.message); }
   }
 
-  // ====================================================
-  // Refresh
-  // ====================================================
-
-  async function handleRefresh() {
-    setRefreshing(
-      true
-    );
-
-    await loadPlan();
+  function openModal(pi: string, dt: string, si: number, sn: string) {
+    setSelSlot({ planId: pi, date: dt, idx: si, name: sn });
+    setSearchQ(""); setSearchRes([]); setShowModal(true);
   }
 
-  // ====================================================
-  // Open Plan
-  // ====================================================
-
-  function openPlan(
-    group: GroupedPlan
-  ) {
-    router.push({
-      pathname:
-        "/create-plan/step2",
-
-      params: {
-        plan_id:
-          group.plan_id,
-
-        startDate:
-          group.days[0].date,
-
-        endDate:
-          group.days[
-            group.days.length - 1
-          ].date,
-
-        days: String(
-          group.days.length
-        ),
-      },
-    });
+  function onSearch(text: string) {
+    setSearchQ(text);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (!text.trim()) { setSearchRes([]); setSearching(false); return; }
+    setSearching(true);
+    timerRef.current = setTimeout(async () => {
+      try { const d = await searchFoods(text.trim(), 15); setSearchRes(d.foods || []); }
+      catch { setSearchRes([]); } finally { setSearching(false); }
+    }, 400);
   }
 
-  // ====================================================
-  // Loading
-  // ====================================================
+  async function doReplace(foodId: string) {
+    if (!selSlot) return;
+    try { await replaceMeal(selSlot.planId, selSlot.date, selSlot.idx, foodId); Alert.alert("สำเร็จ", "แทนที่มื้ออาหารแล้ว"); setShowModal(false); setSelSlot(null); await loadPlan(); }
+    catch (e: any) { Alert.alert("แทนที่ไม่สำเร็จ", e?.message); }
+  }
 
-  if (
-    loading &&
-    plans.length === 0
-  ) {
+  function doDeleteMeal(pi: string, dt: string, si: number) {
+    Alert.alert("ลบมื้ออาหาร", "ต้องการลบมื้อนี้?", [
+      { text: "ยกเลิก", style: "cancel" },
+      { text: "ลบ", style: "destructive", onPress: async () => {
+        try { await deleteMeal(pi, String(si), dt); Alert.alert("สำเร็จ", "ลบมื้ออาหารแล้ว"); await loadPlan(); }
+        catch (e: any) { Alert.alert("ลบไม่สำเร็จ", e?.message); }
+      }},
+    ]);
+  }
+
+  function doScanReplace() {
+    if (!selSlot) return;
+    setShowModal(false);
+    router.push({ pathname: "/food-scan", params: { replaceTarget: JSON.stringify(selSlot) } });
+  }
+
+  // ===== LOADING =====
+  if (loading && plans.length === 0) {
     return (
-      <SafeAreaView
-        style={
-          styles.container
-        }
-      >
-        <View
-          style={
-            styles.loadingContainer
-          }
-        >
-          <ActivityIndicator
-            size="large"
-            color="#F29913"
-          />
+      <SafeAreaView style={st.container}>
+        <View style={st.header}><Text style={st.headerTitle}>แผนอาหาร</Text></View>
+        <View style={st.center}><ActivityIndicator size="large" color={ORANGE} /><Text style={{ marginTop: 12, color: "#777" }}>กำลังโหลด...</Text></View>
+      </SafeAreaView>
+    );
+  }
 
-          <Text
-            style={
-              styles.loadingText
-            }
-          >
-            กำลังโหลดแผนอาหาร...
-          </Text>
+  // ===== NO PLAN =====
+  if (!hasPlan || plans.length === 0) {
+    return (
+      <SafeAreaView style={st.container}>
+        <View style={st.header}><Text style={st.headerTitle}>แผนอาหาร</Text></View>
+        <View style={st.center}>
+          <Ionicons name="nutrition-outline" size={64} color={ORANGE} />
+          <Text style={st.emptyTitle}>ยังไม่มีแผนอาหาร</Text>
+          <Text style={st.emptyText}>เริ่มต้นสร้างแผนอาหาร 7 วัน{"\n"}เพื่อสุขภาพที่ดีของคุณ</Text>
+          <TouchableOpacity style={st.createBtn} onPress={() => router.push("/create-plan/step1")} activeOpacity={0.8}>
+            <Ionicons name="add-circle-outline" size={22} color="#fff" />
+            <Text style={st.createBtnText}>สร้างแผนอาหาร</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
   }
 
-  // ====================================================
-  // UI
-  // ====================================================
-
+  // ===== ACTIVE PLAN =====
   return (
-    <SafeAreaView
-      style={
-        styles.container
-      }
-    >
-      {/* Header */}
-
-      <View
-        style={
-          styles.header
-        }
-      >
-        <Text
-          style={
-            styles.headerTitle
-          }
-        >
-          แผนการกิน
-        </Text>
-
-        <TouchableOpacity
-          onPress={() =>
-            loadPlan()
-          }
-          disabled={
-            !!deletingPlanId
-          }
-        >
-          <Ionicons
-            name="refresh"
-            size={26}
-            color="#000"
-          />
-        </TouchableOpacity>
+    <SafeAreaView style={st.container}>
+      <View style={st.header}>
+        <Text style={st.headerTitle}>แผนอาหาร</Text>
+        <TouchableOpacity onPress={() => router.push("/create-plan/step1")}><Ionicons name="add-circle-outline" size={26} color="#fff" /></TouchableOpacity>
+      </View>
+      <View style={st.tabBar}>
+        <TouchableOpacity style={[st.tab, activeTab === "today" && st.tabActive]} onPress={() => setActiveTab("today")}><Text style={[st.tabText, activeTab === "today" && st.tabTextActive]}>วันนี้</Text></TouchableOpacity>
+        <TouchableOpacity style={[st.tab, activeTab === "full" && st.tabActive]} onPress={() => setActiveTab("full")}><Text style={[st.tabText, activeTab === "full" && st.tabTextActive]}>แผนทั้งหมด</Text></TouchableOpacity>
       </View>
 
-      {/* Content */}
-
-      <ScrollView
-        style={
-          styles.scroll
-        }
-        contentContainerStyle={
-          styles.scrollContent
-        }
-        refreshControl={
-          <RefreshControl
-            refreshing={
-              refreshing
-            }
-            onRefresh={
-              handleRefresh
-            }
-          />
-        }
-      >
-        <View
-          style={
-            styles.titleContainer
-          }
-        >
-          <Text
-            style={
-              styles.title
-            }
-          >
-            แผนอาหารของฉัน
-          </Text>
-
-          <Text
-            style={
-              styles.subtitle
-            }
-          >
-            แผนที่บันทึกไว้
-          </Text>
-        </View>
-
-        {/* Empty */}
-
-        {plans.length ===
-        0 ? (
-          <View
-            style={
-              styles.emptyContainer
-            }
-          >
-            <Ionicons
-              name="restaurant-outline"
-              size={70}
-              color="#bbb"
-            />
-
-            <Text
-              style={
-                styles.emptyTitle
-              }
-            >
-              ยังไม่มีแผนอาหาร
-            </Text>
-
-            <Text
-              style={
-                styles.emptyText
-              }
-            >
-              สร้างแผนอาหารของคุณ
-              เพื่อเริ่มต้น
-            </Text>
-
-            <TouchableOpacity
-              style={
-                styles.createButton
-              }
-              onPress={() =>
-                router.push(
-                  "/create-plan/step1"
-                )
-              }
-            >
-              <Text
-                style={
-                  styles.createButtonText
-                }
-              >
-                สร้างแผนอาหาร
-              </Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <>
-            {/* Count */}
-
-            <View
-              style={
-                styles.countCard
-              }
-            >
-              <Text
-                style={
-                  styles.countTitle
-                }
-              >
-                แผนที่บันทึกไว้
-              </Text>
-
-              <Text
-                style={
-                  styles.countNumber
-                }
-              >
-                {
-                  groupedPlans.length
-                }
-              </Text>
-
-              <Text
-                style={
-                  styles.countText
-                }
-              >
-                แผน
-              </Text>
+      {activeTab === "today" ? (
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 30 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadPlan(); }} />}>
+          <View style={st.summaryCard}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}><Ionicons name="flame-outline" size={22} color={ORANGE} /><Text style={{ fontSize: 16, fontWeight: "bold" }}>{thaiDate(todayPlan?.date || getTodayDate())}</Text></View>
+            <View style={{ marginTop: 12 }}>
+              <View style={st.progressBar}><View style={[st.progressFill, { width: targetKcal > 0 ? `${Math.min(100, (eatenKcal / targetKcal) * 100)}%` : "0%" }]} /></View>
+              <Text style={{ marginTop: 4, fontSize: 13, color: "#777", textAlign: "right" }}>{eatenKcal} / {targetKcal} kcal</Text>
             </View>
-
-            {/* Plan Cards */}
-
-            {groupedPlans.map(
-              (
-                group
-              ) => {
-                const isDeleting =
-                  deletingPlanId ===
-                  group.plan_id;
-
-                const firstDay =
-                  group.days[0];
-
-                const lastDay =
-                  group.days[
-                    group.days
-                      .length - 1
-                  ];
-
+            <View style={{ flexDirection: "row", marginTop: 12 }}>
+              {[{ l: "Protein", v: todayPlan?.daily_target_summary?.protein_g ?? 0, c: "#3B82F6" }, { l: "Carbs", v: todayPlan?.daily_target_summary?.carb_g ?? 0, c: "#F59E0B" }, { l: "Fat", v: todayPlan?.daily_target_summary?.fat_g ?? 0, c: "#EF4444" }].map((m) => (
+                <View key={m.l} style={{ flex: 1, alignItems: "center" }}><Text style={{ fontSize: 12, color: "#999" }}>{m.l}</Text><Text style={{ fontSize: 16, fontWeight: "bold", color: m.c, marginTop: 2 }}>{m.v}g</Text></View>
+              ))}
+            </View>
+            <View style={{ flexDirection: "row", alignItems: "center", marginTop: 12 }}><View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#22A06B" }} /><Text style={{ marginLeft: 8, fontSize: 13, color: "#22A06B", fontWeight: "600" }}>กินแล้ว {eatenCount}/{todayPlan?.slots.length || 0} มื้อ</Text></View>
+          </View>
+          <Text style={{ fontSize: 17, fontWeight: "bold", marginBottom: 12 }}>มื้ออาหารวันนี้</Text>
+          {todayPlan?.slots.map((slot, idx) => {
+            const isE = slot.status === "eaten"; const hasF = !!slot.main_food;
+            return (
+              <View key={idx} style={st.mealCard}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <Ionicons name={mealIcon(slot.meal_type) as any} size={20} color={ORANGE} />
+                  <View style={{ flex: 1 }}><Text style={{ fontSize: 13, color: "#999", fontWeight: "600" }}>{slot.slot_name}</Text><Text style={{ fontSize: 15, fontWeight: "bold", color: "#333", marginTop: 2 }}>{slot.main_food?.name || "ไม่มีเมนู"}</Text></View>
+                  {hasF && <TouchableOpacity onPress={() => handleToggle(todayPlan.plan_id, todayPlan.date, idx, slot.status || "pending")}><Ionicons name={isE ? "checkmark-circle" : "ellipse-outline"} size={26} color={isE ? "#22A06B" : "#ccc"} /></TouchableOpacity>}
+                </View>
+                {hasF && slot.main_food && <Text style={{ marginTop: 8, fontSize: 14, color: ORANGE, fontWeight: "bold" }}>{slot.main_food.kcal || 0} kcal</Text>}
+                <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
+                  <TouchableOpacity style={st.actionBtn} onPress={() => openModal(todayPlan.plan_id, todayPlan.date, idx, slot.slot_name)}><Ionicons name="swap-horizontal-outline" size={16} color={ORANGE} /><Text style={{ fontSize: 13, color: ORANGE, fontWeight: "600" }}>เปลี่ยน</Text></TouchableOpacity>
+                  {hasF && <TouchableOpacity style={st.actionBtn} onPress={() => doDeleteMeal(todayPlan.plan_id, todayPlan.date, idx)}><Ionicons name="trash-outline" size={16} color="#EF4444" /><Text style={{ fontSize: 13, color: "#EF4444", fontWeight: "600" }}>ลบ</Text></TouchableOpacity>}
+                </View>
+              </View>
+            );
+          })}
+          <View style={{ flexDirection: "row", gap: 10, marginTop: 20 }}>
+            <TouchableOpacity style={st.outlineBtn} onPress={() => setActiveTab("full")}><Ionicons name="calendar-outline" size={18} color={ORANGE} /><Text style={{ fontSize: 15, color: ORANGE, fontWeight: "600" }}>ดูแผน 7 วัน</Text></TouchableOpacity>
+            <TouchableOpacity style={st.dangerBtn} onPress={() => { const f = plans[0]; if (f) confirmDel(f); }}><Ionicons name="trash-outline" size={18} color="#fff" /><Text style={{ fontSize: 15, color: "#fff", fontWeight: "600" }}>ลบแผน</Text></TouchableOpacity>
+          </View>
+        </ScrollView>
+      ) : (
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 30 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadPlan(); }} />}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }} contentContainerStyle={{ gap: 8 }}>
+            {plans.map((pl, i) => (
+              <TouchableOpacity key={pl.date} style={[st.dayTab, dayIdx === i && st.dayTabActive]} onPress={() => setDayIdx(i)}>
+                <Text style={[{ fontSize: 13, fontWeight: "800", color: "#333" }, dayIdx === i && { color: "#fff" }]}>{thaiDay(pl.date)}</Text>
+                <Text style={[{ fontSize: 11, color: "#999", marginTop: 2 }, dayIdx === i && { color: "#fff" }]}>{fmtShort(pl.date)}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          {selDay && (
+            <>
+              <Text style={{ fontSize: 17, fontWeight: "bold", marginBottom: 12 }}>{thaiDate(selDay.date)}</Text>
+              {selDay.slots.map((slot, idx) => {
+                const isE = slot.status === "eaten"; const hasF = !!slot.main_food;
                 return (
-                  <View
-                    key={group.plan_id}
-                    style={
-                      styles.planCard
-                    }
-                  >
-                    {/* Click Area */}
-
-                    <TouchableOpacity
-                      onPress={() =>
-                        openPlan(
-                          group
-                        )
-                      }
-                      disabled={
-                        isDeleting
-                      }
-                      activeOpacity={
-                        0.7
-                      }
-                    >
-                      {/* Header */}
-
-                      <View
-                        style={
-                          styles.planHeader
-                        }
-                      >
-                        <View
-                          style={
-                            styles.planHeaderInfo
-                          }
-                        >
-                          <Text
-                            style={
-                              styles.planDate
-                            }
-                          >
-                            {firstDay.date}{" "}
-                            ถึง{" "}
-                            {lastDay.date}
-                          </Text>
-
-                          <Text
-                            style={
-                              styles.planGoal
-                            }
-                          >
-                            เป้าหมาย:{" "}
-                            {
-                              firstDay.goal ||
-                              "-"
-                            }
-                            {" · "}
-                            {group.days.length}{" "}
-                            วัน
-                          </Text>
-
-                          <Text
-                            style={
-                              styles.planId
-                            }
-                            numberOfLines={
-                              1
-                            }
-                          >
-                            {group.plan_id}
-                          </Text>
-                        </View>
-
-                        <Ionicons
-                          name="chevron-forward"
-                          size={24}
-                          color="#999"
-                        />
-                      </View>
-
-                      {/* Calories */}
-
-                      <View
-                        style={
-                          styles.kcalBox
-                        }
-                      >
-                        <Ionicons
-                          name="flame-outline"
-                          size={24}
-                          color="#666"
-                        />
-
-                        <View
-                          style={
-                            styles.kcalInfo
-                          }
-                        >
-                          <Text
-                            style={
-                              styles.kcalLabel
-                            }
-                          >
-                            พลังงานต่อวัน
-                          </Text>
-
-                          <Text
-                            style={
-                              styles.kcalValue
-                            }
-                          >
-                            {
-                              firstDay
-                                .daily_target_summary
-                                ?.kcal ??
-                              0
-                            }{" "}
-                            kcal
-                          </Text>
-                        </View>
-                      </View>
-
-                      {/* Macros */}
-
-                      <View
-                        style={
-                          styles.macroRow
-                        }
-                      >
-                        <View
-                          style={
-                            styles.macroItem
-                          }
-                        >
-                          <Text
-                            style={
-                              styles.macroLabel
-                            }
-                          >
-                            Protein
-                          </Text>
-
-                          <Text
-                            style={
-                              styles.macroValue
-                            }
-                          >
-                            {
-                              firstDay
-                                .daily_target_summary
-                                ?.protein_g ??
-                              0
-                            }{" "}
-                            g
-                          </Text>
-                        </View>
-
-                        <View
-                          style={
-                            styles.macroItem
-                          }
-                        >
-                          <Text
-                            style={
-                              styles.macroLabel
-                            }
-                          >
-                            Carbs
-                          </Text>
-
-                          <Text
-                            style={
-                              styles.macroValue
-                            }
-                          >
-                            {
-                              firstDay
-                                .daily_target_summary
-                                ?.carb_g ??
-                              0
-                            }{" "}
-                            g
-                          </Text>
-                        </View>
-
-                        <View
-                          style={
-                            styles.macroItem
-                          }
-                        >
-                          <Text
-                            style={
-                              styles.macroLabel
-                            }
-                          >
-                            Fat
-                          </Text>
-
-                          <Text
-                            style={
-                              styles.macroValue
-                            }
-                          >
-                            {
-                              firstDay
-                                .daily_target_summary
-                                ?.fat_g ??
-                              0
-                            }{" "}
-                            g
-                          </Text>
-                        </View>
-                      </View>
-
-                      {/* Meals */}
-
-                      <View
-                        style={
-                          styles.mealPreview
-                        }
-                      >
-                        {firstDay.slots?.map(
-                          (
-                            slot,
-                            slotIndex
-                          ) => (
-                            <View
-                              key={`${slot.meal_type}-${slotIndex}`}
-                              style={
-                                styles.mealRow
-                              }
-                            >
-                              <Ionicons
-                                name="restaurant-outline"
-                                size={18}
-                                color="#666"
-                              />
-
-                              <Text
-                                style={
-                                  styles.mealName
-                                }
-                                numberOfLines={
-                                  1
-                                }
-                              >
-                                {
-                                  slot.slot_name
-                                }
-                                :{" "}
-                                {
-                                  slot
-                                    .main_food
-                                    ?.name ||
-                                  "ไม่มีเมนู"
-                                }
-                              </Text>
-                            </View>
-                          )
-                        )}
-                      </View>
-
-                      {/* Status */}
-
-                      <View
-                        style={
-                          styles.statusRow
-                        }
-                      >
-                        <View
-                          style={
-                            styles.statusDot
-                          }
-                        />
-
-                        <Text
-                          style={
-                            styles.statusText
-                          }
-                        >
-                          แผนใช้งานอยู่ ·{" "}
-                          {group.days.length}{" "}
-                          วัน
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-
-                    {/* Delete Button */}
-
-                    <TouchableOpacity
-                      style={
-                        styles.deleteButton
-                      }
-                      onPress={() =>
-                        confirmDeletePlan(
-                          firstDay
-                        )
-                      }
-                      disabled={
-                        !!deletingPlanId
-                      }
-                    >
-                      {isDeleting ? (
-                        <ActivityIndicator
-                          size="small"
-                          color="#fff"
-                        />
-                      ) : (
-                        <>
-                          <Ionicons
-                            name="trash-outline"
-                            size={20}
-                            color="#fff"
-                          />
-
-                          <Text
-                            style={
-                              styles.deleteButtonText
-                            }
-                          >
-                            ลบแผนนี้
-                          </Text>
-                        </>
-                      )}
-                    </TouchableOpacity>
+                  <View key={idx} style={st.mealCard}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                      <Ionicons name={mealIcon(slot.meal_type) as any} size={20} color={ORANGE} />
+                      <View style={{ flex: 1 }}><Text style={{ fontSize: 13, color: "#999", fontWeight: "600" }}>{slot.slot_name}</Text><Text style={{ fontSize: 15, fontWeight: "bold", color: "#333", marginTop: 2 }}>{slot.main_food?.name || "ไม่มีเมนู"}</Text></View>
+                      {hasF && <TouchableOpacity onPress={() => handleToggle(selDay.plan_id, selDay.date, idx, slot.status || "pending")}><Ionicons name={isE ? "checkmark-circle" : "ellipse-outline"} size={26} color={isE ? "#22A06B" : "#ccc"} /></TouchableOpacity>}
+                    </View>
+                    <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
+                      <TouchableOpacity style={st.actionBtn} onPress={() => openModal(selDay.plan_id, selDay.date, idx, slot.slot_name)}><Ionicons name="swap-horizontal-outline" size={16} color={ORANGE} /><Text style={{ fontSize: 13, color: ORANGE, fontWeight: "600" }}>เปลี่ยน</Text></TouchableOpacity>
+                      {hasF && <TouchableOpacity style={st.actionBtn} onPress={() => doDeleteMeal(selDay.plan_id, selDay.date, idx)}><Ionicons name="trash-outline" size={16} color="#EF4444" /><Text style={{ fontSize: 13, color: "#EF4444", fontWeight: "600" }}>ลบ</Text></TouchableOpacity>}
+                    </View>
                   </View>
                 );
-              }
+              })}
+            </>
+          )}
+          <TouchableOpacity style={[st.dangerBtn, { flex: 1, marginTop: 24 }]} onPress={() => { const f = plans[0]; if (f) confirmDel(f); }}>
+            <Ionicons name="trash-outline" size={20} color="#fff" /><Text style={{ fontSize: 16, color: "#fff", fontWeight: "bold" }}>ลบแผนอาหารทั้งหมด</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      )}
+
+      {/* MEAL CUSTOMIZATION MODAL */}
+      <Modal visible={showModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowModal(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "#eee" }}>
+            <TouchableOpacity onPress={() => setShowModal(false)}><Ionicons name="close" size={28} color="#333" /></TouchableOpacity>
+            <Text style={{ fontSize: 17, fontWeight: "bold" }}>เปลี่ยน {selSlot?.name || "มื้ออาหาร"}</Text>
+            <View style={{ width: 28 }} />
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", margin: 16, paddingHorizontal: 14, backgroundColor: "#f5f5f5", borderRadius: 12, height: 46, gap: 8 }}>
+            <Ionicons name="search-outline" size={20} color="#999" />
+            <TextInput style={{ flex: 1, fontSize: 15, color: "#333" }} placeholder="ค้นหาอาหาร เช่น อกไก่..." placeholderTextColor="#aaa" value={searchQ} onChangeText={onSearch} autoFocus />
+            {searchQ.length > 0 && <TouchableOpacity onPress={() => onSearch("")}><Ionicons name="close-circle" size={20} color="#999" /></TouchableOpacity>}
+          </View>
+          <View style={{ flexDirection: "row", paddingHorizontal: 16, gap: 10, marginBottom: 8 }}>
+            <TouchableOpacity style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12, borderRadius: 10, backgroundColor: "#FFF8E8" }} onPress={doScanReplace}>
+              <Ionicons name="camera-outline" size={22} color={ORANGE} /><Text style={{ fontSize: 14, fontWeight: "600", color: ORANGE }}>สแกนอาหาร</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12, borderRadius: 10, backgroundColor: "#FEF2F2" }} onPress={() => { if (selSlot) doDeleteMeal(selSlot.planId, selSlot.date, selSlot.idx); }}>
+              <Ionicons name="trash-outline" size={22} color="#EF4444" /><Text style={{ fontSize: 14, fontWeight: "600", color: "#EF4444" }}>ลบมื้อนี้</Text>
+            </TouchableOpacity>
+          </View>
+          {searching && <ActivityIndicator size="small" color={ORANGE} style={{ marginTop: 20 }} />}
+          <FlatList data={searchRes} keyExtractor={(item) => item._id} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 30 }}
+            ListEmptyComponent={searchQ.length > 0 && !searching ? (<View style={{ alignItems: "center", paddingTop: 60 }}><Ionicons name="search-outline" size={40} color="#ddd" /><Text style={{ marginTop: 12, color: "#ccc" }}>ไม่พบอาหาร</Text></View>) : searchQ.length === 0 ? (<View style={{ alignItems: "center", paddingTop: 60 }}><Ionicons name="restaurant-outline" size={40} color="#ddd" /><Text style={{ marginTop: 12, color: "#ccc" }}>พิมพ์ชื่ออาหารเพื่อค้นหา</Text></View>) : null}
+            renderItem={({ item }) => (
+              <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#f0f0f0", gap: 12 }} onPress={() => doReplace(item._id)} activeOpacity={0.7}>
+                {item.image ? <Image source={{ uri: item.image }} style={{ width: 48, height: 48, borderRadius: 10 }} /> : <View style={{ width: 48, height: 48, borderRadius: 10, backgroundColor: "#f0f0f0", justifyContent: "center", alignItems: "center" }}><Ionicons name="fast-food-outline" size={24} color="#ccc" /></View>}
+                <View style={{ flex: 1 }}><Text style={{ fontSize: 15, fontWeight: "600", color: "#333" }} numberOfLines={1}>{item.name}</Text>{item.name_en ? <Text style={{ fontSize: 12, color: "#999", marginTop: 1 }} numberOfLines={1}>{item.name_en}</Text> : null}<Text style={{ fontSize: 13, color: ORANGE, fontWeight: "600", marginTop: 2 }}>{item.nutrition_per_portion?.kcal || 0} kcal</Text></View>
+                <Ionicons name="chevron-forward" size={20} color="#ccc" />
+              </TouchableOpacity>
             )}
-          </>
-        )}
-      </ScrollView>
+          />
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
 
-// ======================================================
-// Styles
-// ======================================================
 
-const styles =
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor:
-        "#fff",
-    },
-
-    header: {
-      height: 60,
-      backgroundColor:
-        "#F29913",
-      flexDirection:
-        "row",
-      alignItems:
-        "center",
-      justifyContent:
-        "space-between",
-      paddingHorizontal:
-        20,
-    },
-
-    headerTitle: {
-      fontSize: 24,
-      fontWeight:
-        "bold",
-      fontFamily: "NotoSansThaiBold",
-    },
-
-    scroll: {
-      flex: 1,
-    },
-
-    scrollContent: {
-      padding: 20,
-      paddingBottom: 40,
-    },
-
-    titleContainer: {
-      marginBottom: 20,
-    },
-
-    title: {
-      fontSize: 26,
-      fontWeight:
-        "bold",
-      fontFamily: "NotoSansThaiBold",
-    },
-
-    subtitle: {
-      marginTop: 5,
-      color: "#777",
-      fontSize: 14,
-      fontFamily: "NotoSansThai",
-    },
-
-    loadingContainer: {
-      flex: 1,
-      justifyContent:
-        "center",
-      alignItems:
-        "center",
-    },
-
-    loadingText: {
-      marginTop: 12,
-      fontSize: 16,
-      color: "#555",
-      fontFamily: "NotoSansThai",
-    },
-
-    emptyContainer: {
-      alignItems:
-        "center",
-      justifyContent:
-        "center",
-      paddingTop: 80,
-    },
-
-    emptyTitle: {
-      marginTop: 15,
-      fontSize: 20,
-      fontWeight:
-        "bold",
-      fontFamily: "NotoSansThaiBold",
-    },
-
-    emptyText: {
-      marginTop: 8,
-      color: "#777",
-      fontFamily: "NotoSansThai",
-    },
-
-    createButton: {
-      marginTop: 20,
-      backgroundColor:
-        "#F29913",
-      paddingHorizontal:
-        25,
-      paddingVertical:
-        14,
-      borderRadius: 12,
-    },
-
-    createButtonText: {
-      color: "#fff",
-      fontSize: 16,
-      fontWeight:
-        "bold",
-      fontFamily: "NotoSansThaiBold",
-    },
-
-    countCard: {
-      backgroundColor:
-        "#F8F8F8",
-      borderRadius: 15,
-      padding: 18,
-      marginBottom: 15,
-      flexDirection:
-        "row",
-      alignItems:
-        "center",
-    },
-
-    countTitle: {
-      fontSize: 16,
-      fontWeight:
-        "600",
-      flex: 1,
-      fontFamily: "NotoSansThaiBold",
-    },
-
-    countNumber: {
-      fontSize: 28,
-      fontWeight:
-        "bold",
-      color: "#333",
-      fontFamily: "NotoSansThaiBold",
-    },
-
-    countText: {
-      marginLeft: 5,
-      color: "#777",
-      fontFamily: "NotoSansThai",
-    },
-
-    planCard: {
-      backgroundColor:
-        "#fff",
-      borderWidth: 1,
-      borderColor:
-        "#E5E5E5",
-      borderRadius: 16,
-      padding: 16,
-      marginBottom: 15,
-
-      shadowColor:
-        "#000",
-
-      shadowOffset: {
-        width: 0,
-        height: 2,
-      },
-
-      shadowOpacity:
-        0.08,
-
-      shadowRadius: 5,
-
-      elevation: 2,
-    },
-
-    planHeader: {
-      flexDirection:
-        "row",
-      justifyContent:
-        "space-between",
-      alignItems:
-        "center",
-    },
-
-    planHeaderInfo: {
-      flex: 1,
-      paddingRight: 10,
-    },
-
-    planDate: {
-      fontSize: 19,
-      fontWeight:
-        "bold",
-      fontFamily: "NotoSansThaiBold",
-    },
-
-    planGoal: {
-      marginTop: 5,
-      color: "#777",
-      fontSize: 13,
-      fontFamily: "NotoSansThai",
-    },
-
-    planId: {
-      marginTop: 4,
-      color: "#aaa",
-      fontSize: 10,
-      fontFamily: "NotoSansThai",
-    },
-
-    kcalBox: {
-      marginTop: 15,
-      padding: 12,
-      borderRadius: 12,
-      backgroundColor:
-        "#F8F8F8",
-      flexDirection:
-        "row",
-      alignItems:
-        "center",
-    },
-
-    kcalInfo: {
-      marginLeft: 10,
-    },
-
-    kcalLabel: {
-      fontSize: 12,
-      color: "#777",
-      fontFamily: "NotoSansThai",
-    },
-
-    kcalValue: {
-      marginTop: 2,
-      fontSize: 18,
-      fontWeight:
-        "bold",
-      color: "#333",
-      fontFamily: "NotoSansThaiBold",
-    },
-
-    macroRow: {
-      flexDirection:
-        "row",
-      marginTop: 15,
-    },
-
-    macroItem: {
-      flex: 1,
-      alignItems:
-        "center",
-    },
-
-    macroLabel: {
-      fontSize: 12,
-      color: "#777",
-      fontFamily: "NotoSansThai",
-    },
-
-    macroValue: {
-      marginTop: 4,
-      fontWeight:
-        "bold",
-      fontFamily: "NotoSansThaiBold",
-    },
-
-    mealPreview: {
-      marginTop: 15,
-      paddingTop: 12,
-      borderTopWidth: 1,
-      borderTopColor:
-        "#eee",
-    },
-
-    mealRow: {
-      flexDirection:
-        "row",
-      alignItems:
-        "center",
-      marginTop: 7,
-    },
-
-    mealName: {
-      marginLeft: 8,
-      flex: 1,
-      fontSize: 14,
-      fontFamily: "NotoSansThai",
-    },
-
-    statusRow: {
-      marginTop: 14,
-      flexDirection:
-        "row",
-      alignItems:
-        "center",
-    },
-
-    statusDot: {
-      width: 8,
-      height: 8,
-      borderRadius: 8,
-      backgroundColor:
-        "#22C55E",
-    },
-
-    statusText: {
-      marginLeft: 7,
-      fontSize: 12,
-      color: "#22C55E",
-      fontFamily: "NotoSansThai",
-    },
-
-    deleteButton: {
-      marginTop: 15,
-      height: 46,
-      borderRadius: 12,
-      backgroundColor:
-        "#EF4444",
-      flexDirection:
-        "row",
-      alignItems:
-        "center",
-      justifyContent:
-        "center",
-      gap: 8,
-    },
-
-    deleteButtonText: {
-      color: "#fff",
-      fontSize: 15,
-      fontWeight:
-        "bold",
-      fontFamily: "NotoSansThaiBold",
-    },
-  });
->>>>>>> Stashed changes
+const st = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#fff" },
+  header: { height: 56, backgroundColor: "#F29913", flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16 },
+  headerTitle: { fontSize: 20, fontWeight: "bold", color: "#fff" },
+  center: { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 40 },
+  emptyTitle: { fontSize: 22, fontWeight: "bold", marginTop: 20, color: "#333" },
+  emptyText: { fontSize: 15, color: "#999", textAlign: "center", marginTop: 10, lineHeight: 22 },
+  createBtn: { marginTop: 30, backgroundColor: "#F29913", borderRadius: 14, paddingVertical: 16, paddingHorizontal: 32, flexDirection: "row", alignItems: "center", gap: 8 },
+  createBtnText: { color: "#fff", fontSize: 18, fontWeight: "bold" },
+  tabBar: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#eee" },
+  tab: { flex: 1, paddingVertical: 12, alignItems: "center" },
+  tabActive: { borderBottomWidth: 2, borderBottomColor: ORANGE },
+  tabText: { fontSize: 15, color: "#999", fontWeight: "600" },
+  tabTextActive: { color: ORANGE, fontWeight: "bold" },
+  summaryCard: { backgroundColor: "#FFF8E8", borderRadius: 16, padding: 16, marginBottom: 16 },
+  progressBar: { height: 10, backgroundColor: "#eee", borderRadius: 5, overflow: "hidden" },
+  progressFill: { height: "100%", backgroundColor: ORANGE, borderRadius: 5 },
+  mealCard: { backgroundColor: "#fff", borderWidth: 1, borderColor: "#eee", borderRadius: 14, padding: 14, marginBottom: 10 },
+  actionBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, backgroundColor: "#f8f8f8" },
+  outlineBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 14, borderRadius: 12, borderWidth: 1.5, borderColor: ORANGE },
+  dangerBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 14, paddingHorizontal: 20, borderRadius: 12, backgroundColor: "#EF4444" },
+  dayTab: { width: 58, height: 62, borderRadius: 12, borderWidth: 1, borderColor: "#eee", justifyContent: "center", alignItems: "center", backgroundColor: "#fff" },
+  dayTabActive: { backgroundColor: ORANGE, borderColor: ORANGE },
+});
