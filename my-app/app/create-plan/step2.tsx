@@ -24,6 +24,8 @@ import {
 
 import axios from "axios";
 
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
 import { BASE_URL } from "../../constants/config";
 
 // ======================================================
@@ -91,9 +93,10 @@ type DailyPlan = {
 // ======================================================
 
 function parseDate(dateString: string) {
-  const [year, month, day] = dateString
-    .split("-")
-    .map(Number);
+  const [year, month, day] =
+    dateString
+      .split("-")
+      .map(Number);
 
   return new Date(
     year,
@@ -102,8 +105,11 @@ function parseDate(dateString: string) {
   );
 }
 
-function formatShortDate(dateString: string) {
-  const date = parseDate(dateString);
+function formatShortDate(
+  dateString: string
+) {
+  const date =
+    parseDate(dateString);
 
   return `${String(
     date.getDate()
@@ -112,8 +118,11 @@ function formatShortDate(dateString: string) {
   ).padStart(2, "0")}`;
 }
 
-function getThaiDay(dateString: string) {
-  const date = parseDate(dateString);
+function getThaiDay(
+  dateString: string
+) {
+  const date =
+    parseDate(dateString);
 
   const days = [
     "อา.",
@@ -132,33 +141,41 @@ function createDateList(
   startDate: string,
   days: number
 ) {
-  if (!startDate || days <= 0) {
+  if (
+    !startDate ||
+    days <= 0
+  ) {
     return [];
   }
 
-  const start = parseDate(startDate);
+  const start =
+    parseDate(startDate);
 
   return Array.from(
     {
       length: days,
     },
     (_, index) => {
-      const date = new Date(start);
+      const date =
+        new Date(start);
 
       date.setDate(
-        start.getDate() + index
+        start.getDate() +
+          index
       );
 
       const year =
         date.getFullYear();
 
-      const month = String(
-        date.getMonth() + 1
-      ).padStart(2, "0");
+      const month =
+        String(
+          date.getMonth() + 1
+        ).padStart(2, "0");
 
-      const day = String(
-        date.getDate()
-      ).padStart(2, "0");
+      const day =
+        String(
+          date.getDate()
+        ).padStart(2, "0");
 
       return `${year}-${month}-${day}`;
     }
@@ -194,14 +211,60 @@ export default function Step2Screen() {
   // Date Tabs
   // ====================================================
 
-  const dateTabs = useMemo(
-    () =>
-      createDateList(
+  const dateTabsFromParams =
+    useMemo(
+      () =>
+        createDateList(
+          startDate,
+          planDays
+        ),
+      [
         startDate,
-        planDays
-      ),
-    [startDate, planDays]
-  );
+        planDays,
+      ]
+    );
+
+  const [
+    plans,
+    setPlans,
+  ] = useState<DailyPlan[]>([]);
+
+  const dateTabsFromPlans =
+    useMemo(() => {
+      if (
+        dateTabsFromParams.length > 0
+      ) {
+        return [];
+      }
+
+      // ==================================================
+      // ถ้า params ว่าง → สร้างจาก plans จริง
+      // ==================================================
+
+      const dates = [
+        ...new Set(
+          plans.map(
+            (plan) => plan.date
+          )
+        ),
+      ];
+
+      dates.sort(
+        (a, b) =>
+          new Date(a).getTime() -
+          new Date(b).getTime()
+      );
+
+      return dates;
+    }, [
+      plans,
+      dateTabsFromParams,
+    ]);
+
+  const dateTabs =
+    dateTabsFromParams.length > 0
+      ? dateTabsFromParams
+      : dateTabsFromPlans;
 
   const [
     selectedDay,
@@ -211,11 +274,6 @@ export default function Step2Screen() {
   // ====================================================
   // State
   // ====================================================
-
-  const [
-    plans,
-    setPlans,
-  ] = useState<DailyPlan[]>([]);
 
   const [
     loading,
@@ -246,6 +304,47 @@ export default function Step2Screen() {
   // ====================================================
 
   useEffect(() => {
+    console.log(
+      "================================"
+    );
+
+    console.log(
+      "ℹ️ STEP 2 OPENED"
+    );
+
+    console.log(
+      "📋 PARAMS:",
+      JSON.stringify(
+        params,
+        null,
+        2
+      )
+    );
+
+    console.log(
+      "📋 PLAN ID:",
+      planId
+    );
+
+    console.log(
+      "📅 START DATE:",
+      startDate
+    );
+
+    console.log(
+      "📅 END DATE:",
+      endDate
+    );
+
+    console.log(
+      "📅 DAYS:",
+      planDays
+    );
+
+    console.log(
+      "================================"
+    );
+
     loadPlans();
   }, [planId]);
 
@@ -253,53 +352,201 @@ export default function Step2Screen() {
     try {
       setLoading(true);
 
-      if (!planId) {
-        throw new Error(
-          "ไม่พบ plan_id"
+      let plansData: DailyPlan[] =
+        [];
+
+      // ==================================================
+      // ถ้ามี plan_id → โหลดด้วย plan_id
+      // ==================================================
+
+      if (planId) {
+        const url =
+          `${BASE_URL}/api/meal/plans/${planId}`;
+
+        console.log(
+          "📤 GET BY PLAN ID:",
+          url
         );
-      }
 
-      const url =
-        `${BASE_URL}/api/meal/plans/${planId}`;
+        const response =
+          await axios.get(
+            url,
+            {
+              timeout: 30000,
+            }
+          );
 
-      console.log(
-        "📤 GET:",
-        url
-      );
+        console.log(
+          "📥 RESPONSE:",
+          JSON.stringify(
+            response.data,
+            null,
+            2
+          )
+        );
 
-      const response =
-        await axios.get(
-          url,
-          {
-            timeout: 30000,
+        if (
+          response.data?.success
+        ) {
+          plansData =
+            response.data.plans ||
+            [];
+        }
+      } else {
+        // ==================================================
+        // ไม่มี plan_id → โหลดจาก user_id
+        // ==================================================
+
+        console.log(
+          "⚠️ ไม่มี plan_id - โหลดจาก user_id"
+        );
+
+        const userId =
+          await AsyncStorage.getItem(
+            "currentUser"
+          ).then((raw) => {
+            if (!raw) return null;
+
+            try {
+              const user =
+                JSON.parse(raw);
+
+              return (
+                user?.user_id ||
+                user?.uid ||
+                user?.id ||
+                user?.email ||
+                null
+              );
+            } catch {
+              return null;
+            }
+          });
+
+        if (userId) {
+          const url =
+            `${BASE_URL}/api/meal/user/${userId}`;
+
+          console.log(
+            "📤 GET BY USER ID:",
+            url
+          );
+
+          const response =
+            await axios.get(
+              url,
+              {
+                timeout: 30000,
+              }
+            );
+
+          console.log(
+            "📥 RESPONSE:",
+            JSON.stringify(
+              response.data,
+              null,
+              2
+            )
+          );
+
+          if (
+            response.data?.success
+          ) {
+            const allPlans =
+              response.data.plans ||
+              [];
+
+            // ==================================================
+            // เรียงตามวันที่ล่าสุด
+            // ==================================================
+
+            allPlans.sort(
+              (
+                a: DailyPlan,
+                b: DailyPlan
+              ) =>
+                new Date(
+                  b.date
+                ).getTime() -
+                new Date(
+                  a.date
+                ).getTime()
+            );
+
+            // ==================================================
+            // ใช้ plan_id ล่าสุด
+            // ==================================================
+
+            if (
+              allPlans.length > 0
+            ) {
+              const latestPlanId =
+                allPlans[0].plan_id;
+
+              plansData =
+                allPlans.filter(
+                  (p: DailyPlan) =>
+                    p.plan_id ===
+                    latestPlanId
+                );
+            }
           }
-        );
-
-      console.log(
-        "📥 RESPONSE:",
-        response.data
-      );
-
-      if (
-        !response.data?.success
-      ) {
-        throw new Error(
-          response.data?.message ||
-            "โหลดแผนอาหารไม่สำเร็จ"
-        );
+        }
       }
 
-      setPlans(
-        response.data.plans || []
+      console.log(
+        "📋 PLANS COUNT:",
+        plansData.length
       );
+
+      plansData.forEach(
+        (
+          plan: DailyPlan,
+          index: number
+        ) => {
+          console.log(
+            `📋 PLAN ${index + 1}:`,
+            {
+              plan_id:
+                plan.plan_id,
+              date: plan.date,
+              slots_count:
+                plan.slots?.length ||
+                0,
+            }
+          );
+        }
+      );
+
+      setPlans(plansData);
     } catch (error: any) {
       console.error(
         "❌ LOAD PLAN ERROR:",
         error
       );
 
-      const message =
+      if (
         axios.isAxiosError(error)
+      ) {
+        console.error(
+          "❌ STATUS:",
+          error.response?.status
+        );
+
+        console.error(
+          "❌ RESPONSE:",
+          JSON.stringify(
+            error.response?.data,
+            null,
+            2
+          )
+        );
+      }
+
+      const message =
+        axios.isAxiosError(
+          error
+        )
           ? error.response?.data
               ?.message ||
             error.message
@@ -318,29 +565,88 @@ export default function Step2Screen() {
   // ====================================================
   // Save
   // ====================================================
+  // ไม่แก้ Logic Save
+  // ====================================================
 
   function handleSave() {
     if (saving) {
       return;
     }
 
+    // ==================================================
+    // ตรวจสอบ plan_id
+    // ==================================================
+
+    if (!planId) {
+      Alert.alert(
+        "ไม่พบข้อมูลแผนอาหาร",
+        "กรุณาลองสร้างแผนใหม่"
+      );
+
+      return;
+    }
+
+    // ==================================================
+    // Log
+    // ==================================================
+
     console.log(
-      "💾 SAVE PLAN"
+      "================================"
     );
 
     console.log(
-      "PLAN ID:",
+      "💾 SAVE MEAL PLAN"
+    );
+
+    console.log(
+      "📋 PLAN ID:",
       planId
     );
 
+    console.log(
+      "📅 START DATE:",
+      startDate
+    );
+
+    console.log(
+      "📅 END DATE:",
+      endDate
+    );
+
+    console.log(
+      "📅 DAYS:",
+      planDays
+    );
+
+    console.log(
+      "➡️ NAVIGATE TO STEP 3"
+    );
+
+    console.log(
+      "================================"
+    );
+
+    // ==================================================
+    // Navigate to Step 3
+    // ==================================================
+
     setSaving(true);
 
-    router.replace({
-      pathname: "/(tabs)/plan",
+    router.push({
+      pathname:
+        "/create-plan/step3",
+
       params: {
-        refresh:
-          Date.now().toString(),
         plan_id: planId,
+
+        startDate:
+          startDate,
+
+        endDate:
+          endDate,
+
+        days:
+          String(planDays),
       },
     });
   }
@@ -545,7 +851,8 @@ export default function Step2Screen() {
                   styles.planInfoTitle
                 }
               >
-                แผนการกิน {planDays} วัน
+                แผนการกิน{" "}
+                {planDays} วัน
               </Text>
 
               <Text
@@ -553,7 +860,8 @@ export default function Step2Screen() {
                   styles.planInfoDate
                 }
               >
-                {startDate} ถึง {endDate}
+                {startDate} ถึง{" "}
+                {endDate}
               </Text>
             </View>
 
@@ -599,7 +907,8 @@ export default function Step2Screen() {
               styles.sectionHint
             }
           >
-            {selectedDay + 1}/{planDays}
+            {selectedDay + 1}/
+            {planDays}
           </Text>
         </View>
 
@@ -641,7 +950,9 @@ export default function Step2Screen() {
                       index
                     )
                   }
-                  activeOpacity={0.8}
+                  activeOpacity={
+                    0.8
+                  }
                 >
                   <Text
                     style={[
@@ -703,7 +1014,8 @@ export default function Step2Screen() {
                 styles.selectedDate
               }
             >
-              {selectedDate}
+              {selectedDate ||
+                "-"}
             </Text>
           </View>
 
@@ -724,11 +1036,16 @@ export default function Step2Screen() {
                   styles.mealCountText
                 }
               >
-                {selectedPlan.meals_per_day} มื้อ
+                {
+                  selectedPlan.meals_per_day
+                }{" "}
+                มื้อ
               </Text>
             </View>
           )}
         </View>
+
+        {/* No Plan */}
 
         {!selectedPlan ? (
           <View
@@ -753,7 +1070,7 @@ export default function Step2Screen() {
                 styles.emptyText
               }
             >
-              ไม่พบแผนอาหารวันนี้
+              ยังไม่มีแผนอาหาร
             </Text>
 
             <Text
@@ -761,7 +1078,8 @@ export default function Step2Screen() {
                 styles.emptySubText
               }
             >
-              กรุณาลองเลือกวันอื่น
+              ขั้นตอนนี้เป็นหน้าสำหรับดู
+              และปรับแต่งแผนอาหาร
             </Text>
           </View>
         ) : (
@@ -876,7 +1194,8 @@ export default function Step2Screen() {
                       {
                         selectedPlan
                           .daily_target_summary
-                          .protein_g ?? "-"
+                          .protein_g ??
+                        "-"
                       }
                     </Text>
 
@@ -916,7 +1235,8 @@ export default function Step2Screen() {
                       {
                         selectedPlan
                           .daily_target_summary
-                          .carb_g ?? "-"
+                          .carb_g ??
+                        "-"
                       }
                     </Text>
 
@@ -956,7 +1276,8 @@ export default function Step2Screen() {
                       {
                         selectedPlan
                           .daily_target_summary
-                          .fat_g ?? "-"
+                          .fat_g ??
+                        "-"
                       }
                     </Text>
 
@@ -1007,7 +1328,11 @@ export default function Step2Screen() {
                     styles.mealsCountText
                   }
                 >
-                  {selectedPlan.slots?.length || 0}
+                  {
+                    selectedPlan
+                      .slots?.length ||
+                    0
+                  }
                 </Text>
 
                 <Text
@@ -1072,7 +1397,9 @@ export default function Step2Screen() {
                           styles.mealTypeText
                         }
                       >
-                        {slot.meal_type}
+                        {
+                          slot.meal_type
+                        }
                       </Text>
                     </View>
 
@@ -1086,8 +1413,10 @@ export default function Step2Screen() {
                           styles.kcalText
                         }
                       >
-                        {slot.target_kcal ??
-                          0}
+                        {
+                          slot.target_kcal ??
+                          0
+                        }
                       </Text>
 
                       <Text
@@ -1099,8 +1428,6 @@ export default function Step2Screen() {
                       </Text>
                     </View>
                   </View>
-
-                  {/* Divider */}
 
                   <View
                     style={
@@ -1145,7 +1472,9 @@ export default function Step2Screen() {
                           style={
                             styles.foodName
                           }
-                          numberOfLines={2}
+                          numberOfLines={
+                            2
+                          }
                         >
                           {
                             slot
@@ -1162,7 +1491,8 @@ export default function Step2Screen() {
                           {
                             slot
                               .main_food
-                              .kcal ?? 0
+                              .kcal ??
+                            0
                           }{" "}
                           kcal
                         </Text>
@@ -1238,7 +1568,7 @@ export default function Step2Screen() {
                               >
                                 {
                                   addon.kcal ??
-                                    0
+                                  0
                                 }{" "}
                                 kcal
                               </Text>
@@ -1364,16 +1694,13 @@ const styles =
       backgroundColor: "#F7F7F7",
     },
 
-    // ==================================================
-    // Header
-    // ==================================================
-
     header: {
       height: 68,
       backgroundColor: "#F29913",
       flexDirection: "row",
       alignItems: "center",
-      justifyContent: "space-between",
+      justifyContent:
+        "space-between",
       paddingHorizontal: 18,
     },
 
@@ -1383,7 +1710,8 @@ const styles =
       borderRadius: 12,
       backgroundColor:
         "rgba(255,255,255,0.65)",
-      justifyContent: "center",
+      justifyContent:
+        "center",
       alignItems: "center",
     },
 
@@ -1409,10 +1737,6 @@ const styles =
       width: 40,
     },
 
-    // ==================================================
-    // Scroll
-    // ==================================================
-
     scroll: {
       flex: 1,
     },
@@ -1422,10 +1746,6 @@ const styles =
       paddingTop: 20,
       paddingBottom: 20,
     },
-
-    // ==================================================
-    // Page Title
-    // ==================================================
 
     pageTitleSection: {
       flexDirection: "row",
@@ -1458,10 +1778,6 @@ const styles =
       fontSize: 13,
       color: "#777",
     },
-
-    // ==================================================
-    // Plan Info
-    // ==================================================
 
     planInfoCard: {
       backgroundColor: "#fff",
@@ -1526,14 +1842,11 @@ const styles =
       fontWeight: "700",
     },
 
-    // ==================================================
-    // Section Header
-    // ==================================================
-
     sectionHeader: {
       flexDirection: "row",
       alignItems: "center",
-      justifyContent: "space-between",
+      justifyContent:
+        "space-between",
       marginBottom: 10,
     },
 
@@ -1548,10 +1861,6 @@ const styles =
       color: "#999",
       fontWeight: "600",
     },
-
-    // ==================================================
-    // Date Tabs
-    // ==================================================
 
     tabsContainer: {
       paddingBottom: 20,
@@ -1608,13 +1917,10 @@ const styles =
       backgroundColor: "#fff",
     },
 
-    // ==================================================
-    // Selected Date
-    // ==================================================
-
     selectedDateHeader: {
       flexDirection: "row",
-      justifyContent: "space-between",
+      justifyContent:
+        "space-between",
       alignItems: "flex-end",
       marginBottom: 14,
     },
@@ -1646,10 +1952,6 @@ const styles =
       fontSize: 11,
       fontWeight: "700",
     },
-
-    // ==================================================
-    // Summary
-    // ==================================================
 
     summaryCard: {
       backgroundColor: "#fff",
@@ -1732,14 +2034,11 @@ const styles =
       backgroundColor: "#E5E5E5",
     },
 
-    // ==================================================
-    // Meals Section
-    // ==================================================
-
     mealsSectionHeader: {
       flexDirection: "row",
       alignItems: "center",
-      justifyContent: "space-between",
+      justifyContent:
+        "space-between",
       marginBottom: 12,
     },
 
@@ -1776,10 +2075,6 @@ const styles =
       color: "#999",
       marginTop: -1,
     },
-
-    // ==================================================
-    // Meal Card
-    // ==================================================
 
     mealCard: {
       backgroundColor: "#fff",
@@ -1850,10 +2145,6 @@ const styles =
       marginVertical: 14,
     },
 
-    // ==================================================
-    // Food
-    // ==================================================
-
     foodRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -1891,10 +2182,6 @@ const styles =
       fontSize: 11,
       color: "#888",
     },
-
-    // ==================================================
-    // Addons
-    // ==================================================
 
     addonContainer: {
       marginTop: 14,
@@ -1942,10 +2229,6 @@ const styles =
       fontSize: 10,
     },
 
-    // ==================================================
-    // Status
-    // ==================================================
-
     statusContainer: {
       marginTop: 13,
       flexDirection: "row",
@@ -1972,16 +2255,13 @@ const styles =
       color: "#B76B00",
     },
 
-    // ==================================================
-    // Empty
-    // ==================================================
-
     emptyContainer: {
       backgroundColor: "#fff",
       borderRadius: 17,
       alignItems: "center",
       justifyContent: "center",
       paddingVertical: 55,
+      paddingHorizontal: 25,
       borderWidth: 1,
       borderColor: "#EEEEEE",
     },
@@ -2006,11 +2286,8 @@ const styles =
       marginTop: 5,
       color: "#999",
       fontSize: 12,
+      textAlign: "center",
     },
-
-    // ==================================================
-    // Loading
-    // ==================================================
 
     loadingContainer: {
       flex: 1,
@@ -2040,10 +2317,6 @@ const styles =
       color: "#888",
       fontSize: 13,
     },
-
-    // ==================================================
-    // Footer
-    // ==================================================
 
     footer: {
       paddingHorizontal: 18,

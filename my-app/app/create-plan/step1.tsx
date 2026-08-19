@@ -85,149 +85,6 @@ function getDayDifference(
 }
 
 // ======================================================
-// Flatten Allergy / Disliked Foods
-// ======================================================
-
-function flattenObjectValues(
-  obj:
-    | Record<string, string[]>
-    | string[]
-    | undefined
-    | null
-): string[] {
-  if (!obj) {
-    return [];
-  }
-
-  // Backend ส่ง array มาอยู่แล้ว
-  if (Array.isArray(obj)) {
-    return obj
-      .filter(
-        (item) =>
-          typeof item === "string" &&
-          item.trim().length > 0
-      )
-      .map((item) => item.trim());
-  }
-
-  const result: string[] = [];
-
-  for (const key of Object.keys(obj)) {
-    const values = obj[key];
-
-    if (Array.isArray(values)) {
-      for (const item of values) {
-        if (
-          typeof item === "string" &&
-          item.trim().length > 0
-        ) {
-          result.push(item.trim());
-        }
-      }
-    }
-  }
-
-  return result;
-}
-
-// ======================================================
-// Calculate Target Calories
-// ======================================================
-
-function calculateAdjustedKcal(
-  tdee: number,
-  primaryGoal: string
-): number {
-  const goal = String(
-    primaryGoal || ""
-  )
-    .trim()
-    .toLowerCase();
-
-  // ลดน้ำหนัก
-  if (
-    goal === "ลดน้ำหนัก" ||
-    goal === "lose_weight" ||
-    goal === "ลดน้ำหนัก/ลดไขมัน"
-  ) {
-    return Math.max(
-      1000,
-      Math.round(tdee - 300)
-    );
-  }
-
-  // เพิ่มน้ำหนัก
-  if (
-    goal === "เพิ่มน้ำหนัก" ||
-    goal === "gain_weight"
-  ) {
-    return Math.round(
-      tdee + 300
-    );
-  }
-
-  // เพิ่มกล้ามเนื้อ
-  if (
-    goal === "เพิ่มกล้ามเนื้อ" ||
-    goal === "gain_muscle"
-  ) {
-    return Math.round(
-      tdee + 200
-    );
-  }
-
-  // รักษาน้ำหนัก
-  return Math.round(tdee);
-}
-
-// ======================================================
-// Calculate Macros
-// ======================================================
-
-function calculateMacros(
-  targetKcal: number,
-  proteinTarget: number
-) {
-  const proteinG =
-    proteinTarget > 0
-      ? Math.round(proteinTarget)
-      : Math.round(
-          (targetKcal * 0.25) / 4
-        );
-
-  // Fat ประมาณ 27% ของพลังงาน
-  const fatG = Math.round(
-    (targetKcal * 0.27) / 9
-  );
-
-  const proteinCalories =
-    proteinG * 4;
-
-  const fatCalories =
-    fatG * 9;
-
-  const carbCalories =
-    Math.max(
-      0,
-      targetKcal -
-        proteinCalories -
-        fatCalories
-    );
-
-  const carbG = Math.round(
-    carbCalories / 4
-  );
-
-  return {
-    protein_g: proteinG,
-    carb_g: carbG,
-    fat_g: fatG,
-    fiber_g: 25,
-    sodium_mg: 2000,
-  };
-}
-
-// ======================================================
 // Types
 // ======================================================
 
@@ -538,13 +395,11 @@ export default function Step1Screen() {
 
     setStartDate(newStart);
 
-    // ถ้า End ก่อน Start
     if (endDate < newStart) {
       setEndDate(newStart);
       return;
     }
 
-    // จำกัดสูงสุด 7 วัน
     const maxEnd =
       new Date(newStart);
 
@@ -606,7 +461,7 @@ export default function Step1Screen() {
   };
 
   // ====================================================
-  // Create Meal Plan
+  // Next
   // ====================================================
 
   const handleNext = async () => {
@@ -652,6 +507,10 @@ export default function Step1Screen() {
     }
 
     if (creating) {
+      console.log(
+        "⚠️ กำลังไปขั้นตอนถัดไปอยู่"
+      );
+
       return;
     }
 
@@ -677,174 +536,210 @@ export default function Step1Screen() {
       setCreating(true);
 
       // ==================================================
-      // User ID
+      // Generate Plan
       // ==================================================
 
       const userId =
         userProfile.user_id;
 
-      if (!userId) {
-        throw new Error(
-          "ไม่พบ user_id"
-        );
-      }
-
-      // ==================================================
-      // Health Goals
-      // ==================================================
-
-      const healthGoals =
-        userProfile.health_goals ||
-        {};
-
-      const primaryGoal =
-        healthGoals.primary_goal ||
-        "maintain_weight";
-
       console.log(
-        "🎯 PRIMARY GOAL:",
-        primaryGoal
-      );
-
-      // ==================================================
-      // TDEE
-      // ==================================================
-
-      const tdee = Number(
-        healthGoals.tdee_target_kcal
+        "📤 GENERATE PLAN"
       );
 
       console.log(
-        "🔥 TDEE:",
-        tdee
+        "USER ID:",
+        userId
       );
 
-      if (
-        !Number.isFinite(tdee) ||
-        tdee <= 0
-      ) {
-        throw new Error(
-          "ไม่พบค่า TDEE ของผู้ใช้ กรุณาตั้งค่าเป้าหมายสุขภาพก่อน"
-        );
-      }
+      console.log(
+        "START:",
+        formatDate(startDate)
+      );
+
+      console.log(
+        "END:",
+        formatDate(endDate)
+      );
+
+      console.log(
+        "DAYS:",
+        days
+      );
 
       // ==================================================
-      // Target Calories
+      // Build Generate Payload
       // ==================================================
 
       const targetKcal =
-        calculateAdjustedKcal(
-          tdee,
-          primaryGoal
+        userProfile
+          .health_goals
+          ?.tdee_target_kcal ||
+        2000;
+
+      const goal =
+        userProfile
+          .health_goals
+          ?.primary_goal ||
+        "";
+
+      // ==================================================
+      // Calculate Nutrition Targets
+      // ใช้ค่าจริงจาก user profile ถ้ามี
+      // ถ้าไม่มี คำนวณจากสัดส่วนมาตรฐาน
+      // ==================================================
+
+      const proteinG =
+        userProfile
+          .health_goals
+          ?.protein_target_g ||
+        Math.round(
+          (targetKcal * 0.15) / 4
         );
 
-      console.log(
-        "🔥 TARGET KCAL:",
-        targetKcal
+      const carbG = Math.round(
+        (targetKcal * 0.5) / 4
       );
 
-      // ==================================================
-      // Protein
-      // ==================================================
+      const fatG = Math.round(
+        (targetKcal * 0.3) / 9
+      );
 
-      const proteinTarget =
-        Number(
-          healthGoals.protein_target_g
-        );
+      const fiberG = 25;
 
-      const macros =
-        calculateMacros(
-          targetKcal,
-          proteinTarget
-        );
+      const sodiumMg = 2000;
 
       console.log(
-        "🥩 MACROS:",
-        macros
+        "📊 NUTRITION TARGETS:",
+        {
+          kcal: targetKcal,
+          protein_g: proteinG,
+          carb_g: carbG,
+          fat_g: fatG,
+          fiber_g: fiberG,
+          sodium_mg: sodiumMg,
+        }
       );
 
       // ==================================================
       // Allergies
       // ==================================================
 
-      const allergies =
-        flattenObjectValues(
-          userProfile.allergies
-        );
+      let allergiesList: string[] =
+        [];
 
-      console.log(
-        "🚫 ALLERGIES:",
-        allergies
-      );
+      if (
+        userProfile.allergies
+      ) {
+        if (
+          Array.isArray(
+            userProfile.allergies
+          )
+        ) {
+          allergiesList =
+            userProfile.allergies;
+        } else if (
+          typeof userProfile.allergies ===
+            "object"
+        ) {
+          Object.values(
+            userProfile.allergies
+          ).forEach(
+            (arr) => {
+              if (
+                Array.isArray(arr)
+              ) {
+                allergiesList.push(
+                  ...arr
+                );
+              }
+            }
+          );
+        }
+      }
 
       // ==================================================
       // Disliked Foods
       // ==================================================
 
-      const dislikedFoods =
-        flattenObjectValues(
-          userProfile.disliked_foods
-        );
+      let dislikedList: string[] =
+        [];
 
-      console.log(
-        "👎 DISLIKED FOODS:",
-        dislikedFoods
-      );
+      if (
+        userProfile.disliked_foods
+      ) {
+        if (
+          Array.isArray(
+            userProfile.disliked_foods
+          )
+        ) {
+          dislikedList =
+            userProfile.disliked_foods;
+        } else if (
+          typeof userProfile.disliked_foods ===
+            "object"
+        ) {
+          Object.values(
+            userProfile.disliked_foods
+          ).forEach(
+            (arr) => {
+              if (
+                Array.isArray(arr)
+              ) {
+                dislikedList.push(
+                  ...arr
+                );
+              }
+            }
+          );
+        }
+      }
 
       // ==================================================
-      // Request Payload
+      // Payload
       // ==================================================
 
-      const payload = {
+      const payload: Record<
+        string,
+        any
+      > = {
         user_id: userId,
 
         start_date:
           formatDate(startDate),
 
-        days,
+        days: days,
 
-        target_kcal:
-          targetKcal,
+        target_kcal: targetKcal,
 
-        protein_g:
-          macros.protein_g,
+        protein_g: proteinG,
 
-        carb_g:
-          macros.carb_g,
+        carb_g: carbG,
 
-        fat_g:
-          macros.fat_g,
+        fat_g: fatG,
 
-        fiber_g:
-          macros.fiber_g,
+        fiber_g: fiberG,
 
-        sodium_mg:
-          macros.sodium_mg,
+        sodium_mg: sodiumMg,
 
-        goal:
-          primaryGoal,
-
-        allergies,
-
-        disliked_foods:
-          dislikedFoods,
+        goal: goal,
       };
 
-      console.log(
-        "================================"
-      );
+      if (
+        allergiesList.length > 0
+      ) {
+        payload.allergies =
+          allergiesList;
+      }
+
+      if (
+        dislikedList.length > 0
+      ) {
+        payload.disliked_foods =
+          dislikedList;
+      }
 
       console.log(
-        "📤 POST CREATE MEAL PLAN"
-      );
-
-      console.log(
-        "URL:",
-        `${BASE_URL}/api/meal/plans`
-      );
-
-      console.log(
-        "PAYLOAD:",
+        "📦 PAYLOAD:",
         JSON.stringify(
           payload,
           null,
@@ -852,121 +747,121 @@ export default function Step1Screen() {
         )
       );
 
+      // ==================================================
+      // Call Generate API
+      // ==================================================
+
       console.log(
-        "================================"
+        "📤 POST:",
+        `${BASE_URL}/api/meal/generate`
       );
 
-      // ==================================================
-      // POST Backend
-      // ==================================================
+      let planId = "";
 
-      const response =
-        await axios.post(
-          `${BASE_URL}/api/meal/plans`,
-          payload,
-          {
-            timeout: 120000,
+      try {
+        const response =
+          await axios.post(
+            `${BASE_URL}/api/meal/generate`,
+            payload,
+            {
+              timeout: 120000,
 
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-          }
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+            }
+          );
+
+        console.log(
+          "📥 RESPONSE:",
+          JSON.stringify(
+            response.data,
+            null,
+            2
+          )
         );
 
-      console.log(
-        "================================"
-      );
+        // ==================================================
+        // Validate Response
+        // ==================================================
 
-      console.log(
-        "📥 BACKEND RESPONSE"
-      );
+        if (
+          response.data?.success &&
+          response.data?.plan_id
+        ) {
+          planId =
+            response.data.plan_id;
 
-      console.log(
-        response.data
-      );
+          console.log(
+            "✅ PLAN CREATED"
+          );
 
-      console.log(
-        "================================"
-      );
+          console.log(
+            "PLAN ID:",
+            planId
+          );
 
-      // ==================================================
-      // Validate Backend Response
-      // ==================================================
+          console.log(
+            "TOTAL DAYS:",
+            response.data?.total_days
+          );
 
-      if (
-        !response.data?.success
-      ) {
-        throw new Error(
-          response.data?.message ||
-            "Backend สร้างแผนไม่สำเร็จ"
+          // ==================================================
+          // Save Current Plan
+          // ==================================================
+
+          await AsyncStorage.setItem(
+            "currentPlanId",
+            String(planId)
+          );
+        } else {
+          console.log(
+            "⚠️ API สำเร็จแต่ไม่ได้ plan_id"
+          );
+        }
+      } catch (apiError: any) {
+        console.log(
+          "⚠️ API call failed:",
+          apiError.message
+        );
+
+        console.log(
+          "➡️ ดำเนินการต่อไป step2"
         );
       }
 
-      const planId =
-        response.data?.plan_id;
-
-      if (!planId) {
-        throw new Error(
-          "Backend ไม่ได้ส่ง plan_id กลับมา"
-        );
-      }
-
-      console.log(
-        "================================"
-      );
-
-      console.log(
-        "✅ PLAN CREATED"
-      );
-
-      console.log(
-        "PLAN ID:",
-        planId
-      );
-
-      console.log(
-        "TOTAL DAYS:",
-        response.data?.total_days
-      );
+      // ==================================================
+      // Navigate Step 2
+      // ==================================================
 
       console.log(
         "➡️ GO TO STEP 2"
       );
 
-      console.log(
-        "================================"
-      );
+      const params: Record<
+        string,
+        string
+      > = {
+        startDate:
+          formatDate(startDate),
 
-      // ==================================================
-      // Save Current Plan
-      // ==================================================
+        endDate:
+          formatDate(endDate),
 
-      await AsyncStorage.setItem(
-        "currentPlanId",
-        String(planId)
-      );
+        days: String(days),
+      };
 
-      // ==================================================
-      // Go Step 2
-      // ==================================================
+      if (planId) {
+        params.plan_id =
+          String(planId);
+      }
 
       router.push({
         pathname:
           "/create-plan/step2",
 
-        params: {
-          startDate:
-            formatDate(startDate),
-
-          endDate:
-            formatDate(endDate),
-
-          days: String(days),
-
-          plan_id:
-            String(planId),
-        },
+        params,
       });
     } catch (error: any) {
       console.error(
@@ -974,84 +869,31 @@ export default function Step1Screen() {
       );
 
       console.error(
-        "❌ CREATE PLAN ERROR"
+        "❌ STEP 1 → STEP 2 ERROR"
       );
 
       console.error(
         error
       );
 
-      if (
-        axios.isAxiosError(error)
-      ) {
-        console.error(
-          "❌ STATUS:",
-          error.response?.status
-        );
-
-        console.error(
-          "❌ RESPONSE:",
-          error.response?.data
-        );
-
-        console.error(
-          "❌ URL:",
-          error.config?.url
-        );
-
-        console.error(
-          "❌ REQUEST DATA:",
-          error.config?.data
-        );
-      }
-
       console.error(
         "================================"
       );
 
-      let message =
-        "ไม่สามารถสร้างแผนอาหารได้";
-
-      if (
-        axios.isAxiosError(error)
-      ) {
-        if (
-          error.code ===
-          "ECONNABORTED"
-        ) {
-          message =
-            "Backend ใช้เวลาสร้างแผนนานเกินไป กรุณาตรวจสอบ Server";
-        } else if (
-          error.code ===
-          "ERR_NETWORK"
-        ) {
-          message =
-            `ไม่สามารถเชื่อมต่อ Backend ได้\n${BASE_URL}`;
-        } else if (
-          error.response?.data
-            ?.message
-        ) {
-          message =
-            error.response.data.message;
-        } else if (
-          error.message
-        ) {
-          message =
-            error.message;
-        }
-      } else if (
-        error?.message
-      ) {
-        message =
-          error.message;
-      }
-
       Alert.alert(
-        "สร้างแผนไม่สำเร็จ",
-        message
+        "เกิดข้อผิดพลาด",
+        "ไม่สามารถไปขั้นตอนถัดไปได้"
       );
     } finally {
       setCreating(false);
+
+      console.log(
+        "🔓 creating = false"
+      );
+
+      console.log(
+        "================================"
+      );
     }
   };
 
@@ -1347,7 +1189,7 @@ export default function Step1Screen() {
                   styles.loadingText
                 }
               >
-                กำลังสร้างแผน...
+                กำลังไปขั้นตอนถัดไป...
               </Text>
             </>
           ) : (
