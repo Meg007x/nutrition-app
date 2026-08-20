@@ -1,4 +1,4 @@
-const DailyPlan = require("../models/DailyPlan");
+﻿const DailyPlan = require("../models/DailyPlan");
 const MasterFood = require("../models/MasterFood");
 
 // ======================================================
@@ -329,6 +329,30 @@ async function searchFoods(req, res) {
 // Exports
 // ======================================================
 
+async function getFoodById(req, res) {
+  try {
+    const food = await MasterFood.findById(req.params.food_id).lean();
+
+    if (!food) {
+      return res.status(404).json({
+        success: false,
+        message: "ไม่พบอาหาร",
+      });
+    }
+
+    res.json({
+      success: true,
+      food,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "ไม่สามารถโหลดรายละเอียดอาหารได้",
+      error: error.message,
+    });
+  }
+}
+
 module.exports = {
   createMealPlans,
   getPlansByPlanId,
@@ -337,4 +361,5 @@ module.exports = {
   replaceMealInPlan,
   deleteMealFromPlan,
   searchFoods,
+  getFoodById,
 };
