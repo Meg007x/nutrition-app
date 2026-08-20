@@ -226,12 +226,11 @@ async function deletePlanByPlanId(req, res) {
 async function replaceMealInPlan(req, res) {
   try {
     const { planId } = req.params;
-    const { date, slot_index, food_id } = req.body;
+    const { date, slot_index, food_id, status } = req.body;
 
     if (!planId) return res.status(400).json({ success: false, message: "กรุณาระบุ planId" });
     if (!date) return res.status(400).json({ success: false, message: "กรุณาระบุ date" });
     if (slot_index === undefined || slot_index === null) return res.status(400).json({ success: false, message: "กรุณาระบุ slot_index" });
-    if (!food_id) return res.status(400).json({ success: false, message: "กรุณาระบุ food_id" });
 
     const dailyPlan = await DailyPlan.findOne({ plan_id: planId, date, plan_status: "active" });
     if (!dailyPlan) return res.status(404).json({ success: false, message: "ไม่พบแผนอาหารสำหรับวันที่ระบุ" });
@@ -240,6 +239,28 @@ async function replaceMealInPlan(req, res) {
     if (!Number.isInteger(idx) || idx < 0 || idx >= dailyPlan.slots.length) {
       return res.status(400).json({ success: false, message: `slot_index ต้องอยู่ระหว่าง 0-${dailyPlan.slots.length - 1}` });
     }
+
+    // ==================================================
+    // Status-only update (eaten toggle)
+    // When frontend sends { status } without food_id
+    // ==================================================
+
+    if (status && !food_id) {
+      const validStatuses = ["pending", "eaten", "cleared"];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({ success: false, message: `status ต้องเป็น ${validStatuses.join(", ")}` });
+      }
+
+      dailyPlan.slots[idx].status = status;
+      await dailyPlan.save();
+      return res.json({ success: true, message: "อัปเดตสถานะสำเร็จ", updated_plan: dailyPlan });
+    }
+
+    // ==================================================
+    // Full meal replacement (requires food_id)
+    // ==================================================
+
+    if (!food_id) return res.status(400).json({ success: false, message: "กรุณาระบุ food_id" });
 
     const newFood = await MasterFood.findById(food_id).lean();
     if (!newFood) return res.status(404).json({ success: false, message: "ไม่พบอาหารที่ต้องการแทนที่" });
@@ -293,40 +314,55 @@ async function deleteMealFromPlan(req, res) {
 }
 
 // ======================================================
-// GET /api/meal/search-foods - Fuzzy Search
+// GET /api/meal/search-foods - Fuzzy Search (FIXED)
 // ======================================================
 
 async function searchFoods(req, res) {
   try {
     const { q = "", limit = 20 } = req.query;
-    const searchQuery = String(q).trim();
+    const searchParam = q ? String(q).trim() : "";
+    const limitNum = Math.min(Math.max(Number(limit) || 20, 1), 50);
 
-    if (!searchQuery) {
-      const allFoods = await MasterFood.find({}).limit(Number(limit)).lean();
-      return res.json({ success: true, query: "", count: allFoods.length, foods: allFoods.map((f) => ({ _id: f._id, name: f.name, name_en: f.name_en || "", category: f.category || "", image: f.image || "", nutrition_per_portion: f.nutrition_per_portion || {}, allergens: f.allergens || [] })) });
+    // Empty query → return top foods
+    if (!searchParam) {
+      const allFoods = await MasterFood.find({}).sort({ _id: 1 }).limit(limitNum).lean();
+      return res.json({ success: true, query: "", count: allFoods.length, foods: allFoods.map(mapFoodForResponse) });
     }
 
-    const escaped = searchQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const regex = new RegExp(escaped, "i");
+    // Use $regex/$options syntax directly (avoids RegExp constructor issues)
+    const regexQuery = { $regex: searchParam, $options: "i" };
 
     const foods = await MasterFood.find({
       $or: [
-        { name: regex },
-        { name_en: regex },
-        { category: regex },
-        { search_keywords: { $elemMatch: regex } },
-        { tags: { $elemMatch: regex } },
+        { name: regexQuery },
+        { name_en: regexQuery },
+        { category: regexQuery },
+        { search_keywords: regexQuery },
+        { tags: regexQuery },
       ],
-    }).limit(Number(limit)).lean();
+    }).sort({ name: 1 }).limit(limitNum).lean();
 
-    return res.json({ success: true, query: searchQuery, count: foods.length, foods: foods.map((f) => ({ _id: f._id, name: f.name, name_en: f.name_en || "", category: f.category || "", image: f.image || "", nutrition_per_portion: f.nutrition_per_portion || {}, allergens: f.allergens || [] })) });
+    return res.json({ success: true, query: searchParam, count: foods.length, foods: foods.map(mapFoodForResponse) });
   } catch (error) {
-    return res.status(500).json({ success: false, message: "ไม่สามารถค้นหาอาหารได้", error: error.message });
+    console.error("Search Foods Error:", error);
+    return res.status(500).json({ success: false, message: "cannot search foods", error: error.message });
   }
 }
 
-// ======================================================
+function mapFoodForResponse(f) {
+  return {
+    _id: f._id, name: f.name || "", name_en: f.name_en || "",
+    category: f.category || "", image: f.image || "",
+    nutrition_per_portion: f.nutrition_per_portion || {},
+    allergens: f.allergens || [], portion: f.portion || null,
+    ingredients: f.ingredients || [],
+  };
+}
 // Exports
+// ======================================================
+
+// ======================================================
+// getFoodById
 // ======================================================
 
 async function getFoodById(req, res) {

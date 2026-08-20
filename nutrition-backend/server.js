@@ -34,7 +34,6 @@ app.use(express.json());
 
 // เปิดให้เข้าถึงโฟลเดอร์ uploads
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // 4. กำหนดเส้นทาง API

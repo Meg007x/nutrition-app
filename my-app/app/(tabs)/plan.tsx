@@ -773,8 +773,30 @@ export default function PlanScreen() {
     });
 
     setSearchQ("");
-    setSearchRes([]);
     setShowModal(true);
+
+    // Load default recommendations from DB
+    loadDefaultFoods();
+  }
+
+  async function loadDefaultFoods() {
+    try {
+      setSearching(true);
+      const data = await searchFoods("", 20);
+      setSearchRes(
+        Array.isArray(data?.foods)
+          ? data.foods
+          : []
+      );
+    } catch (e) {
+      console.warn(
+        "loadDefaultFoods error:",
+        e
+      );
+      setSearchRes([]);
+    } finally {
+      setSearching(false);
+    }
   }
 
   /* =====================================================
@@ -792,9 +814,9 @@ export default function PlanScreen() {
       );
     }
 
+    // If cleared, reload default recommendations
     if (!text.trim()) {
-      setSearchRes([]);
-      setSearching(false);
+      loadDefaultFoods();
       return;
     }
 
@@ -1302,7 +1324,7 @@ export default function PlanScreen() {
 
               <Text
                 style={{
-                  fontSize: 16,
+                  fontSize: 18,
                   fontWeight:
                     "bold",
                 }}
@@ -1346,7 +1368,7 @@ export default function PlanScreen() {
               <Text
                 style={{
                   marginTop: 4,
-                  fontSize: 13,
+                  fontSize: 15,
                   color: "#777",
                   textAlign:
                     "right",
@@ -1411,7 +1433,7 @@ export default function PlanScreen() {
                   >
                     <Text
                       style={{
-                        fontSize: 12,
+                        fontSize: 13,
                         color:
                           "#999",
                       }}
@@ -1423,7 +1445,7 @@ export default function PlanScreen() {
 
                     <Text
                       style={{
-                        fontSize: 16,
+                        fontSize: 18,
                         fontWeight:
                           "bold",
                         color:
@@ -1462,7 +1484,7 @@ export default function PlanScreen() {
               <Text
                 style={{
                   marginLeft: 8,
-                  fontSize: 13,
+                  fontSize: 14,
                   color:
                     "#22A06B",
                   fontWeight:
@@ -1529,7 +1551,7 @@ export default function PlanScreen() {
                       }
                       size={20}
                       color={
-                        ORANGE
+                        "#000"
                       }
                     />
 
@@ -1770,7 +1792,7 @@ export default function PlanScreen() {
                 name="calendar-outline"
                 size={18}
                 color={
-                  ORANGE
+                  "#000"
                 }
               />
 
@@ -1778,7 +1800,7 @@ export default function PlanScreen() {
                 style={{
                   fontSize: 15,
                   color:
-                    ORANGE,
+                    "#000",
                   fontWeight:
                     "600",
                 }}
@@ -1975,7 +1997,7 @@ export default function PlanScreen() {
                           }
                           size={20}
                           color={
-                            ORANGE
+                            "#000"
                           }
                         />
 
@@ -2526,7 +2548,7 @@ export default function PlanScreen() {
                         "#ccc",
                     }}
                   >
-                    พิมพ์ชื่ออาหารเพื่อค้นหา
+                    กำลังโหลดรายการอาหาร...
                   </Text>
                 </View>
               ) : null
@@ -3215,6 +3237,7 @@ const st =
       fontWeight:
         "bold",
       color: "#fff",
+      fontFamily: "System",
     },
 
     center: {
@@ -3300,10 +3323,12 @@ const st =
 
     summaryCard: {
       backgroundColor:
-        "#FFF8E8",
+        "#FFFFFF",
       borderRadius: 16,
-      padding: 16,
+      padding: 18,
       marginBottom: 16,
+      borderWidth: 1.5,
+      borderColor: "#FF6B00",
     },
 
     progressBar: {
@@ -3359,7 +3384,8 @@ const st =
       borderRadius: 12,
       borderWidth: 1.5,
       borderColor:
-        ORANGE,
+        "#000",
+      backgroundColor: "#fff",
     },
 
     dangerBtn: {

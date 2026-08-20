@@ -8,6 +8,7 @@ import {
   SafeAreaView,
   StatusBar,
   Switch,
+  Alert,
 } from "react-native";
 
 import { Ionicons } from "@expo/vector-icons";
@@ -15,6 +16,8 @@ import {
   router,
   useLocalSearchParams,
 } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { BASE_URL } from "../../constants/config";
 
 // ======================================================
 // Component
@@ -87,8 +90,8 @@ export default function Step3Screen() {
   // Water Range
   // ====================================================
 
-  const MIN_WATER = 2000;
-  const MAX_WATER = 4000;
+  const MIN_WATER = 1500;
+  const MAX_WATER = 4500;
   const STEP = 100;
 
   // ====================================================
@@ -129,38 +132,37 @@ export default function Step3Screen() {
   // Start Using
   // ====================================================
 
-  const handleStartUsing = () => {
-    console.log(
-      "================================"
-    );
+  const [saving, setSaving] = useState(false);
 
-    console.log(
-      "💧 STEP 3 START USING"
-    );
+  const handleStartUsing = async () => {
+    console.log("💧 STEP 3 | WATER:", waterTarget);
 
-    console.log(
-      "💧 WATER TARGET:",
-      waterTarget
-    );
+    try {
+      setSaving(true);
+      let userId = "";
+      for (const k of ["user_id", "userId"]) {
+        const v = await AsyncStorage.getItem(k);
+        if (v) { userId = v; break; }
+      }
+      if (!userId) {
+        const raw = await AsyncStorage.getItem("currentUser");
+        if (raw) { const o = JSON.parse(raw); if (o?.user_id) userId = String(o.user_id); }
+      }
 
-    console.log(
-      "🔔 NOTIFICATION:",
-      notificationEnabled
-    );
-
-    console.log(
-      "================================"
-    );
-
-    // ตอนนี้ยังไม่บันทึกลง Backend
-    // และยังไม่แตะระบบ Plan
-    //
-    // ภายหลังจะเพิ่ม:
-    // 1. Save water target
-    // 2. Save notification setting
-    // 3. router.replace("/(tabs)/plan")
-
-    router.replace("/(tabs)/plan");
+      if (userId) {
+        const resp = await fetch(`${BASE_URL}/api/users/update-meal-water-settings`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId, water_target_ml: waterTarget }),
+        });
+        console.log("💧 Water save:", await resp.json());
+      }
+    } catch (e) {
+      console.warn("⚠️ Water save failed:", e?.message);
+    } finally {
+      setSaving(false);
+      router.replace("/(tabs)/plan");
+    }
   };
 
   // ====================================================
@@ -279,7 +281,7 @@ export default function Step3Screen() {
           <View style={styles.sliderLabels}>
 
             <Text style={styles.sliderLabel}>
-              ขั้นต่ำ (2.0 L)
+              ขั้นต่ำ (1.5 L)
             </Text>
 
             <Text style={styles.sliderLabel}>
@@ -287,7 +289,7 @@ export default function Step3Screen() {
             </Text>
 
             <Text style={styles.sliderLabel}>
-              มาก (4.0 L)
+              มาก (4.5 L)
             </Text>
 
           </View>
