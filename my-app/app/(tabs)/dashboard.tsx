@@ -311,11 +311,19 @@ export default function DashboardScreen() {
               )}
             </Pressable>
 
-            <Pressable
-              style={styles.streakPill}
+           <Pressable
+              style={[
+                styles.streakPill,
+                streakDays === 0 ? { backgroundColor: "#e0e0e0" } : { backgroundColor: "#f39c12" }
+              ]}
               onPress={() => setShowStreakModal(true)}
             >
-              <Text style={styles.streakText}>🔥 ต่อเนื่อง {streakDays} วัน</Text>
+              <Text style={[
+                styles.streakText,
+                streakDays === 0 ? { color: "#666" } : { color: "#fff" }
+              ]}>
+                {streakDays > 0 ? "🔥" : "⚪️"} ต่อเนื่อง {streakDays} วัน
+              </Text>
             </Pressable>
           </View>
         </View>

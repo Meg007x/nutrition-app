@@ -8,7 +8,6 @@ import {
   TouchableWithoutFeedback,
   ScrollView,
   Switch,
-  TextInput,
   Alert,
   Platform,
   ActivityIndicator,
@@ -18,11 +17,7 @@ import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useRegister } from "../../context/register-context";
 import styles, { ORANGE, BG, IOS_GREEN, ROW_COLOR_1, ROW_COLOR_2 } from "./step6-2.styles";
-
-// ⚠️ เปลี่ยนตรงนี้เป็น IP เครื่องคอมคุณ หรือ URL ของหลังบ้าน (เช่น http://192.168.1.55:3000)
-// โน้ต: ถ้าเทสบนมือถือ ห้ามใช้ localhost นะครับ ให้ใช้ IP ของ Wi-Fi แทน
-//ถ้าคุณรันบน Web คุณสามารถแก้เป็น http://localhost:3000/api/ingredients ได้เลย แต่ถ้ารันแอปบน โทรศัพท์มือถือ หรือ Emulator ให้แก้เลข IP เป็น IP จริงของคอมพิวเตอร์คุณนะครับ (เช่น 192.168.1.55) ไม่งั้นแอปจะดึงข้อมูลจากหลังบ้านไม่ได้ครับ!
-const API_URL = "http://localhost:3000/api/ingredients";
+import { API_BASE_URL } from "../../constants/config";
 
 export default function RegisterStep6OtherScreen() {
   const { form, updateForm } = useRegister();
@@ -44,21 +39,16 @@ export default function RegisterStep6OtherScreen() {
   const [isOpenCondiment, setIsOpenCondiment] = useState(false);
   const [isOpenMeat, setIsOpenMeat] = useState(false);
 
-  // ช่องกรอกข้อมูลเพิ่มเอง
-  const [inputVeg, setInputVeg] = useState("");
-  const [inputCondiment, setInputCondiment] = useState("");
-  const [inputMeat, setInputMeat] = useState("");
-
   // 🚀 ดึงข้อมูลจาก API เมื่อเปิดหน้านี้
   useEffect(() => {
     const fetchIngredients = async () => {
       try {
-        const response = await fetch(API_URL);
+        const response = await fetch(`${API_BASE_URL}/ingredients`);
         const result = await response.json();
         
         if (result && result.data) {
-          // แปลง _id จาก MongoDB ให้เป็น id ธรรมดาที่หน้าบ้านใช้
-          const formatData = (arr: any[]) => arr.map(item => ({ ...item, id: item._id || item.id }));
+          // แปลง _id จาก MongoDB ให้เป็น id ธรรมดาที่หน้าบ้านใช้ และรับประกันว่าเป็น string เพื่อการตรวจสอบที่ถูกต้อง
+          const formatData = (arr: any[]) => arr.map(item => ({ ...item, id: String(item._id || item.id) }));
           
           const fetchedVeg = formatData(result.data.veg || []);
           const fetchedCond = formatData(result.data.condiment || []);
@@ -130,31 +120,6 @@ export default function RegisterStep6OtherScreen() {
     );
   };
 
-  const handleAddCustom = (
-    category: 'veg' | 'condiment' | 'meat',
-    value: string,
-    setInputValue: (v: string) => void
-  ) => {
-    const trimmed = value.trim();
-    if (!trimmed) return;
-
-    const allCurrentNames = [...vegList, ...condimentList, ...meatList].map((i) => i.name);
-    if (allCurrentNames.includes(trimmed) || customAllergies.includes(trimmed)) {
-      Alert.alert("รายการซ้ำ", "มีรายการนี้อยู่แล้ว");
-      return;
-    }
-
-    const newItem = { id: `custom_${category}_${Date.now()}`, name: trimmed };
-
-    if (category === 'veg') setVegList((prev) => [...prev, newItem]);
-    if (category === 'condiment') setCondimentList((prev) => [...prev, newItem]);
-    if (category === 'meat') setMeatList((prev) => [...prev, newItem]);
-
-    setSelectedAllergies((prev) => [...prev, newItem.id]);
-    setInputValue(""); 
-    Keyboard.dismiss();
-  };
-
   const removeCustomAllergy = (value: string) => {
     setCustomAllergies((prev) => prev.filter((item) => item !== value));
   };
@@ -165,14 +130,7 @@ export default function RegisterStep6OtherScreen() {
   const finalAllergiesFlat = [...finalVegNames, ...finalCondimentNames, ...finalMeatNames, ...customAllergies];
 
   const handleSaveAndBack = () => {
-    if (finalAllergiesFlat.length === 0) {
-      Alert.alert(
-        "ยังไม่ได้เลือกข้อมูล",
-        "กรุณาเลือกหรือเพิ่มรายการอาหารที่แพ้อย่างน้อย 1 รายการ"
-      );
-      return;
-    }
-
+    // บันทึกข้อมูลแล้วไป step7 เลย ไม่ว่าจะกดจากหน้า 6-1 หรือ 6-2
     const categorizedAllergies = {
       veg: finalVegNames,
       condiment: finalCondimentNames,
@@ -185,15 +143,25 @@ export default function RegisterStep6OtherScreen() {
       allergies: categorizedAllergies as any,
     });
 
-    router.replace("/register/step6-1" as any);
+    router.push("/register/step7" as any);
   };
 
   const renderList = (
     data: { id: string; name: string }[],
     category: 'veg' | 'condiment' | 'meat',
-    inputValue: string,
-    setInputValue: (v: string) => void
   ) => {
+    // 🟢 แสดงข้อความเมื่อไม่มีข้อมูลวัตถุดิบในหมวดนี้
+    if (data.length === 0) {
+      return (
+        <View style={styles.listContainer}>
+          <View style={[styles.listItem, { justifyContent: 'center', paddingVertical: 18 }]}>
+            <Text style={{ fontSize: 14, color: '#999', fontFamily: 'NotoSansThai', textAlign: 'center' }}>
+              ยังไม่มีข้อมูลวัตถุดิบในหมวดนี้
+            </Text>
+          </View>
+        </View>
+      );
+    }
     return (
       <View style={styles.listContainer}>
         {data.map((item) => {
@@ -211,25 +179,6 @@ export default function RegisterStep6OtherScreen() {
             </View>
           );
         })}
-
-        <View style={styles.customInputRowInList}>
-          <TextInput
-            style={styles.customInputInList}
-            value={inputValue}
-            onChangeText={setInputValue}
-            placeholder={`พิมพ์ชื่อ${category === 'veg' ? 'ผัก/ผลไม้' : category === 'condiment' ? 'เครื่องปรุง' : 'เนื้อสัตว์'}ที่แพ้...`}
-            placeholderTextColor="#888"
-            returnKeyType="done"
-            onSubmitEditing={() => handleAddCustom(category, inputValue, setInputValue)}
-          />
-          <TouchableOpacity
-            style={styles.addButtonInList}
-            onPress={() => handleAddCustom(category, inputValue, setInputValue)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.addButtonTextInList}>เพิ่ม</Text>
-          </TouchableOpacity>
-        </View>
       </View>
     );
   };
@@ -239,7 +188,7 @@ export default function RegisterStep6OtherScreen() {
     return (
       <SafeAreaView style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
         <ActivityIndicator size="large" color={ORANGE} />
-        <Text style={{ marginTop: 16, color: "#666", fontWeight: "700" }}>กำลังโหลดข้อมูลวัตถุดิบ...</Text>
+        <Text style={{ marginTop: 16, color: "#666", fontFamily: "NotoSansThaiBold" }}>กำลังโหลดข้อมูลวัตถุดิบ...</Text>
       </SafeAreaView>
     );
   }
@@ -256,13 +205,13 @@ export default function RegisterStep6OtherScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.stepTitle}>6. อาการแพ้อาหาร</Text>
+        <Text style={styles.stepTitle}>6. วัตถุดิบที่แพ้</Text>
 
         <View style={styles.progressTrack}>
           <View style={[styles.progressFill, { width: "75%" }]} />
         </View>
 
-        <Text style={styles.subtitle}>เลือกอาหารที่คุณแพ้</Text>
+        <Text style={styles.subtitle}>เลือกรายการวัตถุดิบที่คุณแพ้</Text>
 
         <View style={styles.dropdownWrapper}>
           <TouchableOpacity
@@ -276,7 +225,7 @@ export default function RegisterStep6OtherScreen() {
             </View>
             <Ionicons name={isOpenVeg ? "caret-up" : "caret-down"} size={20} color="#FFF" />
           </TouchableOpacity>
-          {isOpenVeg && renderList(vegList, 'veg', inputVeg, setInputVeg)}
+          {isOpenVeg && renderList(vegList, 'veg')}
         </View>
 
         <View style={styles.dropdownWrapper}>
@@ -291,7 +240,7 @@ export default function RegisterStep6OtherScreen() {
             </View>
             <Ionicons name={isOpenCondiment ? "caret-up" : "caret-down"} size={20} color="#FFF" />
           </TouchableOpacity>
-          {isOpenCondiment && renderList(condimentList, 'condiment', inputCondiment, setInputCondiment)}
+          {isOpenCondiment && renderList(condimentList, 'condiment')}
         </View>
 
         <View style={styles.dropdownWrapper}>
@@ -306,7 +255,7 @@ export default function RegisterStep6OtherScreen() {
             </View>
             <Ionicons name={isOpenMeat ? "caret-up" : "caret-down"} size={20} color="#FFF" />
           </TouchableOpacity>
-          {isOpenMeat && renderList(meatList, 'meat', inputMeat, setInputMeat)}
+          {isOpenMeat && renderList(meatList, 'meat')}
         </View>
 
         {customAllergies.length > 0 && (
@@ -346,7 +295,7 @@ export default function RegisterStep6OtherScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.saveButton} onPress={handleSaveAndBack}>
-            <Text style={styles.saveText}>บันทึก</Text>
+            <Text style={styles.saveText}>ถัดไป</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

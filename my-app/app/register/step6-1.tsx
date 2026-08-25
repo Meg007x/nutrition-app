@@ -16,15 +16,15 @@ import styles, { ORANGE, BG, IOS_GREEN, ROW_COLOR_1, ROW_COLOR_2 } from "./step6
 
 
 const ALLERGIES = [
-  "แพ้ถั่ว",
-  "แพ้อาหารทะเล",
-  "แพ้นมวัว",
-  "แพ้กลูเตน",
-  "แพ้ไข่",
-  "แพ้แป้งสาลี",
+  "ถั่ว",
+  "อาหารทะเล",
+  "นมวัว",
+  "กลูเตน",
+  "ไข่",
+  "แป้งสาลี",
 ];
 
-const NONE_OPTION = "ไม่มีอาการแพ้";
+const NONE_OPTION = "ไม่มี";
 
 export default function RegisterStep6Screen() {
   const { form, updateForm } = useRegister();
@@ -75,7 +75,7 @@ export default function RegisterStep6Screen() {
     if (hasNoneSelected) {
       Alert.alert(
         "เลือกไม่ได้",
-        "คุณเลือก 'ไม่มีอาการแพ้' อยู่ หากต้องการเลือกอาหารที่แพ้ กรุณายกเลิก 'ไม่มีอาการแพ้' ก่อน"
+        "คุณเลือก 'ไม่มี' อยู่ หากต้องการเลือกรายการเพิ่ม กรุณายกเลิก 'ไม่มี' ก่อน"
       );
       return;
     }
@@ -99,7 +99,7 @@ export default function RegisterStep6Screen() {
     if (selectedFoodOnly.length > 0) {
       Alert.alert(
         "ยืนยันการเลือก",
-        "หากเลือก 'ไม่มีอาการแพ้' ระบบจะล้างรายการอาหารที่แพ้ทั้งหมด",
+        "หากเลือก 'ไม่มี' ระบบจะล้างรายการที่เลือกทั้งหมด",
         [
           { text: "ยกเลิก", style: "cancel" },
           {
@@ -120,7 +120,7 @@ export default function RegisterStep6Screen() {
     if (hasNoneSelected) {
       Alert.alert(
         "เลือกไม่ได้",
-        "คุณเลือก 'ไม่มีอาการแพ้' อยู่ จึงไม่สามารถเพิ่มรายการอาหารที่แพ้ได้"
+        "คุณเลือก 'ไม่มี' อยู่ จึงไม่สามารถเพิ่มรายการได้"
       );
       return;
     }
@@ -135,11 +135,14 @@ export default function RegisterStep6Screen() {
   };
 
   const handleNext = () => {
+    // ถ้าผู้ใช้ไม่เลือกอะไรเลย ให้ Set default เป็น "ไม่มี" อัตโนมัติ
     if (selectedAllergies.length === 0) {
-      Alert.alert(
-        "ยังไม่ได้เลือกข้อมูล",
-        "กรุณาเลือกอาการแพ้อาหาร หรือเลือก 'ไม่มีอาการแพ้'"
-      );
+      const defaultAllergies = { veg: [], condiment: [], meat: [], other: ["ไม่มี"] };
+      updateForm({
+        hasAllergies: false,
+        allergies: defaultAllergies,
+      });
+      router.push("/register/step7" as any);
       return;
     }
 
@@ -176,14 +179,14 @@ export default function RegisterStep6Screen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.stepTitle}>6. อาการแพ้อาหาร</Text>
+          <Text style={styles.stepTitle}>6. วัตถุดิบที่แพ้</Text>
 
           <View style={styles.progressTrack}>
             <View style={[styles.progressFill, { width: "75%" }]} />
           </View>
 
           <Text style={styles.subtitle}>
-            คุณมีอาการแพ้อาหารหรือโรคประจำตัวหรือไม่?
+            เลือกรายการวัตถุดิบที่คุณแพ้ หรือกดข้ามได้เลย
           </Text>
 
           <View style={styles.gridContainer}>
@@ -245,7 +248,7 @@ export default function RegisterStep6Screen() {
                 isSelected(NONE_OPTION) && styles.noneBtnTextActive,
               ]}
             >
-              ไม่มีอาการแพ้
+              ไม่มี
             </Text>
           </TouchableOpacity>
 

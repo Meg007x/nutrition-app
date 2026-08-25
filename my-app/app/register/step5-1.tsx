@@ -29,10 +29,28 @@ import styles, {
 type ProteinLevel = "low" | "medium" | "high";
 type ProteinMode = "auto" | "custom";
 
-const proteinOptions: { label: string; value: ProteinLevel; desc: string; hint: string; }[] = [
-  { label: "พื้นฐาน", value: "low", desc: "เหมาะกับคนทั่วไปที่ดูแลสุขภาพเบาๆ", hint: "ประมาณ 1.2 กรัม / กก." },
-  { label: "สมดุล", value: "medium", desc: "เหมาะกับคนที่ออกกำลังกายสม่ำเสมอ", hint: "ประมาณ 1.6 กรัม / กก." },
-  { label: "สูง", value: "high", desc: "เน้นสร้างกล้ามเนื้อแบบที่คุณต้องการ", hint: "ประมาณ 2.0-2.4 กรัม / กก." },
+const proteinOptions: { label: string; value: ProteinLevel; desc: string; hint: string; detail: string; }[] = [
+  {
+    label: "พื้นฐาน",
+    value: "low",
+    desc: "เหมาะกับคนทั่วไปที่ดูแลสุขภาพเบาๆ",
+    hint: "ประมาณ 1.2 กรัม / กก.",
+    detail: "ระดับนี้เพียงพอสำหรับการรักษามวลกล้ามเนื้อและซ่อมแซมเนื้อเยื่อในชีวิตประจำวัน เหมาะหากคุณไม่ได้ออกกำลังกายหนัก หรือต้องการดูแลสุขภาพแบบง่ายๆ",
+  },
+  {
+    label: "สมดุล",
+    value: "medium",
+    desc: "เหมาะกับคนที่ออกกำลังกายสม่ำเสมอ",
+    hint: "ประมาณ 1.6 กรัม / กก.",
+    detail: "ระดับนี้ช่วยเสริมการฟื้นฟูกล้ามเนื้อหลังออกกำลังกายได้ดี เหมาะหากคุณวิ่ง โยคะ ปั่นจักรยาน หรือเข้าฟิตเนส 2-4 วันต่อสัปดาห์",
+  },
+  {
+    label: "สูง",
+    value: "high",
+    desc: "เน้นสร้างกล้ามเนื้อแบบที่คุณต้องการ",
+    hint: "ประมาณ 2.0-2.4 กรัม / กก.",
+    detail: "ระดับนี้ออกแบบมาสำหรับคนที่เล่นเวทเทรนนิ่งเป็นประจำ หรือต้องการเพิ่มมวลกล้ามเนื้ออย่างจริงจัง ช่วยให้ร่างกายสร้างและซ่อมแซมกล้ามเนื้อได้เร็วขึ้น",
+  },
 ];
 
 export default function RegisterStep5_1Screen() {
@@ -121,15 +139,26 @@ export default function RegisterStep5_1Screen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled" // <--- ทำให้จิ้มช่องกรอก/ปุ่มได้ราบรื่นขึ้น
       >
-        <Text style={styles.stepTitle}>5.1 ปริมาณโปรตีน</Text>
+        <Text style={styles.stepTitle}>5.1 ระดับโปรตีน</Text>
 
         <View style={styles.progressTrack}>
           <View style={[styles.progressFill, { width: "60%" }]} />
         </View>
 
         <Text style={styles.sectionDesc}>
-          จากข้อมูลของคุณ เราขอแนะนำระดับโปรตีนที่เหมาะสม หรือคุณสามารถปรับเองได้เลย
+          ระดับโปรตีนคือปริมาณโปรตีนที่ร่างกายควรได้รับต่อวันตามน้ำหนักและกิจกรรมของคุณ โปรตีนเป็นสารอาหารสำคัญที่ช่วยซ่อมแซมกล้ามเนื้อ เสริมสร้างภูมิคุ้มกัน และรักษาสมดุลของร่างกาย การได้รับโปรตีนในปริมาณที่เหมาะสมจะช่วยให้ร่างกายแข็งแรงและทำงานได้อย่างมีประสิทธิภาพ
         </Text>
+
+        {/* แสดงค่าโปรตีนที่ได้รับจริง */}
+        <View style={styles.proteinValueCard}>
+          <Text style={styles.proteinValueLabel}>ระดับโปรตีนที่ได้รับจริง</Text>
+          <Text style={styles.proteinValueNumber}>
+            {autoRecommendedProtein} กรัม / วัน
+          </Text>
+          <Text style={styles.proteinValueHint}>
+            คิดเป็นประมาณ {currentWeight > 0 ? (autoRecommendedProtein / currentWeight).toFixed(1) : "1.6"} กรัม ต่อน้ำหนักตัว 1 กก.
+          </Text>
+        </View>
 
         {/* สลับโหมดออโต้ / กรอกเอง */}
         <View style={styles.modeRow}>
@@ -182,6 +211,7 @@ export default function RegisterStep5_1Screen() {
                   </View>
                   <Text style={[styles.optionDesc, active && styles.optionDescActive]}>{item.desc}</Text>
                   <Text style={[styles.optionHint, active && styles.optionHintActive]}>{item.hint}</Text>
+                  <Text style={[styles.optionDetail, active && styles.optionDetailActive]}>{item.detail}</Text>
                 </TouchableOpacity>
               );
             })}

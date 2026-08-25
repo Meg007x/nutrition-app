@@ -17,16 +17,14 @@ const styles = StyleSheet.create({
     backgroundColor: BG 
 },
   headerBar: {
-     paddingVertical: 16, 
-     alignItems: "center", 
-     borderBottomWidth: 1, 
-     borderBottomColor: "#E5E5E5",
-      backgroundColor: "#FFF" },
+     paddingVertical: 16,
+     alignItems: "center",
+     backgroundColor: ORANGE },
 
-  headerText: { 
-    fontSize: 18, 
-    color: "#333",
-     fontFamily: FONT_BOLD },
+  headerText: {
+    fontSize: 18,
+    color: "#FFF",
+    fontFamily: FONT_BOLD },
   scroll: { flex: 1 },
   scrollContent: { padding: 24, paddingBottom: 60 },
   stepTitle: { fontSize: 22, color: "#222", marginBottom: 16, fontFamily: FONT_BOLD },
@@ -53,6 +51,59 @@ const styles = StyleSheet.create({
   emptyText: { padding: 20, textAlign: "center", fontSize: 16, color: "#666", backgroundColor: "#FFF", fontFamily: FONT_REGULAR },
   doneBtn: { backgroundColor: "#222", borderRadius: 12, paddingVertical: 14, alignItems: "center", marginTop: 24 },
   doneBtnText: { color: "#FFF", fontSize: 16, fontFamily: FONT_BOLD },
+
+  searchToggleBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFF",
+    borderWidth: 1,
+    borderColor: "#E5E5E5",
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: 12,
+    gap: 8,
+  },
+
+  searchToggleText: {
+    fontSize: 14,
+    color: "#333",
+    fontFamily: FONT_BOLD,
+  },
+
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFF",
+    borderWidth: 1,
+    borderColor: "#DDD",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 12,
+  },
+
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: "#333",
+    fontFamily: FONT_REGULAR,
+    paddingVertical: 4,
+  },
+
+  showMoreBtn: {
+    padding: 14,
+    alignItems: "center",
+    backgroundColor: "#FAFAFA",
+    borderTopWidth: 1,
+    borderTopColor: "#EFEFEF",
+  },
+
+  showMoreText: {
+    fontSize: 14,
+    color: ORANGE,
+    fontFamily: FONT_BOLD,
+  },
 
   customInputRow: { flexDirection: "row", padding: 12, backgroundColor: "#FAFAFA", borderTopWidth: 1, borderTopColor: "#EFEFEF" },
   customInput: { flex: 1, height: 40, backgroundColor: "#FFF", borderWidth: 1, borderColor: "#DDD", borderRadius: 8, paddingHorizontal: 12, fontSize: 15, fontFamily: FONT_REGULAR },

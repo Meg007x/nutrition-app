@@ -7,6 +7,7 @@ import {
   ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useRegister } from "../../context/register-context";
 import styles, { ORANGE, IOS_GREEN } from "./step8.styles";
@@ -80,25 +81,47 @@ export default function RegisterStep8Screen() {
             return (
               <TouchableOpacity
                 key={cuisine.id}
-                style={[
-                  styles.cuisineItem,
-                  isSelected
-                    ? styles.cuisineItemSelected
-                    : styles.cuisineItemUnselected,
-                ]}
+                style={{
+                  ...styles.cuisineItem,
+                  ...(isSelected ? styles.cuisineItemSelected : styles.cuisineItemUnselected),
+                  ...(isSelected ? {
+                    borderWidth: 2,
+                    borderColor: ORANGE,
+                    shadowColor: ORANGE,
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.35,
+                    shadowRadius: 8,
+                    elevation: 6,
+                  } : {}),
+                }}
                 activeOpacity={0.7}
                 onPress={() => toggleSelection(cuisine.id)}
               >
-                <Text
-                  style={[
-                    styles.cuisineText,
-                    isSelected
-                      ? styles.cuisineTextSelected
-                      : styles.cuisineTextUnselected,
-                  ]}
-                >
-                  {cuisine.name}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flex: 1 }}>
+                  <Text
+                    style={[
+                      styles.cuisineText,
+                      isSelected
+                        ? styles.cuisineTextSelected
+                        : styles.cuisineTextUnselected,
+                    ]}
+                  >
+                    {cuisine.name}
+                  </Text>
+                  {/* ✅ Checkmark icon เมื่อถูกเลือก */}
+                  {isSelected && (
+                    <View style={{
+                      backgroundColor: 'rgba(255,255,255,0.3)',
+                      borderRadius: 14,
+                      width: 28,
+                      height: 28,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                      <Ionicons name="checkmark-circle" size={22} color="#FFF" />
+                    </View>
+                  )}
+                </View>
               </TouchableOpacity>
             );
           })}
@@ -110,7 +133,7 @@ export default function RegisterStep8Screen() {
         <View style={styles.buttonRow}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => router.push("/register/step7" as any)}
+            onPress={() => router.back()}
           >
             <Text style={styles.backText}>ย้อนกลับ</Text>
           </TouchableOpacity>

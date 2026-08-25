@@ -22,9 +22,8 @@ import {
   BLUE,
   BLUE_DARK,
   TEXT,
-} from "./water-log.styles";
-
-const API_BASE = "http://localhost:3000"; 
+} from "../style/water-log.styles";
+import { BASE_URL } from "../constants/config";
 
 type WaterRecord = {
   time: string;
@@ -142,7 +141,7 @@ export default function WaterLogScreen() {
     try {
       setLoading(true);
       const response = await fetch(
-        `${API_BASE}/api/water-logs/daily/${userId}?date=${selectedDate}`
+        `${BASE_URL}/api/water-logs/daily/${userId}?date=${selectedDate}`
       );
       const res = await response.json();
       if (!response.ok || !res.success) {
@@ -199,7 +198,7 @@ export default function WaterLogScreen() {
 
     try {
       setSaving(true);
-      const response = await fetch(`${API_BASE}/api/water-logs`, {
+      const response = await fetch(`${BASE_URL}/api/water-logs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -225,7 +224,7 @@ export default function WaterLogScreen() {
     if (!userId) return;
     try {
       const response = await fetch(
-        `${API_BASE}/api/water-logs/${userId}/${selectedDate}/${index}`,
+        `${BASE_URL}/api/water-logs/${userId}/${selectedDate}/${index}`,
         {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },

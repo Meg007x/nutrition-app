@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -17,11 +17,7 @@ import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useRegister } from "../../context/register-context";
 import styles, { ORANGE, BG, IOS_GREEN, ROW_COLOR_1, ROW_COLOR_2 } from "./step7.styles";
-
-
-
-// ⚠️ อย่าลืมแก้ IP เป็นของเครื่องคุณ
-const API_URL = "http://localhost:3000/api/disliked-foods";
+import { API_BASE_URL } from "../../constants/config";
 
 type CategoryData = {
   id: string;
@@ -36,16 +32,18 @@ export default function RegisterStep7Screen() {
   const [categories, setCategories] = useState<CategoryData[]>([]);
 
   const [selectedFoods, setSelectedFoods] = useState<Set<string>>(new Set());
-  const [customFoods, setCustomFoods] = useState<Record<string, string[]>>({});
   
   // 💡 State ควบคุมการสลับหน้าจอ (null = อยู่หน้าหลัก, string = เข้าไปในหมวดหมู่นั้นๆ)
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
-  const [inputText, setInputText] = useState("");
+  
+  // 🔍 State สำหรับค้นหา
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showSearch, setShowSearch] = useState(false);
 
   useEffect(() => {
     const fetchDislikedFoods = async () => {
       try {
-        const response = await fetch(API_URL);
+        const response = await fetch(`${API_BASE_URL}/disliked-foods`);
         const result = await response.json();
         
         if (result && result.data) {
@@ -55,22 +53,15 @@ export default function RegisterStep7Screen() {
           const isOldArray = Array.isArray(safeDisliked);
 
           const restoredSelected = new Set<string>();
-          const restoredCustoms: Record<string, string[]> = {};
 
           if (!isOldArray) {
             Object.keys(safeDisliked).forEach(catId => {
               const itemsInCat = safeDisliked[catId] || [];
-              const knownFoodsInCat = result.data.find((c: CategoryData) => c.id === catId)?.foods.map((f: any) => f.name) || [];
-              
-              const customItems = itemsInCat.filter((item: string) => !knownFoodsInCat.includes(item));
-              if (customItems.length > 0) restoredCustoms[catId] = customItems;
-
               itemsInCat.forEach((item: string) => restoredSelected.add(item));
             });
           }
 
           setSelectedFoods(restoredSelected);
-          setCustomFoods(restoredCustoms);
         }
       } catch (error) {
         console.error("Fetch Error:", error);
@@ -89,35 +80,6 @@ export default function RegisterStep7Screen() {
     setSelectedFoods(newSet);
   };
 
-  const handleAddCustomFood = () => {
-    if (!activeCategoryId) return;
-    const text = inputText.trim();
-    if (text.length < 2) {
-      Alert.alert("สั้นเกินไป", "กรุณาพิมพ์ชื่ออาหารอย่างน้อย 2 ตัวอักษร");
-      return;
-    }
-
-    const isValidFormat = /^[ก-ฮะ-์a-zA-Z\s]+$/.test(text);
-    if (!isValidFormat) {
-      Alert.alert("ข้อมูลไม่ถูกต้อง", "ห้ามใส่ตัวเลขหรือสัญลักษณ์พิเศษ");
-      return;
-    }
-
-    const currentCustoms = customFoods[activeCategoryId] || [];
-    const isExistInDB = categories.find(c => c.id === activeCategoryId)?.foods.some(f => f.name === text);
-    
-    if (currentCustoms.includes(text) || isExistInDB) {
-      Alert.alert("ซ้ำ", "มีรายการอาหารนี้อยู่แล้ว");
-      return;
-    }
-
-    setCustomFoods(prev => ({ ...prev, [activeCategoryId]: [...currentCustoms, text] }));
-    const newSet = new Set(selectedFoods);
-    newSet.add(text);
-    setSelectedFoods(newSet);
-    setInputText(""); 
-  };
-
   const removeSelected = (foodName: string) => {
     const newSet = new Set(selectedFoods);
     newSet.delete(foodName);
@@ -128,8 +90,7 @@ export default function RegisterStep7Screen() {
     const formattedData: Record<string, string[]> = {};
     categories.forEach(cat => {
       const selectedInCat = cat.foods.filter(f => selectedFoods.has(f.name)).map(f => f.name);
-      const customInCat = (customFoods[cat.id] || []).filter(f => selectedFoods.has(f));
-      formattedData[cat.id] = [...selectedInCat, ...customInCat];
+      formattedData[cat.id] = selectedInCat;
     });
 
     updateForm({ dislikedFoods: formattedData as any });
@@ -140,7 +101,7 @@ export default function RegisterStep7Screen() {
     return (
       <SafeAreaView style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
         <ActivityIndicator size="large" color={ORANGE} />
-        <Text style={{ marginTop: 16, color: "#666", fontWeight: "700" }}>กำลังโหลดข้อมูล...</Text>
+        <Text style={{ marginTop: 16, color: "#666", fontFamily: "NotoSansThaiBold" }}>กำลังโหลดข้อมูล...</Text>
       </SafeAreaView>
     );
   }
@@ -168,7 +129,7 @@ export default function RegisterStep7Screen() {
             <View>
               <View style={styles.subScreenHeader}>
                 <TouchableOpacity 
-                  onPress={() => { setActiveCategoryId(null); setInputText(""); }} 
+                  onPress={() => { setActiveCategoryId(null); setSearchQuery(""); setShowSearch(false); }} 
                   style={styles.backIconBtn}
                 >
                   <Ionicons name="arrow-back" size={24} color="#333" />
@@ -177,59 +138,95 @@ export default function RegisterStep7Screen() {
                 <Text style={styles.subScreenTitle}>หมวด: {activeCat.name}</Text>
               </View>
 
+              {/* ปุ่มค้นหา */}
+              <TouchableOpacity 
+                style={styles.searchToggleBtn}
+                onPress={() => setShowSearch(!showSearch)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name={showSearch ? "close" : "search"} size={18} color="#333" />
+                <Text style={styles.searchToggleText}>
+                  {showSearch ? "ปิดการค้นหา" : "ค้นหา"}
+                </Text>
+              </TouchableOpacity>
+
+              {/* ช่องค้นหา */}
+              {showSearch && (
+                <View style={styles.searchContainer}>
+                  <Ionicons name="search" size={18} color="#999" style={{ marginRight: 8 }} />
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder="พิมพ์ชื่ออาหาร..."
+                    placeholderTextColor="#999"
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    returnKeyType="search"
+                  />
+                  {searchQuery ? (
+                    <TouchableOpacity onPress={() => setSearchQuery("")} activeOpacity={0.8}>
+                      <Ionicons name="close-circle" size={20} color="#999" />
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              )}
+
               <View style={styles.subListWrapOuter}>
                 {(() => {
                   const defaultFoods = activeCat.foods || [];
-                  const userAddedFoods = customFoods[activeCat.id] || [];
-                  const allFoodsInCat = [...defaultFoods.map(f => f.name), ...userAddedFoods];
+                  
+                  // กรองข้อมูลตามคำค้นหา
+                  const filteredFoods = searchQuery
+                    ? defaultFoods.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                    : defaultFoods;
 
-                  return allFoodsInCat.length > 0 ? (
-                    allFoodsInCat.map((foodName, i) => {
-                      const isLast = i === allFoodsInCat.length - 1;
-                      const isSelected = selectedFoods.has(foodName);
-                      return (
-                        <TouchableOpacity
-                          key={foodName}
-                          style={[styles.subItemRow, !isLast && styles.subItemRowBorder]}
-                          onPress={() => toggleFood(foodName)}
-                          activeOpacity={0.7}
+                  // แสดง 10 รายการแรก ถ้าไม่ได้ค้นหา
+                  const displayFoods = searchQuery ? filteredFoods : filteredFoods.slice(0, 10);
+                  const hasMore = !searchQuery && filteredFoods.length > 10;
+
+                  return displayFoods.length > 0 ? (
+                    <>
+                      {displayFoods.map((food, i) => {
+                        const isLast = i === displayFoods.length - 1 && !hasMore;
+                        const isSelected = selectedFoods.has(food.name);
+                        return (
+                          <TouchableOpacity
+                            key={food.name}
+                            style={[styles.subItemRow, !isLast && styles.subItemRowBorder]}
+                            onPress={() => toggleFood(food.name)}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={styles.subItemText}>{food.name}</Text>
+                            <Switch
+                              value={isSelected}
+                              onValueChange={() => toggleFood(food.name)}
+                              trackColor={{ false: "#D1D1D6", true: IOS_GREEN }}
+                              thumbColor="#FFF"
+                              ios_backgroundColor="#D1D1D6"
+                            />
+                          </TouchableOpacity>
+                        );
+                      })}
+                      {hasMore && (
+                        <TouchableOpacity 
+                          style={styles.showMoreBtn}
+                          onPress={() => setShowSearch(true)}
+                          activeOpacity={0.8}
                         >
-                          <Text style={styles.subItemText}>{foodName}</Text>
-                          <Switch
-                            value={isSelected}
-                            onValueChange={() => toggleFood(foodName)}
-                            trackColor={{ false: "#D1D1D6", true: IOS_GREEN }}
-                            thumbColor="#FFF"
-                            ios_backgroundColor="#D1D1D6"
-                          />
+                          <Text style={styles.showMoreText}>
+                            แสดงทั้งหมด ({filteredFoods.length} รายการ) กดค้นหาเพื่อดูเพิ่มเติม
+                          </Text>
                         </TouchableOpacity>
-                      );
-                    })
+                      )}
+                    </>
                   ) : (
-                    <Text style={styles.emptyText}>ไม่มีข้อมูลในหมวดนี้</Text>
+                    <Text style={styles.emptyText}>ไม่พบข้อมูลที่ค้นหา</Text>
                   );
                 })()}
-
-                {/* ช่องพิมพ์เพิ่มรายการเอง */}
-                <View style={styles.customInputRow}>
-                  <TextInput
-                    style={styles.customInput}
-                    placeholder="+ พิมพ์เพิ่มรายการที่ไม่ชอบ..."
-                    placeholderTextColor="#999"
-                    value={inputText}
-                    onChangeText={setInputText}
-                    onSubmitEditing={handleAddCustomFood}
-                    returnKeyType="done"
-                  />
-                  <TouchableOpacity style={styles.customAddBtn} onPress={handleAddCustomFood}>
-                    <Text style={styles.customAddBtnText}>เพิ่ม</Text>
-                  </TouchableOpacity>
-                </View>
               </View>
 
               <TouchableOpacity 
                 style={styles.doneBtn} 
-                onPress={() => { setActiveCategoryId(null); setInputText(""); }}
+                onPress={() => { setActiveCategoryId(null); setSearchQuery(""); setShowSearch(false); }}
               >
                 <Text style={styles.doneBtnText}>ยืนยันหมวดหมู่นี้</Text>
               </TouchableOpacity>
@@ -250,9 +247,7 @@ export default function RegisterStep7Screen() {
                   const bgColor = index % 2 === 0 ? ROW_COLOR_1 : ROW_COLOR_2;
                   // นับจำนวนรายการที่เลือกในหมวดนี้
                   const defaultFoods = cat.foods || [];
-                  const userAddedFoods = customFoods[cat.id] || [];
-                  const allFoodsInCat = [...defaultFoods.map(f => f.name), ...userAddedFoods];
-                  const countSelected = allFoodsInCat.filter(f => selectedFoods.has(f)).length;
+                  const countSelected = defaultFoods.filter(f => selectedFoods.has(f.name)).length;
 
                   return (
                     <TouchableOpacity

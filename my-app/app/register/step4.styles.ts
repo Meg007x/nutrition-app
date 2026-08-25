@@ -131,11 +131,12 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 12,
   },
-
-  goalButton: {
+goalButton: {
     flex: 1,
     minHeight: 54,
-    backgroundColor: "#EA8D20",
+    backgroundColor: WHITE,       // 👈 1. เปลี่ยนพื้นหลังเริ่มต้นเป็นสีขาวตามสั่ง
+    borderWidth: 1.5,             // 👈 2. เพิ่มเส้นขอบให้กับปุ่ม
+    borderColor: "#000000",       // 👈 3. เปลี่ยนสีขอบเริ่มต้นเป็นสีดำตามสั่ง
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 8,
@@ -146,30 +147,24 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.16,
     shadowRadius: 4,
     elevation: 4,
+
   },
 
   goalButtonActive: {
-    backgroundColor: "#D77C14",
-    borderWidth: 2,
-    borderColor: "#B85F00",
+    backgroundColor: "#EA8D20",   // 👈 4. พอกดแล้วให้กลายเป็นสีส้มเดิมของระบบ
+    borderWidth: 1.5,
+    borderColor: "#EA8D20",       // ขอบส้มกลืนไปกับปุ่ม
   },
 
   goalButtonText: {
-    color: "#fff",
+    color: "#000000",             // 👈 5. เปลี่ยนสีข้อความเริ่มต้นเป็นสีดำตามสั่ง
     fontSize: 15,
     textAlign: "center",
     fontFamily: FONT_BOLD,
   },
 
   goalButtonTextActive: {
-    color: "#fff",
-  },
-
-  inputLabel: {
-    marginTop: 18,
-    fontSize: 17,
-    color: "#111",
-    fontFamily: FONT_BOLD,
+    color: WHITE,                 // 👈 6. พอกดแล้วให้ข้อความเปลี่ยนเป็นสีขาว
   },
 
   weightInputWrap: {
@@ -233,6 +228,11 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+inputLabel: {
+    fontSize: 16,
+    color: "#333",
+    fontFamily: FONT_REGULAR,
+},
 
   selectText: {
     fontSize: 16,

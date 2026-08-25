@@ -21,11 +21,27 @@ const getIngredients = async (req, res) => {
       })
       .toArray();
 
+    // จัดกลุ่มข้อมูลตาม category_group สำหรับหน้า 6-2
+    const grouped = { veg: [], condiment: [], meat: [], other: [] };
+    ingredientsData.forEach((item) => {
+      const group = String(item.category_group || "").toLowerCase();
+      const formatted = { _id: item._id, name: item.name, category_group: item.category_group, sub_category: item.sub_category };
+      if (group.includes("ผัก") || group.includes("ผลไม") || group === "veg" || group === "vegetable") {
+        grouped.veg.push(formatted);
+      } else if (group.includes("เครื่อง") || group.includes("ปรุง") || group === "condiment" || group === "seasoning") {
+        grouped.condiment.push(formatted);
+      } else if (group.includes("เนื้อ") || group.includes("สัตว") || group === "meat" || group === "protein") {
+        grouped.meat.push(formatted);
+      } else {
+        grouped.other.push(formatted);
+      }
+    });
+
     return res.status(200).json({
       success: true,
       message: "ดึงข้อมูลวัตถุดิบสำเร็จ",
       count: ingredientsData.length,
-      data: ingredientsData,
+      data: grouped,
     });
   } catch (error) {
     console.error("❌ Get Ingredients Error:", error);
