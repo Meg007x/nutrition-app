@@ -2,6 +2,26 @@
 const MasterFood = require("../models/MasterFood");
 
 // ======================================================
+// Shared: Calculate Daily Nutrition Target from User
+// ======================================================
+
+function calculateDailyNutritionTarget(user) {
+  const targetKcal = user?.health_goals?.tdee_target_kcal || 0;
+  const protein_g = user?.health_goals?.protein_target_g || 0;
+  const carb_g = targetKcal > 0 ? Math.round((targetKcal * 0.5) / 4) : 0;
+  const fat_g = targetKcal > 0 ? Math.round((targetKcal * 0.25) / 9) : 0;
+
+  return {
+    kcal: targetKcal,
+    protein_g,
+    carb_g,
+    fat_g,
+    fiber_g: 0,
+    sodium_mg: 0,
+  };
+}
+
+// ======================================================
 // Helpers
 // ======================================================
 
@@ -59,12 +79,21 @@ function addNutrition(current, nutrition) {
 
 function mapFood(food) {
   if (!food) return null;
+  const nutrition = getNutrition(food);
   return {
     food_id: food._id || food.food_id || null,
     name: food.name || "",
     image_url: food.image || food.image_url || "",
     category: food.category || "",
-    kcal: getNutrition(food).kcal,
+    kcal: nutrition.kcal,
+    nutrition_per_portion: food.nutrition_per_portion || {
+      kcal: nutrition.kcal,
+      protein_g: nutrition.protein_g,
+      carb_g: nutrition.carb_g,
+      fat_g: nutrition.fat_g,
+      fiber_g: nutrition.fiber_g,
+      sodium_mg: nutrition.sodium_mg,
+    },
   };
 }
 
@@ -89,12 +118,22 @@ function flattenValues(obj) {
 
 async function createMealPlans(req, res) {
   try {
-    const { user_id, start_date, days = 7, target_kcal = 2000, protein_g = 0, carb_g = 0, fat_g = 0, fiber_g = 0, sodium_mg = 0, goal = "", allergies = [], disliked_foods = [] } = req.body;
+    const { user_id, start_date, days = 7, goal = "", allergies = [], disliked_foods = [] } = req.body;
 
     console.log("📋 CREATE MEAL PLAN | USER:", user_id, "DAYS:", days);
 
     if (!user_id) return res.status(400).json({ success: false, message: "กรุณาระบุ user_id" });
     if (!start_date || !isValidDate(start_date)) return res.status(400).json({ success: false, message: "กรุณาระบุ start_date (YYYY-MM-DD)" });
+
+    // Fetch user to get health_goals as source of truth
+    const User = require("../models/User");
+    const user = await User.findOne({ $or: [{ user_id }, { username: user_id }, { email: user_id }] }).lean();
+    if (!user) return res.status(404).json({ success: false, message: "ไม่พบผู้ใช้" });
+
+    const dailyTarget = calculateDailyNutritionTarget(user);
+    const { kcal: target_kcal, protein_g, carb_g, fat_g, fiber_g, sodium_mg } = dailyTarget;
+
+    console.log("📋 DAILY TARGET from User.health_goals:", JSON.stringify(dailyTarget));
 
     const planDays = Math.min(Math.max(Number(days) || 7, 1), 7);
     const planId = generatePlanId();
@@ -211,10 +250,24 @@ async function getPlansByUserId(req, res) {
 async function deletePlanByPlanId(req, res) {
   try {
     const { plan_id } = req.params;
-    if (!plan_id) return res.status(400).json({ success: false, message: "กรุณาระบุ plan_id" });
+    console.log("🗑️ [BACKEND DELETE] plan_id from params:", plan_id);
+    console.log("🗑️ [BACKEND DELETE] full URL:", req.originalUrl);
+
+    if (!plan_id) {
+      console.error("🗑️ [BACKEND DELETE] ERROR: no plan_id");
+      return res.status(400).json({ success: false, message: "กรุณาระบุ plan_id" });
+    }
+
+    // Check if documents exist before deleting
+    const existingCount = await DailyPlan.countDocuments({ plan_id });
+    console.log("🗑️ [BACKEND DELETE] existing documents with plan_id:", existingCount);
+
     const result = await DailyPlan.deleteMany({ plan_id });
+    console.log("🗑️ [BACKEND DELETE] deletedCount:", result.deletedCount);
+
     return res.json({ success: true, message: "ลบแผนอาหารสำเร็จ", plan_id, deleted_count: result.deletedCount });
   } catch (error) {
+    console.error("🗑️ [BACKEND DELETE] ERROR:", error.message);
     return res.status(500).json({ success: false, message: "ไม่สามารถลบแผนอาหารได้", error: error.message });
   }
 }
@@ -232,6 +285,24 @@ async function replaceMealInPlan(req, res) {
     if (!date) return res.status(400).json({ success: false, message: "กรุณาระบุ date" });
     if (slot_index === undefined || slot_index === null) return res.status(400).json({ success: false, message: "กรุณาระบุ slot_index" });
 
+    // ==================================================
+    // Date validation for status-only updates
+    // MUST be before DailyPlan query to reject non-today dates
+    // ==================================================
+
+    if (status && !food_id) {
+      const validStatuses = ["pending", "eaten", "cleared"];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({ success: false, message: `status ต้องเป็น ${validStatuses.join(", ")}` });
+      }
+
+      const now = new Date();
+      const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      if (date !== todayStr) {
+        return res.status(400).json({ success: false, message: "สามารถบันทึกการกินได้เฉพาะวันที่ปัจจุบันเท่านั้น", date, today: todayStr });
+      }
+    }
+
     const dailyPlan = await DailyPlan.findOne({ plan_id: planId, date, plan_status: "active" });
     if (!dailyPlan) return res.status(404).json({ success: false, message: "ไม่พบแผนอาหารสำหรับวันที่ระบุ" });
 
@@ -246,11 +317,6 @@ async function replaceMealInPlan(req, res) {
     // ==================================================
 
     if (status && !food_id) {
-      const validStatuses = ["pending", "eaten", "cleared"];
-      if (!validStatuses.includes(status)) {
-        return res.status(400).json({ success: false, message: `status ต้องเป็น ${validStatuses.join(", ")}` });
-      }
-
       dailyPlan.slots[idx].status = status;
       await dailyPlan.save();
       return res.json({ success: true, message: "อัปเดตสถานะสำเร็จ", updated_plan: dailyPlan });
@@ -362,6 +428,33 @@ function mapFoodForResponse(f) {
 // ======================================================
 
 // ======================================================
+// DELETE /api/meal/plans/:plan_id/day/:date
+// ======================================================
+
+async function deletePlanDay(req, res) {
+  try {
+    const { plan_id, date } = req.params;
+
+    if (!plan_id) {
+      return res.status(400).json({ success: false, message: "กรุณาระบุ plan_id" });
+    }
+    if (!date) {
+      return res.status(400).json({ success: false, message: "กรุณาระบุ date" });
+    }
+
+    const result = await DailyPlan.deleteMany({ plan_id, date });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ success: false, message: "ไม่พบข้อมูลแผนอาหารสำหรับวันที่ระบุ", plan_id, date });
+    }
+
+    return res.json({ success: true, message: "ลบแผนอาหารวันนั้นสำเร็จ", plan_id, date, deleted_count: result.deletedCount });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "ไม่สามารถลบแผนอาหารวันนั้นได้", error: error.message });
+  }
+}
+
+// ======================================================
 // getFoodById
 // ======================================================
 
@@ -394,6 +487,7 @@ module.exports = {
   getPlansByPlanId,
   getPlansByUserId,
   deletePlanByPlanId,
+  deletePlanDay,
   replaceMealInPlan,
   deleteMealFromPlan,
   searchFoods,

@@ -8,6 +8,14 @@ const FoodSchema = new mongoose.Schema(
     image_url: { type: String, default: "" },
     category: { type: String, default: "" },
     kcal: { type: Number, default: 0 },
+    nutrition_per_portion: {
+      kcal: { type: Number, default: 0 },
+      protein_g: { type: Number, default: 0 },
+      carb_g: { type: Number, default: 0 },
+      fat_g: { type: Number, default: 0 },
+      fiber_g: { type: Number, default: 0 },
+      sodium_mg: { type: Number, default: 0 },
+    },
   },
   { _id: false }
 );

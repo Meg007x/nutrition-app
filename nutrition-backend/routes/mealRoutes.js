@@ -6,6 +6,7 @@ const {
   getPlansByPlanId,
   getPlansByUserId,
   deletePlanByPlanId,
+  deletePlanDay,
   replaceMealInPlan,
   deleteMealFromPlan,
   searchFoods,
@@ -18,6 +19,7 @@ router.get("/foods/:food_id", getFoodById);
 router.post("/plans", createMealPlans);
 router.get("/plans/:plan_id", getPlansByPlanId);
 router.delete("/plans/:plan_id", deletePlanByPlanId);
+router.delete("/plans/:plan_id/day/:date", deletePlanDay);
 
 router.get("/user/:user_id", getPlansByUserId);
 

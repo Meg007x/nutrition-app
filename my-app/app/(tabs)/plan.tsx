@@ -21,6 +21,7 @@ import {
   TextInput,
   FlatList,
   Image,
+  Platform,
 } from "react-native";
 
 import { Ionicons } from "@expo/vector-icons";
@@ -35,6 +36,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   getUserPlan,
   deletePlan as apiDeletePlan,
+  deletePlanDay,
   replaceMeal,
   deleteMeal,
   searchFoods,
@@ -44,6 +46,7 @@ import {
   getEatenKcal,
   getTargetKcal,
   getEatenCount,
+  getEatenNutrition,
   type DailyPlan,
   type SearchResult,
 } from "../../services/mealPlanService";
@@ -97,9 +100,8 @@ function thaiDate(ds: string) {
     "ธ.ค.",
   ];
 
-  return `${d.getDate()} ${mo[d.getMonth()]} ${
-    d.getFullYear() + 543
-  }`;
+  return `${d.getDate()} ${mo[d.getMonth()]} ${d.getFullYear() + 543
+    }`;
 }
 
 function mealIcon(mt: string) {
@@ -131,48 +133,8 @@ function mealIcon(mt: string) {
 
 /* =========================================================
    FOOD HELPERS
-
-   MasterFood:
-
-   _id: String
-   name: String
-   name_en: String
-   image: String
-
-   nutrition_per_portion:
-   {
-      kcal,
-      protein_g,
-      carb_g,
-      fat_g,
-      fiber_g,
-      sodium_mg
-   }
-
-   ingredients:
-   [
-      {
-         ingredient_id,
-         qty,
-         unit
-      }
-   ]
 ========================================================= */
 
-/*
- * แปลงชื่อไฟล์รูปจาก MasterFood
- *
- * ตัวอย่าง:
- *
- * food.image
- *    = "chicken_salad.jpg"
- *
- * จะถูกแปลงเป็น:
- *
- * http://<BACKEND_HOST>:3000/uploads/master/chicken_salad.jpg
- *
- * ถ้า API ส่ง URL เต็มมาอยู่แล้ว จะใช้ URL เดิม
- */
 function getFoodImage(food: any): string | null {
   if (!food) return null;
 
@@ -198,26 +160,12 @@ function getFoodImage(food: any): string | null {
     return null;
   }
 
-  /*
-   * ถ้า Backend ส่ง URL เต็มมาแล้ว
-   * เช่น:
-   * http://192.168.1.100:3000/uploads/master/chicken_salad.jpg
-   */
   if (
     value.startsWith("http://") ||
     value.startsWith("https://")
   ) {
     return value;
   }
-
-  /*
-   * รองรับกรณี image เป็น path เช่น:
-   *
-   * /uploads/master/chicken_salad.jpg
-   * uploads/master/chicken_salad.jpg
-   * master/chicken_salad.jpg
-   * chicken_salad.jpg
-   */
 
   let filename = value;
 
@@ -228,16 +176,10 @@ function getFoodImage(food: any): string | null {
     .replace(/^uploads\/master\//i, "")
     .replace(/^master\//i, "");
 
-  /*
-   * เอาเฉพาะชื่อไฟล์สุดท้าย
-   */
   filename =
     filename.split("/").pop() ||
     filename;
 
-  /*
-   * สร้าง URL ไปยัง Backend
-   */
   return `${BASE_URL}/uploads/master/${encodeURIComponent(
     filename
   )}`;
@@ -274,79 +216,65 @@ function getNutrition(food: any) {
     kcal:
       Number(
         n?.kcal ??
-          food?.kcal ??
-          food?.calories ??
-          0
+        food?.kcal ??
+        food?.calories ??
+        0
       ) || 0,
 
     protein:
       Number(
         n?.protein_g ??
-          n?.protein ??
-          food?.protein_g ??
-          food?.protein ??
-          0
+        n?.protein ??
+        food?.protein_g ??
+        food?.protein ??
+        0
       ) || 0,
 
     carbs:
       Number(
         n?.carb_g ??
-          n?.carbs_g ??
-          n?.carbohydrate_g ??
-          n?.carbs ??
-          food?.carb_g ??
-          food?.carbs ??
-          0
+        n?.carbs_g ??
+        n?.carbohydrate_g ??
+        n?.carbs ??
+        food?.carb_g ??
+        food?.carbs ??
+        0
       ) || 0,
 
     fat:
       Number(
         n?.fat_g ??
-          n?.fat ??
-          food?.fat_g ??
-          food?.fat ??
-          0
+        n?.fat ??
+        food?.fat_g ??
+        food?.fat ??
+        0
       ) || 0,
 
     fiber:
       Number(
         n?.fiber_g ??
-          food?.fiber_g ??
-          0
+        food?.fiber_g ??
+        0
       ) || 0,
 
     sodium:
       Number(
         n?.sodium_mg ??
-          food?.sodium_mg ??
-          0
+        food?.sodium_mg ??
+        0
       ) || 0,
   };
 }
 
-/*
- * MasterFood ingredients:
-
- ingredients: [
-   {
-      ingredient_id: String,
-      qty: Number,
-      unit: String
-   }
- ]
- */
 function getIngredients(food: any): any[] {
   if (!food) return [];
 
   const ingredients =
-    food?.ingredients ||
-    [];
+    food?.ingredients || [];
 
-  if (Array.isArray(ingredients)) {
-    return ingredients;
-  }
-
-  return [];
+  return Array.isArray(ingredients)
+    ? ingredients
+    : [];
 }
 
 function formatIngredient(
@@ -408,6 +336,20 @@ export default function PlanScreen() {
   const [hasPlan, setHasPlan] =
     useState(false);
 
+  /*
+   * null = ไม่มีการลบ
+   * ALL = กำลังลบทั้งหมด
+   * planId = กำลังลบแผนหนึ่ง
+   */
+  const [deletingPlanId, setDeletingPlanId] =
+    useState<string | null>(null);
+
+  /*
+   * ใช้กันกรณี API/load คืนข้อมูลเก่ากลับมา
+   */
+  const justDeletedPlanIds =
+    useRef<Set<string>>(new Set());
+
   const [activeTab, setActiveTab] =
     useState<"today" | "full">(
       "today"
@@ -417,7 +359,7 @@ export default function PlanScreen() {
     useState(0);
 
   /* =====================================================
-     SEARCH / REPLACE MODAL
+     SEARCH / REPLACE
   ===================================================== */
 
   const [showModal, setShowModal] =
@@ -446,7 +388,7 @@ export default function PlanScreen() {
     > | null>(null);
 
   /* =====================================================
-     FOOD DETAIL MODAL
+     FOOD DETAIL
   ===================================================== */
 
   const [
@@ -533,16 +475,20 @@ export default function PlanScreen() {
       const data =
         await getUserPlan(uid);
 
-      setHasPlan(
-        data?.hasPlan === true
-      );
-
       const p =
         Array.isArray(data?.plans)
-          ? data.plans
+          ? data.plans.filter(
+            (plan: DailyPlan) =>
+              !justDeletedPlanIds.current.has(
+                plan.plan_id
+              )
+          )
           : [];
 
       setPlans(p);
+      setHasPlan(
+        p.length > 0
+      );
 
       const today =
         getTodayDate();
@@ -556,9 +502,14 @@ export default function PlanScreen() {
       if (ti >= 0) {
         setDayIdx(ti);
       } else if (
-        p.length > 0 &&
-        dayIdx >= p.length
+        p.length > 0
       ) {
+        setDayIdx((prev) =>
+          prev >= p.length
+            ? p.length - 1
+            : prev
+        );
+      } else {
         setDayIdx(0);
       }
     } catch (e: any) {
@@ -567,12 +518,13 @@ export default function PlanScreen() {
         e
       );
 
+      setPlans([]);
       setHasPlan(false);
 
       Alert.alert(
         "โหลดแผนไม่สำเร็จ",
         e?.message ||
-          "ไม่สามารถโหลดแผนอาหารได้"
+        "ไม่สามารถโหลดแผนอาหารได้"
       );
     } finally {
       setLoading(false);
@@ -606,6 +558,15 @@ export default function PlanScreen() {
       [todayPlan]
     );
 
+  const eatenNutrition =
+    useMemo(
+      () =>
+        getEatenNutrition(
+          todayPlan
+        ),
+      [todayPlan]
+    );
+
   const targetKcal =
     useMemo(
       () =>
@@ -627,48 +588,156 @@ export default function PlanScreen() {
   const selDay =
     plans[dayIdx] || null;
 
-  /* =====================================================
-     DELETE PLAN
-  ===================================================== */
+  /* =========================================================
+     CLEAR CURRENT PLAN ID
+  ========================================================= */
 
-  function confirmDel(
-    plan: DailyPlan
-  ) {
-    Alert.alert(
-      "ลบแผนอาหาร",
-      `ต้องการลบแผน ${plan.plan_id}?`,
-      [
-        {
-          text: "ยกเลิก",
-          style: "cancel",
-        },
-        {
-          text: "ลบ",
-          style: "destructive",
-          onPress: () =>
-            handleDeletePlan(
-              plan.plan_id
-            ),
-        },
-      ]
-    );
-  }
-
-  async function handleDeletePlan(
-    planId: string
+  async function clearCurrentPlanIfNeeded(
+    deletedPlanId: string
   ) {
     try {
-      await apiDeletePlan(
-        planId
+      const currentPlanId =
+        await AsyncStorage.getItem(
+          "currentPlanId"
+        );
+
+      if (
+        currentPlanId &&
+        currentPlanId ===
+        deletedPlanId
+      ) {
+        await AsyncStorage.removeItem(
+          "currentPlanId"
+        );
+
+        console.log(
+          "[DELETE] cleared currentPlanId:",
+          deletedPlanId
+        );
+      }
+    } catch (e) {
+      console.warn(
+        "clear currentPlanId error:",
+        e
+      );
+    }
+  }
+
+  /* =========================================================
+     DELETE ONE DAY
+     
+     สำคัญ:
+     ใช้ plan_id + date
+     ไม่ใช้ deletePlan(planId)
+     เพราะ deletePlan(planId) จะลบทั้งชุด
+  ========================================================= */
+
+  async function handleDeletePlanDay(
+    plan: DailyPlan
+  ) {
+    if (
+      !plan?.plan_id ||
+      !plan?.date
+    ) {
+      Alert.alert(
+        "ผิดพลาด",
+        "ข้อมูลแผนไม่ถูกต้อง"
+      );
+      return;
+    }
+
+    if (deletingPlanId) {
+      return;
+    }
+
+    const planId =
+      String(plan.plan_id);
+
+    const date =
+      String(plan.date);
+
+    setDeletingPlanId(
+      `${planId}:${date}`
+    );
+
+    try {
+      console.log(
+        "[DELETE DAY] start:",
+        {
+          planId,
+          date,
+        }
       );
 
+      /*
+       * DELETE เฉพาะวัน
+       */
+      await deletePlanDay(
+        planId,
+        date
+      );
+
+      /*
+       * ลบออกจาก state ทันที
+       */
       setPlans((current) => {
+        const index =
+          current.findIndex(
+            (x) =>
+              x.plan_id ===
+              planId &&
+              x.date === date
+          );
+
         const updated =
           current.filter(
             (x) =>
-              x.plan_id !==
-              planId
+              !(
+                x.plan_id ===
+                planId &&
+                x.date === date
+              )
           );
+
+        /*
+         * ปรับ dayIdx
+         */
+        setDayIdx((oldIdx) => {
+          if (
+            updated.length === 0
+          ) {
+            return 0;
+          }
+
+          if (
+            index < 0
+          ) {
+            return Math.min(
+              oldIdx,
+              updated.length - 1
+            );
+          }
+
+          /*
+           * ถ้าลบ item ก่อนหน้า index ปัจจุบัน
+           */
+          if (
+            index < oldIdx
+          ) {
+            return Math.max(
+              0,
+              oldIdx - 1
+            );
+          }
+
+          /*
+           * ถ้า index ปัจจุบันเกินจำนวนใหม่
+           */
+          return Math.min(
+            oldIdx,
+            updated.length - 1
+          );
+        });
 
         setHasPlan(
           updated.length > 0
@@ -677,22 +746,255 @@ export default function PlanScreen() {
         return updated;
       });
 
+      /*
+       * currentPlanId:
+       *
+       * ถ้าลบวันเดียว แต่ยังมีวันอื่นของ
+       * plan_id เดิมอยู่ -> ไม่ต้องล้าง
+       *
+       * ถ้า plan_id นี้ไม่เหลือแล้ว -> ล้าง
+       */
+      const result = await deletePlanDay(
+        plan.plan_id,
+        plan.date
+      );
+
+      setPlans((current) => {
+        return current.filter(
+          (p) =>
+            !(
+              p.plan_id === plan.plan_id &&
+              p.date === plan.date
+            )
+        );
+      });
+
       Alert.alert(
         "สำเร็จ",
-        "ลบแผนอาหารแล้ว"
+        `ลบแผนวันที่ ${thaiDate(
+          date
+        )} แล้ว`
       );
     } catch (e: any) {
+      console.error(
+        "[DELETE DAY ERROR]",
+        e
+      );
+
       Alert.alert(
         "ลบไม่สำเร็จ",
         e?.message ||
-          "ไม่สามารถลบแผนอาหารได้"
+        "ไม่สามารถลบแผนของวันนี้ได้"
+      );
+    } finally {
+      setDeletingPlanId(null);
+    }
+  }
+
+  /* =========================================================
+     CONFIRM DELETE ONE DAY
+  ========================================================= */
+
+  function confirmDeletePlanDay(
+    plan: DailyPlan
+  ) {
+    if (
+      !plan?.plan_id ||
+      !plan?.date
+    ) {
+      return;
+    }
+
+    const message =
+      `ต้องการลบแผนอาหารวันที่ ${thaiDate(
+        plan.date
+      )} หรือไม่?`;
+
+    if (
+      Platform.OS ===
+      "web"
+    ) {
+      const ok =
+        window.confirm(
+          message
+        );
+
+      if (ok) {
+        handleDeletePlanDay(
+          plan
+        );
+      }
+
+      return;
+    }
+
+    Alert.alert(
+      "ลบแผนอาหาร",
+      message,
+      [
+        {
+          text: "ยกเลิก",
+          style: "cancel",
+        },
+        {
+          text: "ลบแผนนี้",
+          style: "destructive",
+          onPress: () =>
+            handleDeletePlanDay(
+              plan
+            ),
+        },
+      ]
+    );
+  }
+
+  /* =========================================================
+     DELETE ALL PLANS
+  ========================================================= */
+
+  async function handleDeleteAllPlans() {
+    if (
+      plans.length === 0
+    ) {
+      return;
+    }
+
+    if (deletingPlanId) {
+      return;
+    }
+
+    setDeletingPlanId(
+      "ALL"
+    );
+
+    try {
+      /*
+       * เก็บ plan_id ที่มีจริง
+       */
+      const planIds =
+        Array.from(
+          new Set(
+            plans
+              .map(
+                (p) =>
+                  String(
+                    p.plan_id
+                  )
+              )
+              .filter(Boolean)
+          )
+        );
+
+      console.log(
+        "[DELETE ALL] planIds:",
+        planIds
+      );
+
+      /*
+       * ลบแต่ละ plan_id
+       *
+       * deletePlan(planId)
+       * = ลบทั้งชุดของ plan_id
+       */
+      for (
+        const planId of planIds
+      ) {
+        await apiDeletePlan(
+          planId
+        );
+
+        justDeletedPlanIds.current.add(
+          planId
+        );
+      }
+
+      /*
+       * ปรับ state
+       */
+      setPlans([]);
+      setHasPlan(false);
+      setDayIdx(0);
+
+      /*
+       * ล้าง currentPlanId
+       */
+      await AsyncStorage.removeItem(
+        "currentPlanId"
+      );
+
+      Alert.alert(
+        "สำเร็จ",
+        "ลบแผนอาหารทั้งหมดแล้ว"
+      );
+    } catch (e: any) {
+      console.error(
+        "[DELETE ALL ERROR]",
+        e
+      );
+
+      Alert.alert(
+        "ลบไม่สำเร็จ",
+        e?.message ||
+        "ไม่สามารถลบแผนอาหารทั้งหมดได้"
+      );
+    } finally {
+      setDeletingPlanId(
+        null
       );
     }
   }
 
-  /* =====================================================
+  /* =========================================================
+     CONFIRM DELETE ALL
+  ========================================================= */
+
+  function confirmDeleteAllPlans() {
+    if (
+      plans.length === 0
+    ) {
+      return;
+    }
+
+    const message =
+      `ต้องการลบแผนอาหารทั้งหมด ${plans.length} วันหรือไม่?`;
+
+    if (
+      Platform.OS ===
+      "web"
+    ) {
+      const ok =
+        window.confirm(
+          message
+        );
+
+      if (ok) {
+        handleDeleteAllPlans();
+      }
+
+      return;
+    }
+
+    Alert.alert(
+      "ลบแผนอาหารทั้งหมด",
+      message,
+      [
+        {
+          text: "ยกเลิก",
+          style: "cancel",
+        },
+        {
+          text: "ลบทั้งหมด",
+          style: "destructive",
+          onPress:
+            handleDeleteAllPlans,
+        },
+      ]
+    );
+  }
+
+  /* =========================================================
      TOGGLE EATEN
-  ===================================================== */
+  ========================================================= */
 
   async function handleToggle(
     planId: string,
@@ -701,9 +1003,19 @@ export default function PlanScreen() {
     currentStatus: string
   ) {
     try {
+      // Only allow toggling for today's date
+      const today = getTodayDate();
+      if (date !== today) {
+        Alert.alert(
+          "ไม่สามารถแก้ไขได้",
+          "สามารถบันทึกการกินได้เฉพาะวันที่ปัจจุบันเท่านั้น"
+        );
+        return;
+      }
+
       const newStatus =
         currentStatus ===
-        "eaten"
+          "eaten"
           ? "pending"
           : "eaten";
 
@@ -715,49 +1027,56 @@ export default function PlanScreen() {
       );
 
       setPlans((current) =>
-        current.map((plan) => {
-          if (
-            plan.plan_id ===
-              planId &&
-            plan.date === date
-          ) {
-            const slots = [
-              ...plan.slots,
-            ];
-
+        current.map(
+          (plan) => {
             if (
-              slots[slotIndex]
+              plan.plan_id ===
+              planId &&
+              plan.date ===
+              date
             ) {
-              slots[slotIndex] = {
-                ...slots[
+              const slots = [
+                ...plan.slots,
+              ];
+
+              if (
+                slots[
+                slotIndex
+                ]
+              ) {
+                slots[
                   slotIndex
-                ],
-                status:
-                  newStatus,
+                ] = {
+                  ...slots[
+                  slotIndex
+                  ],
+                  status:
+                    newStatus,
+                };
+              }
+
+              return {
+                ...plan,
+                slots,
               };
             }
 
-            return {
-              ...plan,
-              slots,
-            };
+            return plan;
           }
-
-          return plan;
-        })
+        )
       );
     } catch (e: any) {
       Alert.alert(
         "อัปเดตไม่สำเร็จ",
         e?.message ||
-          "ไม่สามารถอัปเดตสถานะมื้ออาหารได้"
+        "ไม่สามารถอัปเดตสถานะมื้ออาหารได้"
       );
     }
   }
 
-  /* =====================================================
-     OPEN CHANGE FOOD MODAL
-  ===================================================== */
+  /* =========================================================
+     OPEN CHANGE FOOD
+  ========================================================= */
 
   function openModal(
     planId: string,
@@ -775,16 +1094,23 @@ export default function PlanScreen() {
     setSearchQ("");
     setShowModal(true);
 
-    // Load default recommendations from DB
     loadDefaultFoods();
   }
 
   async function loadDefaultFoods() {
     try {
       setSearching(true);
-      const data = await searchFoods("", 20);
+
+      const data =
+        await searchFoods(
+          "",
+          20
+        );
+
       setSearchRes(
-        Array.isArray(data?.foods)
+        Array.isArray(
+          data?.foods
+        )
           ? data.foods
           : []
       );
@@ -793,28 +1119,30 @@ export default function PlanScreen() {
         "loadDefaultFoods error:",
         e
       );
+
       setSearchRes([]);
     } finally {
       setSearching(false);
     }
   }
 
-  /* =====================================================
+  /* =========================================================
      SEARCH FOOD
-  ===================================================== */
+  ========================================================= */
 
   function onSearch(
     text: string
   ) {
     setSearchQ(text);
 
-    if (timerRef.current) {
+    if (
+      timerRef.current
+    ) {
       clearTimeout(
         timerRef.current
       );
     }
 
-    // If cleared, reload default recommendations
     if (!text.trim()) {
       loadDefaultFoods();
       return;
@@ -847,32 +1175,44 @@ export default function PlanScreen() {
 
             setSearchRes([]);
           } finally {
-            setSearching(false);
+            setSearching(
+              false
+            );
           }
         },
         400
       );
   }
 
-  /* =====================================================
+  /* =========================================================
      FOOD DETAIL
-  ===================================================== */
+  ========================================================= */
 
   function openFoodDetail(
     food: any
   ) {
-    setSelectedFood(food);
-    setShowFoodDetail(true);
+    setSelectedFood(
+      food
+    );
+
+    setShowFoodDetail(
+      true
+    );
   }
 
   function closeFoodDetail() {
-    setShowFoodDetail(false);
-    setSelectedFood(null);
+    setShowFoodDetail(
+      false
+    );
+
+    setSelectedFood(
+      null
+    );
   }
 
-  /* =====================================================
+  /* =========================================================
      REPLACE MEAL
-  ===================================================== */
+  ========================================================= */
 
   async function doReplace(
     foodId: string
@@ -898,33 +1238,149 @@ export default function PlanScreen() {
         false
       );
 
-      setSelectedFood(null);
+      setSelectedFood(
+        null
+      );
 
-      setShowModal(false);
-      setSelSlot(null);
+      setShowModal(
+        false
+      );
 
+      setSelSlot(
+        null
+      );
+
+      /*
+       * ไม่ต้อง loadPlan
+       * ปรับ state จาก API response ไม่ได้
+       * ดังนั้นกรณี replace ยัง reload ได้
+       * เพื่อให้ข้อมูลอาหารใหม่ตรง DB
+       */
       await loadPlan();
     } catch (e: any) {
       Alert.alert(
         "แทนที่ไม่สำเร็จ",
         e?.message ||
-          "ไม่สามารถแทนที่มื้ออาหารได้"
+        "ไม่สามารถแทนที่มื้ออาหารได้"
       );
     }
   }
 
-  /* =====================================================
+  /* =========================================================
      DELETE MEAL
-  ===================================================== */
+  ========================================================= */
 
   function doDeleteMeal(
     planId: string,
     date: string,
     slotIndex: number
   ) {
+    const executeDelete =
+      async () => {
+        try {
+          await deleteMeal(
+            planId,
+            String(
+              slotIndex
+            ),
+            date
+          );
+
+          /*
+           * ปรับ state เอง
+           * ไม่ loadPlan
+           */
+          setPlans(
+            (current) =>
+              current.map(
+                (plan) => {
+                  if (
+                    plan.plan_id !==
+                    planId ||
+                    plan.date !==
+                    date
+                  ) {
+                    return plan;
+                  }
+
+                  const slots =
+                    [
+                      ...plan.slots,
+                    ];
+
+                  /*
+                   * เอาเฉพาะเมนูออก
+                   *
+                   * ไม่ลบทั้ง plan
+                   */
+                  if (
+                    slots[
+                    slotIndex
+                    ]
+                  ) {
+                    slots[
+                      slotIndex
+                    ] = {
+                      ...slots[
+                      slotIndex
+                      ],
+                      main_food:
+                        null,
+                      status:
+                        "pending",
+                    } as any;
+                  }
+
+                  return {
+                    ...plan,
+                    slots,
+                  };
+                }
+              )
+          );
+
+          setShowModal(
+            false
+          );
+
+          setSelSlot(
+            null
+          );
+
+          Alert.alert(
+            "สำเร็จ",
+            "ลบมื้ออาหารแล้ว"
+          );
+        } catch (
+        e: any
+        ) {
+          Alert.alert(
+            "ลบไม่สำเร็จ",
+            e?.message ||
+            "ไม่สามารถลบมื้ออาหารได้"
+          );
+        }
+      };
+
+    if (
+      Platform.OS ===
+      "web"
+    ) {
+      const ok =
+        window.confirm(
+          "ต้องการลบมื้อนี้หรือไม่?"
+        );
+
+      if (ok) {
+        executeDelete();
+      }
+
+      return;
+    }
+
     Alert.alert(
       "ลบมื้ออาหาร",
-      "ต้องการลบมื้อนี้?",
+      "ต้องการลบมื้อนี้หรือไม่?",
       [
         {
           text: "ยกเลิก",
@@ -934,46 +1390,15 @@ export default function PlanScreen() {
           text: "ลบ",
           style: "destructive",
           onPress:
-            async () => {
-              try {
-                await deleteMeal(
-                  planId,
-                  String(
-                    slotIndex
-                  ),
-                  date
-                );
-
-                Alert.alert(
-                  "สำเร็จ",
-                  "ลบมื้ออาหารแล้ว"
-                );
-
-                setShowModal(
-                  false
-                );
-
-                setSelSlot(null);
-
-                await loadPlan();
-              } catch (
-                e: any
-              ) {
-                Alert.alert(
-                  "ลบไม่สำเร็จ",
-                  e?.message ||
-                    "ไม่สามารถลบมื้ออาหารได้"
-                );
-              }
-            },
+            executeDelete,
         },
       ]
     );
   }
 
-  /* =====================================================
+  /* =========================================================
      SCAN REPLACE
-  ===================================================== */
+  ========================================================= */
 
   function doScanReplace() {
     if (!selSlot) {
@@ -994,9 +1419,9 @@ export default function PlanScreen() {
     });
   }
 
-  /* =====================================================
-     FOOD IMAGE COMPONENT
-  ===================================================== */
+  /* =========================================================
+     FOOD IMAGE
+  ========================================================= */
 
   function FoodImage({
     food,
@@ -1043,7 +1468,8 @@ export default function PlanScreen() {
             "#f0f0f0",
           justifyContent:
             "center",
-          alignItems: "center",
+          alignItems:
+            "center",
         }}
       >
         <Ionicons
@@ -1055,9 +1481,9 @@ export default function PlanScreen() {
     );
   }
 
-  /* =====================================================
+  /* =========================================================
      LOADING
-  ===================================================== */
+  ========================================================= */
 
   if (
     loading &&
@@ -1100,9 +1526,9 @@ export default function PlanScreen() {
     );
   }
 
-  /* =====================================================
+  /* =========================================================
      NO PLAN
-  ===================================================== */
+  ========================================================= */
 
   if (
     !hasPlan ||
@@ -1180,9 +1606,9 @@ export default function PlanScreen() {
     );
   }
 
-  /* =====================================================
+  /* =========================================================
      ACTIVE PLAN
-  ===================================================== */
+  ========================================================= */
 
   return (
     <SafeAreaView
@@ -1225,8 +1651,8 @@ export default function PlanScreen() {
           style={[
             st.tab,
             activeTab ===
-              "today" &&
-              st.tabActive,
+            "today" &&
+            st.tabActive,
           ]}
           onPress={() =>
             setActiveTab(
@@ -1238,8 +1664,8 @@ export default function PlanScreen() {
             style={[
               st.tabText,
               activeTab ===
-                "today" &&
-                st.tabTextActive,
+              "today" &&
+              st.tabTextActive,
             ]}
           >
             วันนี้
@@ -1250,8 +1676,8 @@ export default function PlanScreen() {
           style={[
             st.tab,
             activeTab ===
-              "full" &&
-              st.tabActive,
+            "full" &&
+            st.tabActive,
           ]}
           onPress={() =>
             setActiveTab(
@@ -1263,8 +1689,8 @@ export default function PlanScreen() {
             style={[
               st.tabText,
               activeTab ===
-                "full" &&
-                st.tabTextActive,
+              "full" &&
+              st.tabTextActive,
             ]}
           >
             แผนทั้งหมด
@@ -1277,7 +1703,7 @@ export default function PlanScreen() {
       ===================================================== */}
 
       {activeTab ===
-      "today" ? (
+        "today" ? (
         <ScrollView
           style={{
             flex: 1,
@@ -1331,7 +1757,7 @@ export default function PlanScreen() {
               >
                 {thaiDate(
                   todayPlan?.date ||
-                    getTodayDate()
+                  getTodayDate()
                 )}
               </Text>
             </View>
@@ -1352,13 +1778,13 @@ export default function PlanScreen() {
                     {
                       width:
                         targetKcal >
-                        0
+                          0
                           ? `${Math.min(
-                              100,
-                              (eatenKcal /
-                                targetKcal) *
-                                100
-                            )}%`
+                            100,
+                            (eatenKcal /
+                              targetKcal) *
+                            100
+                          )}%`
                           : "0%",
                     },
                   ]}
@@ -1390,7 +1816,9 @@ export default function PlanScreen() {
                 {
                   label:
                     "Protein",
-                  value:
+                  eaten:
+                    eatenNutrition.protein,
+                  target:
                     todayPlan
                       ?.daily_target_summary
                       ?.protein_g ??
@@ -1401,7 +1829,9 @@ export default function PlanScreen() {
                 {
                   label:
                     "Carbs",
-                  value:
+                  eaten:
+                    eatenNutrition.carbs,
+                  target:
                     todayPlan
                       ?.daily_target_summary
                       ?.carb_g ??
@@ -1411,7 +1841,9 @@ export default function PlanScreen() {
                 },
                 {
                   label: "Fat",
-                  value:
+                  eaten:
+                    eatenNutrition.fat,
+                  target:
                     todayPlan
                       ?.daily_target_summary
                       ?.fat_g ??
@@ -1454,7 +1886,11 @@ export default function PlanScreen() {
                       }}
                     >
                       {
-                        macro.value
+                        macro.eaten
+                      }{" "}
+                      /{" "}
+                      {
+                        macro.target
                       }g
                     </Text>
                   </View>
@@ -1550,9 +1986,7 @@ export default function PlanScreen() {
                         ) as any
                       }
                       size={20}
-                      color={
-                        "#000"
-                      }
+                      color="#000"
                     />
 
                     <TouchableOpacity
@@ -1645,7 +2079,7 @@ export default function PlanScreen() {
                             todayPlan.date,
                             idx,
                             slot.status ||
-                              "pending"
+                            "pending"
                           )
                         }
                       >
@@ -1791,9 +2225,7 @@ export default function PlanScreen() {
               <Ionicons
                 name="calendar-outline"
                 size={18}
-                color={
-                  "#000"
-                }
+                color="#000"
               />
 
               <Text
@@ -1810,16 +2242,28 @@ export default function PlanScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={
-                st.dangerBtn
+              style={[
+                st.dangerBtn,
+                deletingPlanId
+                  ? {
+                    opacity: 0.5,
+                  }
+                  : undefined,
+              ]}
+              disabled={
+                !!deletingPlanId ||
+                !todayPlan
               }
               onPress={() => {
-                const first =
-                  plans[0];
-
-                if (first) {
-                  confirmDel(
-                    first
+                if (
+                  todayPlan
+                ) {
+                  /*
+                   * สำคัญ:
+                   * ตรงนี้ลบเฉพาะวันนี้
+                   */
+                  confirmDeletePlanDay(
+                    todayPlan
                   );
                 }
               }}
@@ -1885,14 +2329,17 @@ export default function PlanScreen() {
             }}
           >
             {plans.map(
-              (plan, index) => (
+              (
+                plan,
+                index
+              ) => (
                 <TouchableOpacity
                   key={`${plan.plan_id}-${plan.date}`}
                   style={[
                     st.dayTab,
                     dayIdx ===
-                      index &&
-                      st.dayTabActive,
+                    index &&
+                    st.dayTabActive,
                   ]}
                   onPress={() =>
                     setDayIdx(
@@ -1910,7 +2357,7 @@ export default function PlanScreen() {
                           "#333",
                       },
                       dayIdx ===
-                        index && {
+                      index && {
                         color:
                           "#fff",
                       },
@@ -1931,7 +2378,7 @@ export default function PlanScreen() {
                           2,
                       },
                       dayIdx ===
-                        index && {
+                      index && {
                         color:
                           "#fff",
                       },
@@ -1962,7 +2409,10 @@ export default function PlanScreen() {
               </Text>
 
               {selDay.slots?.map(
-                (slot, idx) => {
+                (
+                  slot,
+                  idx
+                ) => {
                   const isE =
                     slot.status ===
                     "eaten";
@@ -1996,9 +2446,7 @@ export default function PlanScreen() {
                             ) as any
                           }
                           size={20}
-                          color={
-                            "#000"
-                          }
+                          color="#000"
                         />
 
                         <TouchableOpacity
@@ -2093,7 +2541,7 @@ export default function PlanScreen() {
                                 selDay.date,
                                 idx,
                                 slot.status ||
-                                  "pending"
+                                "pending"
                               )
                             }
                           >
@@ -2217,27 +2665,78 @@ export default function PlanScreen() {
                   );
                 }
               )}
+
+              {/* =================================================
+                  DELETE SELECTED DAY
+              ================================================= */}
+
+              <TouchableOpacity
+                style={[
+                  st.dangerBtn,
+                  {
+                    marginTop: 24,
+                    marginBottom: 10,
+                  },
+                  deletingPlanId
+                    ? {
+                      opacity: 0.5,
+                    }
+                    : undefined,
+                ]}
+                disabled={
+                  !!deletingPlanId
+                }
+                onPress={() =>
+                  confirmDeletePlanDay(
+                    selDay
+                  )
+                }
+              >
+                <Ionicons
+                  name="trash-outline"
+                  size={20}
+                  color="#fff"
+                />
+
+                <Text
+                  style={{
+                    fontSize: 16,
+                    color: "#fff",
+                    fontWeight:
+                      "bold",
+                  }}
+                >
+                  ลบแผนนี้
+                </Text>
+              </TouchableOpacity>
             </>
           )}
+
+          {/* =================================================
+              DELETE ALL
+          ================================================= */}
 
           <TouchableOpacity
             style={[
               st.dangerBtn,
               {
-                marginTop: 24,
+                marginTop: 10,
                 marginBottom: 20,
+                backgroundColor:
+                  "#B91C1C",
               },
+              deletingPlanId
+                ? {
+                  opacity: 0.5,
+                }
+                : undefined,
             ]}
-            onPress={() => {
-              const first =
-                plans[0];
-
-              if (first) {
-                confirmDel(
-                  first
-                );
-              }
-            }}
+            disabled={
+              !!deletingPlanId
+            }
+            onPress={
+              confirmDeleteAllPlans
+            }
           >
             <Ionicons
               name="trash-outline"
@@ -2364,18 +2863,18 @@ export default function PlanScreen() {
 
             {searchQ.length >
               0 && (
-              <TouchableOpacity
-                onPress={() =>
-                  onSearch("")
-                }
-              >
-                <Ionicons
-                  name="close-circle"
-                  size={20}
-                  color="#999"
-                />
-              </TouchableOpacity>
-            )}
+                <TouchableOpacity
+                  onPress={() =>
+                    onSearch("")
+                  }
+                >
+                  <Ionicons
+                    name="close-circle"
+                    size={20}
+                    color="#999"
+                  />
+                </TouchableOpacity>
+              )}
           </View>
 
           {/* SCAN + DELETE */}
@@ -2445,7 +2944,9 @@ export default function PlanScreen() {
                   "#FEF2F2",
               }}
               onPress={() => {
-                if (selSlot) {
+                if (
+                  selSlot
+                ) {
                   doDeleteMeal(
                     selSlot.planId,
                     selSlot.date,
@@ -2492,7 +2993,7 @@ export default function PlanScreen() {
             ) =>
               String(
                 item?._id ??
-                  index
+                index
               )
             }
             contentContainerStyle={{
@@ -2502,7 +3003,7 @@ export default function PlanScreen() {
             ListEmptyComponent={
               searchQ.length >
                 0 &&
-              !searching ? (
+                !searching ? (
                 <View
                   style={{
                     alignItems:
@@ -2725,8 +3226,6 @@ export default function PlanScreen() {
           >
             {selectedFood && (
               <>
-                {/* BIG IMAGE */}
-
                 <View
                   style={
                     st.detailImageWrapper
@@ -2739,8 +3238,6 @@ export default function PlanScreen() {
                     size={220}
                   />
                 </View>
-
-                {/* NAME */}
 
                 <View
                   style={{
@@ -2764,22 +3261,20 @@ export default function PlanScreen() {
                   {getFoodEnglishName(
                     selectedFood
                   ) && (
-                    <Text
-                      style={{
-                        fontSize: 14,
-                        color:
-                          "#999",
-                        marginTop: 4,
-                      }}
-                    >
-                      {getFoodEnglishName(
-                        selectedFood
-                      )}
-                    </Text>
-                  )}
+                      <Text
+                        style={{
+                          fontSize: 14,
+                          color:
+                            "#999",
+                          marginTop: 4,
+                        }}
+                      >
+                        {getFoodEnglishName(
+                          selectedFood
+                        )}
+                      </Text>
+                    )}
                 </View>
-
-                {/* NUTRITION */}
 
                 <Text
                   style={
@@ -2946,137 +3441,133 @@ export default function PlanScreen() {
                     selectedFood
                   ).fiber >
                     0 && (
-                    <View
-                      style={
-                        st.nutritionBox
-                      }
-                    >
-                      <Text
+                      <View
                         style={
-                          st.nutritionLabel
+                          st.nutritionBox
                         }
                       >
-                        ใยอาหาร
-                      </Text>
+                        <Text
+                          style={
+                            st.nutritionLabel
+                          }
+                        >
+                          ใยอาหาร
+                        </Text>
 
-                      <Text
-                        style={[
-                          st.nutritionValue,
+                        <Text
+                          style={[
+                            st.nutritionValue,
+                            {
+                              color:
+                                "#22A06B",
+                            },
+                          ]}
+                        >
                           {
-                            color:
-                              "#22A06B",
-                          },
-                        ]}
-                      >
-                        {
-                          getNutrition(
-                            selectedFood
-                          ).fiber
-                        }
-                      </Text>
+                            getNutrition(
+                              selectedFood
+                            ).fiber
+                          }
+                        </Text>
 
-                      <Text
-                        style={
-                          st.nutritionUnit
-                        }
-                      >
-                        g
-                      </Text>
-                    </View>
-                  )}
+                        <Text
+                          style={
+                            st.nutritionUnit
+                          }
+                        >
+                          g
+                        </Text>
+                      </View>
+                    )}
 
                   {getNutrition(
                     selectedFood
                   ).sodium >
                     0 && (
-                    <View
-                      style={
-                        st.nutritionBox
-                      }
-                    >
-                      <Text
+                      <View
                         style={
-                          st.nutritionLabel
+                          st.nutritionBox
                         }
                       >
-                        โซเดียม
-                      </Text>
+                        <Text
+                          style={
+                            st.nutritionLabel
+                          }
+                        >
+                          โซเดียม
+                        </Text>
 
-                      <Text
-                        style={[
-                          st.nutritionValue,
+                        <Text
+                          style={[
+                            st.nutritionValue,
+                            {
+                              color:
+                                "#8B5CF6",
+                            },
+                          ]}
+                        >
                           {
-                            color:
-                              "#8B5CF6",
-                          },
-                        ]}
-                      >
-                        {
-                          getNutrition(
-                            selectedFood
-                          ).sodium
-                        }
-                      </Text>
+                            getNutrition(
+                              selectedFood
+                            ).sodium
+                          }
+                        </Text>
 
-                      <Text
-                        style={
-                          st.nutritionUnit
-                        }
-                      >
-                        mg
-                      </Text>
-                    </View>
-                  )}
+                        <Text
+                          style={
+                            st.nutritionUnit
+                          }
+                        >
+                          mg
+                        </Text>
+                      </View>
+                    )}
                 </View>
-
-                {/* PORTION */}
 
                 {selectedFood
                   ?.portion && (
-                  <>
-                    <Text
-                      style={
-                        st.sectionTitle
-                      }
-                    >
-                      ปริมาณต่อหนึ่งหน่วย
-                    </Text>
-
-                    <View
-                      style={
-                        st.portionBox
-                      }
-                    >
-                      <Ionicons
-                        name="scale-outline"
-                        size={22}
-                        color={
-                          ORANGE
-                        }
-                      />
-
+                    <>
                       <Text
                         style={
-                          st.portionText
+                          st.sectionTitle
                         }
                       >
-                        {selectedFood
-                          ?.portion
-                          ?.gram
-                          ? `${selectedFood.portion.gram} กรัม`
-                          : ""}
-
-                        {selectedFood
-                          ?.portion
-                          ?.unit
-                          ? ` / ${selectedFood.portion.unit}`
-                          : ""}
+                        ปริมาณต่อหนึ่งหน่วย
                       </Text>
-                    </View>
-                  </>
-                )}
 
-                {/* INGREDIENTS */}
+                      <View
+                        style={
+                          st.portionBox
+                        }
+                      >
+                        <Ionicons
+                          name="scale-outline"
+                          size={22}
+                          color={
+                            ORANGE
+                          }
+                        />
+
+                        <Text
+                          style={
+                            st.portionText
+                          }
+                        >
+                          {selectedFood
+                            ?.portion
+                            ?.gram
+                            ? `${selectedFood.portion.gram} กรัม`
+                            : ""}
+
+                          {selectedFood
+                            ?.portion
+                            ?.unit
+                            ? ` / ${selectedFood.portion.unit}`
+                            : ""}
+                        </Text>
+                      </View>
+                    </>
+                  )}
 
                 <Text
                   style={
@@ -3089,7 +3580,7 @@ export default function PlanScreen() {
                 {getIngredients(
                   selectedFood
                 ).length >
-                0 ? (
+                  0 ? (
                   <View
                     style={
                       st.ingredientsBox
@@ -3115,9 +3606,7 @@ export default function PlanScreen() {
 
                         return (
                           <View
-                            key={
-                              `${ingredient?.ingredient_id || "ingredient"}-${index}`
-                            }
+                            key={`${ingredient?.ingredient_id || "ingredient"}-${index}`}
                             style={
                               st.ingredientRow
                             }
@@ -3163,8 +3652,6 @@ export default function PlanScreen() {
                     </Text>
                   </View>
                 )}
-
-                {/* REPLACE BUTTON */}
 
                 {selSlot &&
                   selectedFood?._id && (
@@ -3328,7 +3815,8 @@ const st =
       padding: 18,
       marginBottom: 16,
       borderWidth: 1.5,
-      borderColor: "#FF6B00",
+      borderColor:
+        "#FF6B00",
     },
 
     progressBar: {
@@ -3385,7 +3873,8 @@ const st =
       borderWidth: 1.5,
       borderColor:
         "#000",
-      backgroundColor: "#fff",
+      backgroundColor:
+        "#fff",
     },
 
     dangerBtn: {
@@ -3424,10 +3913,6 @@ const st =
       borderColor:
         ORANGE,
     },
-
-    /* =====================================================
-       DETAIL
-    ===================================================== */
 
     detailHeader: {
       flexDirection:

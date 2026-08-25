@@ -119,7 +119,35 @@ const getDashboardData = async (req, res) => {
       }
     });
 
-    // คำนวณเป้าหมายสารอาหาร
+    // รวมสารอาหารจาก DailyPlan slots ที่ status === "eaten"
+    try {
+      const dailyPlansColName = allColNames.includes("DailyPlans") ? "DailyPlans" : (allColNames.includes("dailyplans") ? "dailyplans" : null);
+      if (dailyPlansColName) {
+        const todayPlans = await db.collection(dailyPlansColName).find({ user_id: currentUserId, date: todayStr, plan_status: "active" }).toArray();
+        console.log(`${LP} DailyPlans count:`, todayPlans.length);
+        todayPlans.forEach((dp) => {
+          (dp.slots || []).forEach((slot) => {
+            if (slot.status !== "eaten") return;
+            const n = slot.main_food?.nutrition_per_portion || {};
+            consumedKcal += Number(n.kcal || 0);
+            proteinCurrent += Number(n.protein_g || 0);
+            carbCurrent += Number(n.carb_g || 0);
+            fatCurrent += Number(n.fat_g || 0);
+            (slot.addons || []).forEach((addon) => {
+              const an = addon?.nutrition_per_portion || {};
+              consumedKcal += Number(an.kcal || 0);
+              proteinCurrent += Number(an.protein_g || 0);
+              carbCurrent += Number(an.carb_g || 0);
+              fatCurrent += Number(an.fat_g || 0);
+            });
+          });
+        });
+      }
+    } catch (e) {
+      console.error(`${LP} ⚠️ DailyPlans nutrition error:`, e.message);
+    }
+
+    // คำนวณเป้าหมายสารอาหาร (ใช้สูตรเดียวกับ mealController)
     const targetKcal = user?.health_goals?.tdee_target_kcal || 0;
     const proteinTarget = user?.health_goals?.protein_target_g || 0;
     const percentage = targetKcal > 0 ? Math.round((consumedKcal / targetKcal) * 100) : 0;
