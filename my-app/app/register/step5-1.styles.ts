@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
   },
 
   optionTitleActive: {
-    color: "#fff",
+    color: "#FFF",
   },
 
   optionDesc: {
@@ -143,7 +143,7 @@ const styles = StyleSheet.create({
   },
 
   optionDescActive: {
-    color: "#FFF7E8",
+    color: "rgba(255,255,255,0.85)",
   },
 
   optionHint: {
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
   },
 
   optionHintActive: {
-    color: "#fff",
+    color: "rgba(255,255,255,0.9)",
   },
 
   optionDetail: {
@@ -166,7 +166,7 @@ const styles = StyleSheet.create({
   },
 
   optionDetailActive: {
-    color: "#FFF0D0",
+    color: "rgba(255,255,255,0.75)",
   },
 
   proteinValueCard: {

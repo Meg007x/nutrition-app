@@ -77,7 +77,7 @@ const handleNext = () => {
                   <Text style={[styles.optionTitle, active && styles.optionTitleActive]}>
                     {item.label}
                   </Text>
-                  {active && <Ionicons name="checkmark-circle" size={20} color="#fff" />}
+                  {active && <Ionicons name="checkmark-circle" size={20} color="#FFF" />}
                 </View>
                 <Text style={[styles.optionDesc, active && styles.optionDescActive]}>
                   {item.desc}

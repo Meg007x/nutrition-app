@@ -28,6 +28,7 @@ export default function MealCartScreen() {
       try {
         const parsedFood = JSON.parse(params.newFood as string);
         setCartItems((prev) => [...prev, parsedFood]);
+        setManualItems((prev) => [...prev, parsedFood]);
         router.setParams({ newFood: undefined });
       } catch (e) {
         console.error("Error parsing new food:", e);
@@ -80,6 +81,145 @@ export default function MealCartScreen() {
     fetchUser();
   }, []);
 
+  // ====================================================
+  // PLAN MEALS MAP: Store original plan meals per slot
+  // Key: meal_type (เช้า/กลางวัน/เย็น), Value: cart item
+  // ====================================================
+
+  const [planMealsMap, setPlanMealsMap] = useState<Record<string, any>>({});
+
+  // ====================================================
+  // LOAD PLAN: Fetch today's plan and build planMealsMap
+  // ====================================================
+
+  useEffect(() => {
+    const loadPlan = async () => {
+      if (!userId) return;
+
+      try {
+        const today = new Date().toISOString().split("T")[0];
+        const res = await fetch(
+          `${API_BASE_URL}/meal/user/${encodeURIComponent(userId)}`
+        );
+        const json = await res.json();
+
+        if (
+          json.success &&
+          json.hasPlan &&
+          Array.isArray(json.plans)
+        ) {
+          const todayPlan = json.plans.find(
+            (p: any) => p.date === today
+          );
+
+          if (
+            todayPlan &&
+            Array.isArray(todayPlan.slots)
+          ) {
+            const map: Record<string, any> = {};
+
+            todayPlan.slots.forEach(
+              (slot: any, idx: number) => {
+                if (!slot.main_food) return;
+                if (slot.status === "eaten") return;
+
+                const mealKey =
+                  slot.slot_name ||
+                  slot.meal_type;
+
+                map[mealKey] = {
+                  item_id: `plan_${todayPlan.plan_id}_${idx}`,
+                  scan_session_id: "",
+                  source: "plan",
+                  food_id:
+                    slot.main_food?.food_id ||
+                    slot.current_main_food_id ||
+                    "",
+                  food_name:
+                    slot.main_food?.name ||
+                    slot.slot_name,
+                  food_name_en: "",
+                  category:
+                    slot.main_food?.category ||
+                    slot.meal_type,
+                  image_uri:
+                    slot.main_food?.image_url ||
+                    "",
+                  selected_portion: {
+                    display_text: "1 portion",
+                    gram: 0,
+                    unit: "portion",
+                    multiplier: 1,
+                  },
+                  nutrition: {
+                    kcal:
+                      slot.main_food?.kcal ||
+                      slot.target_kcal ||
+                      0,
+                    protein_g:
+                      slot.target_nutrition
+                        ?.protein_g || 0,
+                    carb_g:
+                      slot.target_nutrition
+                        ?.carb_g || 0,
+                    fat_g:
+                      slot.target_nutrition
+                        ?.fat_g || 0,
+                    fiber_g:
+                      slot.target_nutrition
+                        ?.fiber_g || 0,
+                    sodium_mg:
+                      slot.target_nutrition
+                        ?.sodium_mg || 0,
+                  },
+                  ingredients: [],
+                  _mealType:
+                    slot.meal_type,
+                  _slotName:
+                    slot.slot_name,
+                };
+              }
+            );
+
+            setPlanMealsMap(map);
+            console.log(
+              "📋 Plan meals loaded:",
+              Object.keys(map).join(", ")
+            );
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to load plan meals:", e);
+      }
+    };
+
+    loadPlan();
+  }, [userId]);
+
+  // ====================================================
+  // DYNAMIC SLOT SWITCH: When selectedMealType changes,
+  // swap cart to show that slot's plan meal
+  // (preserves manually-added items across slots)
+  // ====================================================
+
+  const [manualItems, setManualItems] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!selectedMealType || selectedMealType === "มื้ออาหาร") return;
+
+    // Find the plan meal for this slot
+    const planMeal = planMealsMap[selectedMealType];
+
+    // Build new cart: plan meal (if exists) + manual items
+    const newCart: any[] = [];
+    if (planMeal) {
+      newCart.push(planMeal);
+    }
+    newCart.push(...manualItems);
+
+    setCartItems(newCart);
+  }, [selectedMealType, planMealsMap]);
+
   const totalKcal = cartItems.reduce((sum, item) => sum + (item.nutrition?.kcal || 0), 0);
   const totalProtein = cartItems.reduce((sum, item) => sum + (item.nutrition?.protein_g || 0), 0);
   const totalCarb = cartItems.reduce((sum, item) => sum + (item.nutrition?.carb_g || 0), 0);
@@ -88,7 +228,14 @@ export default function MealCartScreen() {
   const totalSodium = cartItems.reduce((sum, item) => sum + (item.nutrition?.sodium_mg || 0), 0);
 
   const handleRemoveItem = (itemId: string) => {
-    setCartItems((prev) => prev.filter((item) => item.item_id !== itemId));
+    // Only remove from current cart view
+    // Plan meals stay in planMealsMap for restoration on slot switch
+    setCartItems((prev) =>
+      prev.filter((item) => item.item_id !== itemId)
+    );
+    setManualItems((prev) =>
+      prev.filter((item) => item.item_id !== itemId)
+    );
   };
 
   const handleAddMockItem = (type: number) => {
@@ -118,6 +265,7 @@ export default function MealCartScreen() {
       ingredients: [{ ingredient_id: "ing_02", name: "อกไก่", qty: 150, unit: "กรัม" }]
     };
     setCartItems((prev) => [...prev, mockItem]);
+    setManualItems((prev) => [...prev, mockItem]);
   };
 
   const handleConfirmMeal = async () => {
@@ -161,6 +309,7 @@ export default function MealCartScreen() {
 
         // เคลียร์ตะกร้าอาหาร
         setCartItems([]);
+        setManualItems([]);
 
         // หน่วงเวลาให้ผู้ใช้เห็นแจ้งเตือนฟิน ๆ 1.5 วินาทีแล้วเด้งไปหน้า Dashboard
         setTimeout(() => {
@@ -274,6 +423,13 @@ return (
             <View key={item.item_id} style={styles.foodCard}>
               <View style={styles.foodInfo}>
                 <ThemedText type="defaultSemiBold" style={styles.textBlackBold}>{item.food_name}</ThemedText>
+                {item.source === "plan" && (
+                  <View style={{ flexDirection: "row", alignItems: "center", marginTop: 4, alignSelf: "flex-start" }}>
+                    <View style={{ backgroundColor: "#FFF3E0", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, flexDirection: "row", alignItems: "center", gap: 4 }}>
+                      <ThemedText style={{ fontSize: 11, color: "#E65100", fontWeight: "700" }}>📌 จากแผนอาหาร</ThemedText>
+                    </View>
+                  </View>
+                )}
                 <ThemedText type="default" style={[styles.textBlack, { fontSize: 14, marginTop: 4, fontWeight: "600" }]}>
                   {item.selected_portion?.display_text}
                 </ThemedText>

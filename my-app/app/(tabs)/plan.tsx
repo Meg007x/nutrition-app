@@ -1780,12 +1780,17 @@ export default function PlanScreen() {
                         targetKcal >
                           0
                           ? `${Math.min(
-                            100,
+                            150,
                             (eatenKcal /
                               targetKcal) *
                             100
                           )}%`
                           : "0%",
+                      backgroundColor:
+                        eatenKcal >
+                        targetKcal
+                          ? "#FF3B30"
+                          : ORANGE,
                     },
                   ]}
                 />
@@ -1795,13 +1800,25 @@ export default function PlanScreen() {
                 style={{
                   marginTop: 4,
                   fontSize: 15,
-                  color: "#777",
+                  color:
+                    eatenKcal >
+                    targetKcal
+                      ? "#FF3B30"
+                      : "#777",
                   textAlign:
                     "right",
+                  fontWeight:
+                    eatenKcal >
+                    targetKcal
+                      ? "bold"
+                      : "normal",
                 }}
               >
                 {eatenKcal} /{" "}
                 {targetKcal} kcal
+                {eatenKcal >
+                  targetKcal &&
+                  ` (+${eatenKcal - targetKcal})`}
               </Text>
             </View>
 

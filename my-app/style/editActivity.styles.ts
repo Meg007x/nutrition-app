@@ -53,7 +53,7 @@ export const styles = StyleSheet.create({
   },
   cardActive: {
     backgroundColor: ORANGE,
-    borderColor: ORANGE,
+    borderColor: "#C97800",
   },
   cardTitle: {
     fontSize: 16,
@@ -61,7 +61,7 @@ export const styles = StyleSheet.create({
     color: "#333",
   },
   cardTitleActive: {
-    color: "#fff",
+    color: "#FFF",
   },
   cardDesc: {
     fontSize: 14,
@@ -70,7 +70,7 @@ export const styles = StyleSheet.create({
     marginTop: 4,
   },
   cardDescActive: {
-    color: "#fff",
+    color: "rgba(255,255,255,0.85)",
   },
   // --- แท็บเลือกโหมดโปรตีน ---
   tabContainer: {

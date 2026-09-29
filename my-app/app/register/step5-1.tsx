@@ -207,7 +207,7 @@ export default function RegisterStep5_1Screen() {
                         </View>
                       )}
                     </View>
-                    {active && <Ionicons name="checkmark-circle" size={20} color="#fff" />}
+                    {active && <Ionicons name="checkmark-circle" size={20} color="#FFF" />}
                   </View>
                   <Text style={[styles.optionDesc, active && styles.optionDescActive]}>{item.desc}</Text>
                   <Text style={[styles.optionHint, active && styles.optionHintActive]}>{item.hint}</Text>

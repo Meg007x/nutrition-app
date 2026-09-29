@@ -1,7 +1,8 @@
 import { StyleSheet, Platform } from "react-native";
+import { Brand } from "../../constants/theme";
 
 // 1. ใส่ export ให้ตัวแปรสี เพื่อส่งไปใช้ในไฟล์หลัก
-export const ORANGE = "#F5A400";
+export const ORANGE = Brand.primary;
 export const BG = "#F3F3F3";
 export const IOS_GREEN = "#34C759";
 export const ROW_COLOR_1 = "#EBA032";
@@ -9,10 +10,10 @@ export const ROW_COLOR_2 = "#DF9226";
 export const WHITE = "#FFFFFF";
 
 // สีเพิ่มเติมที่ใช้ในฟอร์ม (ปรับเปลี่ยนโค้ดสีได้ตามต้องการ)
-export const ORANGE_DK = "#D77C14"; 
+export const ORANGE_DK = Brand.primaryDark;
 export const RULER_BG = "#F8F8F8";
-export const CARD = "#FFFFFF"; 
-export const BORDER = "#E5E5E5"; 
+export const CARD = "#FFFFFF";
+export const BORDER = "#E5E5E5";
 
 // สีสำหรับสถานะการแจ้งเตือน
 export const WARN_COLOR = "#FF9500";
@@ -30,7 +31,7 @@ const styles = StyleSheet.create({
 
   headerBar: {
     backgroundColor: ORANGE,
-    paddingVertical: 14,
+    paddingVertical: 16,
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
@@ -52,7 +53,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 999,
-    backgroundColor: "rgba(0,0,0,0.14)",
+    backgroundColor: "rgba(255,255,255,0.2)",
   },
 
   homeBackThemedThemedText: {
@@ -62,21 +63,22 @@ const styles = StyleSheet.create({
   },
 
   scrollContent: {
-    padding: 14,
-    paddingBottom: 28,
+    padding: 20,
+    paddingBottom: 32,
   },
 
   stepTitle: {
-    fontSize: 26,
+    fontSize: 24,
     color: "#111",
     fontFamily: FONT_BOLD,
+    letterSpacing: -0.3,
   },
 
   progressTrack: {
     marginTop: 10,
     width: "100%",
-    height: 7,
-    backgroundColor: "#D7CFBF",
+    height: 6,
+    backgroundColor: "#E8E8E8",
     borderRadius: 999,
     overflow: "hidden",
   },
@@ -111,39 +113,35 @@ const styles = StyleSheet.create({
   },
 
   formCard: {
-    marginTop: 12,
+    marginTop: 16,
     backgroundColor: CARD,
-    borderRadius: 22,
-    borderWidth: 1.4,
+    borderRadius: 20,
+    borderWidth: 1,
     borderColor: BORDER,
-    padding: 12,
+    padding: 16,
     shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
   },
 
   label: {
-    fontSize: 18,
-    color: "#111",
-    marginBottom: 6,
-    marginTop: 4,
+    fontSize: 16,
+    color: "#333",
+    marginBottom: 8,
+    marginTop: 6,
     fontFamily: FONT_BOLD,
   },
 
   fullInput: {
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    borderWidth: 1.2,
-    borderColor: "#333",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    backgroundColor: "#FAFAFA",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E8E8E8",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     fontSize: 16,
-    color: "#333",
-    shadowColor: "#000",
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
+    color: "#222",
     fontFamily: FONT_REGULAR,
   },
 
@@ -155,16 +153,13 @@ const styles = StyleSheet.create({
 
   birthInputButton: {
     flex: 1,
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    borderWidth: 1.2,
-    borderColor: "#333",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    backgroundColor: "#FAFAFA",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E8E8E8",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     justifyContent: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
     elevation: 3,
   },
 
@@ -188,19 +183,15 @@ const styles = StyleSheet.create({
 
   genderBox: {
     width: "62%",
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    borderWidth: 1.2,
-    borderColor: "#333",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    backgroundColor: "#FAFAFA",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E8E8E8",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
   },
 
   genderThemedThemedText: {
@@ -216,15 +207,11 @@ const styles = StyleSheet.create({
   passwordWrap: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    borderWidth: 1.2,
-    borderColor: "#333",
-    paddingHorizontal: 10,
-    shadowColor: "#000",
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: "#FAFAFA",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E8E8E8",
+    paddingHorizontal: 12,
   },
 
   passwordInput: {
@@ -240,42 +227,42 @@ const styles = StyleSheet.create({
   },
 
   nextButton: {
-    marginTop: 20,
-    backgroundColor: "#FFB300",
-    borderRadius: 14,
+    marginTop: 24,
+    backgroundColor: ORANGE,
+    borderRadius: 16,
     paddingVertical: 18,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.16,
-    shadowRadius: 6,
-    elevation: 5,
+    shadowColor: ORANGE,
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
 
   nextButtonThemedThemedText: {
     color: "#fff",
-    fontSize: 22,
+    fontSize: 20,
     fontFamily: FONT_BOLD,
   },
 
   modalOverlay: {
     flex: 1,
     justifyContent: "flex-end",
-    backgroundColor: "rgba(0,0,0,0.35)",
+    backgroundColor: "rgba(0,0,0,0.4)",
   },
 
   dateModalCard: {
     backgroundColor: "#fff",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    paddingTop: 14,
-    paddingHorizontal: 16,
-    paddingBottom: 22,
+    paddingTop: 16,
+    paddingHorizontal: 20,
+    paddingBottom: 28,
   },
 
   dateModalHeader: {
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: 12,
   },
 
   dateModalTitle: {
@@ -293,20 +280,20 @@ const styles = StyleSheet.create({
 
   dateActionRow: {
     flexDirection: "row",
-    gap: 10,
-    marginTop: 8,
+    gap: 12,
+    marginTop: 12,
   },
 
   dateActionButton: {
     flex: 1,
-    borderRadius: 12,
+    borderRadius: 14,
     paddingVertical: 14,
     alignItems: "center",
     justifyContent: "center",
   },
 
   dateCancelButton: {
-    backgroundColor: "#EFEFEF",
+    backgroundColor: "#F0F0F0",
   },
 
   dateConfirmButton: {
@@ -327,15 +314,19 @@ const styles = StyleSheet.create({
 
   genderModalCard: {
     backgroundColor: "#fff",
-    borderRadius: 16,
+    borderRadius: 20,
     marginHorizontal: 24,
     marginBottom: 80,
-    padding: 16,
+    padding: 20,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 6,
   },
 
   genderModalTitle: {
-    fontSize: 20,
-    marginBottom: 12,
+    fontSize: 18,
+    marginBottom: 16,
     color: "#111",
     fontFamily: FONT_BOLD,
   },
@@ -343,7 +334,7 @@ const styles = StyleSheet.create({
   genderOption: {
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "#EEE",
+    borderBottomColor: "#F0F0F0",
   },
 
   genderOptionThemedThemedText: {
@@ -353,9 +344,9 @@ const styles = StyleSheet.create({
   },
 
   genderCancelButton: {
-    marginTop: 12,
-    backgroundColor: "#EFEFEF",
-    borderRadius: 12,
+    marginTop: 16,
+    backgroundColor: "#F0F0F0",
+    borderRadius: 14,
     paddingVertical: 14,
     alignItems: "center",
   },
