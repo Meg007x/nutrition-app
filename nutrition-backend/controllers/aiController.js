@@ -3,8 +3,9 @@ const fs = require("fs");
 const MasterFood = require("../models/MasterFood");
 const Ingredient = require("../models/Ingredient");
 
-function escapeRegex(text = "") {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function escapeRegex(text) {
+  const str = String(text || "");
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 async function detectDishFromImage(ai, imagePath, mimeType) {
@@ -30,7 +31,7 @@ async function detectDishFromImage(ai, imagePath, mimeType) {
  
   const response = await ai.models.generateContent({
     // เปลี่ยนจากชื่อเดิม (gemini-2.5-flash)
-    model: "gemini-2.5-flash-lite",
+    model: "gemini-3.5-flash-lite",
     contents: [
       { text: prompt },
       {

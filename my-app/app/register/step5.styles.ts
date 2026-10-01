@@ -97,7 +97,7 @@ const styles = StyleSheet.create({
   },
 
   optionTitleActive: {
-    color: "#fff",
+    color: "#FFF",
   },
 
   optionDesc: {
@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
   },
 
   optionDescActive: {
-    color: "#FFF7E8",
+    color: "rgba(255,255,255,0.85)",
   },
 
   helpButtonWrap: {

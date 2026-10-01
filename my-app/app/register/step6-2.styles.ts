@@ -16,49 +16,49 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: BG,
   },
-  
+
   headerBar: {
     backgroundColor: ORANGE,
     paddingVertical: 14,
     alignItems: "center",
   },
-  
+
   headerText: {
     color: "#fff",
     fontSize: 20,
     fontFamily: FONT_BOLD,
   },
-  
+
   scroll: {
     flex: 1,
   },
-  
+
   scrollContent: {
     padding: 16,
     paddingBottom: 30,
     flexGrow: 1,
   },
-  
+
   stepTitle: {
     fontSize: 26,
     color: "#111",
     fontFamily: FONT_BOLD,
   },
-  
+
   progressTrack: {
     marginTop: 12,
     height: 6,
     backgroundColor: "#D8D0C0",
     borderRadius: 8,
   },
-  
+
   progressFill: {
     width: "75%",
     height: "100%",
     backgroundColor: ORANGE,
     borderRadius: 8,
   },
-  
+
   subtitle: {
     marginTop: 24,
     fontSize: 18,
@@ -66,11 +66,53 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     fontFamily: FONT_BOLD,
   },
-  
+
+  // =========================
+  // Search
+  // =========================
+
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    borderRadius: 14,
+    height: 48,
+    paddingHorizontal: 12,
+    marginBottom: 16,
+  },
+
+  searchInput: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 14,
+    color: "#333",
+    fontFamily: FONT_REGULAR,
+  },
+
+  noSearchResult: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 16,
+    marginBottom: 12,
+  },
+
+  noSearchResultText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: "#999",
+    fontFamily: FONT_REGULAR,
+  },
+
+  // =========================
+  // Dropdown
+  // =========================
+
   dropdownWrapper: {
     marginBottom: 16,
   },
-  
+
   dropdownBtn: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -86,23 +128,23 @@ const styles = StyleSheet.create({
     elevation: 3,
     zIndex: 2,
   },
-  
+
   dropdownLeft: {
     flexDirection: "row",
     alignItems: "center",
   },
-  
+
   emojiIcon: {
     fontSize: 22,
   },
-  
+
   dropdownText: {
     fontSize: 18,
     color: "#FFF",
     marginLeft: 12,
     fontFamily: FONT_BOLD,
   },
-  
+
   listContainer: {
     backgroundColor: "#FFF",
     borderBottomLeftRadius: 16,
@@ -118,7 +160,7 @@ const styles = StyleSheet.create({
     elevation: 4,
     zIndex: 1,
   },
-  
+
   listItem: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -127,20 +169,20 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#EAEAEA",
   },
-  
+
   listItemText: {
     fontSize: 16,
     color: "#333",
     fontFamily: FONT_REGULAR,
   },
-  
+
   customInputRowInList: {
     flexDirection: "row",
     alignItems: "center",
     marginTop: 12,
     gap: 8,
   },
-  
+
   customInputInList: {
     flex: 1,
     backgroundColor: "#F5F5F5",
@@ -153,7 +195,7 @@ const styles = StyleSheet.create({
     color: "#222",
     fontFamily: FONT_REGULAR,
   },
-  
+
   addButtonInList: {
     backgroundColor: ORANGE,
     borderRadius: 12,
@@ -162,13 +204,17 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  
+
   addButtonTextInList: {
     color: "#FFF",
     fontSize: 14,
     fontFamily: FONT_BOLD,
   },
-  
+
+  // =========================
+  // Legacy Custom
+  // =========================
+
   legacyCustomSection: {
     marginTop: 4,
     marginBottom: 12,
@@ -178,19 +224,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#EFEFEF",
   },
-  
+
   legacyCustomTitle: {
     fontSize: 15,
     color: "#666",
     marginBottom: 8,
     fontFamily: FONT_BOLD,
   },
-  
+
   customChipWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
   },
-  
+
   customChip: {
     flexDirection: "row",
     alignItems: "center",
@@ -203,20 +249,24 @@ const styles = StyleSheet.create({
     marginRight: 8,
     marginBottom: 8,
   },
-  
+
   customChipText: {
     color: "#8A5A00",
     fontSize: 14,
     fontFamily: FONT_BOLD,
   },
-  
+
   customChipRemove: {
     marginLeft: 8,
     color: "#C96E00",
     fontSize: 14,
     fontFamily: FONT_BOLD,
   },
-  
+
+  // =========================
+  // Summary
+  // =========================
+
   summaryBox: {
     marginTop: 8,
     backgroundColor: "#FFF8EC",
@@ -225,32 +275,36 @@ const styles = StyleSheet.create({
     borderColor: "#F0D3A3",
     padding: 14,
   },
-  
+
   summaryTitle: {
     fontSize: 15,
     color: "#6B5A3D",
     marginBottom: 6,
     fontFamily: FONT_BOLD,
   },
-  
+
   summaryText: {
     fontSize: 14,
     color: "#333",
     lineHeight: 20,
     fontFamily: FONT_BOLD,
   },
-  
+
+  // =========================
+  // Bottom Buttons
+  // =========================
+
   spacer: {
     flex: 1,
     minHeight: 40,
   },
-  
+
   buttonRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     marginTop: 20,
   },
-  
+
   backButton: {
     borderWidth: 1.5,
     borderColor: "#222",
@@ -259,20 +313,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
     backgroundColor: "#FFF",
   },
-  
+
   backText: {
     color: "#222",
     fontSize: 16,
     fontFamily: FONT_BOLD,
   },
-  
+
   saveButton: {
     backgroundColor: ORANGE,
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 36,
   },
-  
+
   saveText: {
     color: "#fff",
     fontSize: 16,

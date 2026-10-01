@@ -1,13 +1,11 @@
 import { StyleSheet, Platform } from "react-native";
 
-// 1. ใส่ export ให้ตัวแปรสี เพื่อส่งไปใช้ในไฟล์หลัก
 export const ORANGE = "#F5A400";
 export const BG = "#F3F3F3";
 export const IOS_GREEN = "#34C759";
 export const ROW_COLOR_1 = "#EBA032";
 export const ROW_COLOR_2 = "#DF9226";
 
-// 2. ตัวแปรฟอนต์
 export const FONT_REGULAR = "NotoSansThai";
 export const FONT_BOLD = "NotoSansThaiBold";
 
@@ -67,6 +65,48 @@ const styles = StyleSheet.create({
     fontFamily: FONT_REGULAR,
   },
 
+  /* =========================
+     Search
+     ========================= */
+
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    borderRadius: 14,
+    height: 48,
+    paddingHorizontal: 12,
+    marginBottom: 16,
+  },
+
+  searchInput: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 14,
+    color: "#333",
+    fontFamily: FONT_REGULAR,
+  },
+
+  noSearchResult: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 20,
+    marginBottom: 12,
+  },
+
+  noSearchResultText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: "#999",
+    fontFamily: FONT_REGULAR,
+  },
+
+  /* =========================
+     Allergy buttons
+     ========================= */
+
   gridContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -75,9 +115,9 @@ const styles = StyleSheet.create({
 
   allergyBtn: {
     width: "48%",
-    backgroundColor: ORANGE,
+    backgroundColor: "#FFF",
     borderWidth: 1.5,
-    borderColor: ORANGE,
+    borderColor: "#D9D9D9",
     borderRadius: 24,
     paddingVertical: 12,
     alignItems: "center",
@@ -85,19 +125,23 @@ const styles = StyleSheet.create({
   },
 
   allergyBtnActive: {
-    backgroundColor: "#FFF",
-    borderColor: ORANGE,
+    backgroundColor: ORANGE,
+    borderColor: "#C97800",
   },
 
   allergyText: {
     fontSize: 16,
-    color: "#FFF",
+    color: "#333",
     fontFamily: FONT_BOLD,
   },
 
   allergyTextActive: {
-    color: ORANGE,
+    color: "#FFF",
   },
+
+  /* =========================
+     Other button
+     ========================= */
 
   otherBtn: {
     width: "100%",
@@ -116,11 +160,15 @@ const styles = StyleSheet.create({
     fontFamily: FONT_BOLD,
   },
 
+  /* =========================
+     None button
+     ========================= */
+
   noneBtn: {
     width: "100%",
-    backgroundColor: ORANGE,
+    backgroundColor: "#FFF",
     borderWidth: 1.5,
-    borderColor: ORANGE,
+    borderColor: "#D9D9D9",
     borderRadius: 24,
     paddingVertical: 14,
     alignItems: "center",
@@ -128,19 +176,23 @@ const styles = StyleSheet.create({
   },
 
   noneBtnActive: {
-    backgroundColor: "#FFF",
-    borderColor: ORANGE,
+    backgroundColor: ORANGE,
+    borderColor: "#C97800",
   },
 
   noneBtnText: {
     fontSize: 18,
-    color: "#FFF",
+    color: "#333",
     fontFamily: FONT_BOLD,
   },
 
   noneBtnTextActive: {
-    color: ORANGE,
+    color: "#FFF",
   },
+
+  /* =========================
+     Summary
+     ========================= */
 
   summaryBox: {
     marginTop: 16,
@@ -197,6 +249,10 @@ const styles = StyleSheet.create({
     fontFamily: FONT_BOLD,
   },
 
+  /* =========================
+     Navigation buttons
+     ========================= */
+
   buttonRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -228,6 +284,10 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontFamily: FONT_BOLD,
   },
+
+  /* =========================
+     Disabled
+     ========================= */
 
   disabledButton: {
     backgroundColor: "#E5E5E5",

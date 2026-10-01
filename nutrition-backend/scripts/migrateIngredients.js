@@ -1,12 +1,6 @@
 const mongoose = require("mongoose");
 require("dotenv").config();
 
-const MONGODB_URI = process.env.MONGODB_URI;
-
-if (!MONGODB_URI) {
-  console.error("❌ ไม่พบ MONGODB_URI ใน .env");
-  process.exit(1);
-}
 
 function inferDefaultUnit(name = "", oldCategory = "") {
   const n = String(name).trim();
@@ -205,7 +199,7 @@ function classifyIngredient(doc) {
 }
 
 async function run() {
-  await mongoose.connect(MONGODB_URI);
+  await connectDB();
   console.log("✅ MongoDB connected");
 
   const db = mongoose.connection.db;
@@ -258,7 +252,7 @@ async function run() {
   console.log("🔎 sample result:");
   console.table(sample);
 
-  await mongoose.disconnect();
+  await disconnectDB();
   console.log("✅ done");
 }
 
