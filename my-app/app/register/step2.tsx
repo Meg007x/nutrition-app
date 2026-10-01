@@ -221,7 +221,7 @@ export default function RegisterStep2Screen() {
         <View style={styles.bottomRow}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => router.back()}
+            onPress={() => router.replace("/register/step1")} 
             activeOpacity={0.8}
           >
             <Text style={styles.backButtonText}>ย้อนกลับ</Text>
