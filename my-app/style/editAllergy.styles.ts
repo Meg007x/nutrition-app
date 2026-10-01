@@ -1,7 +1,7 @@
 import { StyleSheet } from 'react-native';
 import { Brand } from '../constants/theme';
 
-export const ORANGE = Brand.primary;
+export const ORANGE = "#F5A400";
 export const BG = "#F3F3F3";
 
 export const styles = StyleSheet.create({
