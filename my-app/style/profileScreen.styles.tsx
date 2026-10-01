@@ -8,7 +8,7 @@ export const styles = StyleSheet.create({
   },
   headerBar: {
     height: 40,
-    backgroundColor: Brand.primary,
+    backgroundColor: "#F5A400",
   },
   scrollContainer: {
     padding: 16,
