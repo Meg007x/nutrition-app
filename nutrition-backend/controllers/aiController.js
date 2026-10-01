@@ -31,7 +31,7 @@ async function detectDishFromImage(ai, imagePath, mimeType) {
  
   const response = await ai.models.generateContent({
     // เปลี่ยนจากชื่อเดิม (gemini-2.5-flash)
-    model: "gemini-2.5-flash-lite",
+    model: "gemini-3.5-flash-lite",
     contents: [
       { text: prompt },
       {
