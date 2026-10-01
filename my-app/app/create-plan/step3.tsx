@@ -157,7 +157,7 @@ export default function Step3Screen() {
         });
         console.log("💧 Water save:", await resp.json());
       }
-    } catch (e) {
+    } catch (e: any) {
       console.warn("⚠️ Water save failed:", e?.message);
     } finally {
       setSaving(false);

@@ -6,8 +6,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { BASE_URL } from '../../constants/config';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
 
-const ORANGE = '#E67E22';
+import { Brand } from '../../constants/theme';
+
+const ORANGE = Brand.primary;
 const LIGHT_BG = '#F8F8F8';
 
 export default function EditProfileScreen() {
@@ -42,7 +45,7 @@ export default function EditProfileScreen() {
     } catch (error) { setLoading(false); }
   };
 
-  const fetchProfileData = async (uid) => {
+  const fetchProfileData = async (uid: string) => {
     try {
       const response = await fetch(BASE_URL + '/api/users/profile?userId=' + uid);
       const json = await response.json();
@@ -63,29 +66,42 @@ export default function EditProfileScreen() {
   const handlePickAvatar = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) { Alert.alert('ต้องการสิทธิ์', 'กรุณาอนุญาตเข้าถึงรูปภาพ'); return; }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.7 });
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.5 });
     if (!result.canceled && result.assets?.length > 0) { await uploadAvatar(result.assets[0].uri); }
   };
 
   const handleTakeAvatar = async () => {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) { Alert.alert('ต้องการสิทธิ์', 'กรุณาอนุญาตใช้กล้อง'); return; }
-    const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.7 });
+    const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.5 });
     if (!result.canceled && result.assets?.length > 0) { await uploadAvatar(result.assets[0].uri); }
   };
 
-  const uploadAvatar = async (uri) => {
+  const uploadAvatar = async (uri: string) => {
     setUploadingAvatar(true);
     try {
+      // Convert local URI to base64 for database storage
+      let avatarData = uri;
+      try {
+        const base64 = await FileSystem.readAsStringAsync(uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        const ext = uri.split('.').pop()?.toLowerCase() || 'jpeg';
+        const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
+        avatarData = `data:${mimeType};base64,${base64}`;
+      } catch (convErr) {
+        console.warn('Base64 conversion failed, sending URI as-is:', convErr);
+      }
+
       const response = await fetch(BASE_URL + '/api/users/upload-avatar', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentUserId, avatar_url: uri })
+        body: JSON.stringify({ userId: currentUserId, avatar_url: avatarData })
       });
       const json = await response.json();
       if (json.success) {
-        setAvatarUrl(uri);
+        setAvatarUrl(avatarData);
         const userJson = await AsyncStorage.getItem('currentUser');
-        if (userJson) { const u = JSON.parse(userJson); u.avatar_url = uri; await AsyncStorage.setItem('currentUser', JSON.stringify(u)); }
+        if (userJson) { const u = JSON.parse(userJson); u.avatar_url = avatarData; await AsyncStorage.setItem('currentUser', JSON.stringify(u)); }
         Alert.alert('สำเร็จ', 'อัปเดตรูปโปรไฟล์แล้ว');
       } else { Alert.alert('ไม่สำเร็จ', json.message || 'เกิดข้อผิดพลาด'); }
     } catch (error) { Alert.alert('ข้อผิดพลาด', 'ไม่สามารถอัปโหลดรูปได้'); } finally { setUploadingAvatar(false); }

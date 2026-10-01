@@ -8,7 +8,7 @@ const connectDB = require("./config/db");
 
 // 1. นำเข้า Routes
 const dashboardRoutes = require("./routes/dashboardRoutes");
-const { getIngredients, getDislikedFoods } = require("./controllers/foodController");
+const foodRoutes = require("./routes/foodRoutes");
 const aiRoute = require("./routes/aiRoute");
 const userRoute = require("./routes/userRoute");
 const mealLogRoute = require("./routes/mealLogRoute");
@@ -30,11 +30,11 @@ app.use(
   })
 );
 
-app.use(express.json());
+app.use(express.json({ limit: '5mb' }));
 
 // เปิดให้เข้าถึงโฟลเดอร์ uploads
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ limit: '5mb', extended: true }));
 
 // 4. กำหนดเส้นทาง API
 app.use("/api/dashboard", dashboardRoutes);
@@ -44,8 +44,9 @@ app.use("/api/meal-logs", mealLogRoute);
 app.use("/api/water-logs", waterLogRoute);
 app.use("/api/scan-sessions", scanSessionRoute);
 app.use('/api/notifications', notificationRoutes);
-app.get("/api/ingredients", getIngredients);
-app.get("/api/disliked-foods", getDislikedFoods);
+app.use('/api/food', foodRoutes);
+app.get("/api/ingredients", (req, res, next) => { req.url = '/ingredients'; foodRoutes(req, res, next); });
+app.get("/api/disliked-foods", (req, res, next) => { req.url = '/disliked-foods'; foodRoutes(req, res, next); });
 app.use("/api/ai", aiRoute);
 app.use("/api/meal", mealRoutes);
 
@@ -67,13 +68,10 @@ async function startServer() {
     // Print registered routes
     console.log("\n📋 Registered Routes:");
     console.log("─────────────────────────────────────");
-    console.log("  GET      /api/meal/user/:userId");
-    console.log("  POST     /api/meal/plans");
-    console.log("  GET      /api/meal/plans/:planId");
-    console.log("  DELETE   /api/meal/plans/:planId");
-    console.log("  PUT      /api/meal/plans/:planId/meal");
-    console.log("  DELETE   /api/meal/plans/:planId/meal/:mealId");
-    console.log("  GET      /api/meal/search-foods");
+    console.log("  GET      /api/ingredients");
+    console.log("  GET      /api/ingredients/hierarchy");
+    console.log("  GET      /api/disliked-foods");
+    console.log("  GET      /api/food/ingredients/hierarchy");
     console.log("─────────────────────────────────────\n");
   });
 }

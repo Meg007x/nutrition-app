@@ -1,13 +1,14 @@
 import { StyleSheet } from 'react-native';
+import { Brand } from '../constants/theme';
 
 export const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFDE7', // สีพื้นหลังออกเหลืองนวลตามภาพ
+    backgroundColor: '#FFFDE7',
   },
   headerBar: {
     height: 40,
-    backgroundColor: '#E67E22', // สีส้มด้านบนสุด
+    backgroundColor: Brand.primary,
   },
   scrollContainer: {
     padding: 16,

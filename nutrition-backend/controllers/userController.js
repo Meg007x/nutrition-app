@@ -428,6 +428,170 @@ const uploadAvatar = async (req, res) => {
   }
 };
 
+// ==========================================
+// GET /api/user/allergies?userId=xxx
+// ดึงข้อมูลภูมิแพ้ของผู้ใช้
+// ==========================================
+const getUserAllergies = async (req, res) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) {
+      return res.status(400).json({ success: false, message: "กรุณาส่ง userId" });
+    }
+
+    const user = await User.findOne({ user_id: userId });
+    if (!user) {
+      return res.status(404).json({ success: false, message: "ไม่พบผู้ใช้" });
+    }
+
+    // ดึง allergies จาก User document
+    const allergies = user.allergies || {};
+    // แปลงเป็น flat array สำหรับ frontend
+    const allItems = [
+      ...(allergies.veg || []),
+      ...(allergies.condiment || []),
+      ...(allergies.meat || []),
+      ...(allergies.other || []),
+    ];
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        allergies,
+        allItems,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Get User Allergies Error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ==========================================
+// PUT /api/user/allergies
+// เพิ่ม/อัปเดตภูมิแพ้ของผู้ใช้ (batch update)
+// ==========================================
+const saveUserAllergies = async (req, res) => {
+  try {
+    const { userId, allergies } = req.body;
+    if (!userId) {
+      return res.status(400).json({ success: false, message: "กรุณาส่ง userId" });
+    }
+
+    const user = await User.findOne({ user_id: userId });
+    if (!user) {
+      return res.status(404).json({ success: false, message: "ไม่พบผู้ใช้" });
+    }
+
+    // อัปเดต allergies (merge กับของเดิม)
+    // allergies ที่ส่งมาเป็น object { veg: [...], condiment: [...], meat: [...], other: [...] }
+    // หรือเป็น flat array ของ ingredient names
+    if (Array.isArray(allergies)) {
+      // ถ้าส่งมาเป็น flat array ให้เก็บใน other
+      user.allergies = {
+        veg: user.allergies?.veg || [],
+        condiment: user.allergies?.condiment || [],
+        meat: user.allergies?.meat || [],
+        other: allergies,
+      };
+    } else if (typeof allergies === "object" && allergies !== null) {
+      user.allergies = {
+        veg: allergies.veg || user.allergies?.veg || [],
+        condiment: allergies.condiment || user.allergies?.condiment || [],
+        meat: allergies.meat || user.allergies?.meat || [],
+        other: allergies.other || user.allergies?.other || [],
+      };
+    }
+
+    user.updated_at = new Date();
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "อัปเดตภูมิแพ้สำเร็จ",
+      data: user.allergies,
+    });
+  } catch (error) {
+    console.error("❌ Save User Allergies Error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ==========================================
+// DELETE /api/user/allergies/:itemId
+// ลบภูมิแพ้รายการเดียว
+// ==========================================
+const deleteUserAllergy = async (req, res) => {
+  try {
+    const { userId, itemName } = req.body;
+    if (!userId || !itemName) {
+      return res.status(400).json({ success: false, message: "กรุณาส่ง userId และ itemName" });
+    }
+
+    const user = await User.findOne({ user_id: userId });
+    if (!user) {
+      return res.status(404).json({ success: false, message: "ไม่พบผู้ใช้" });
+    }
+
+    // ลบ itemName จากทุก category ใน allergies
+    if (user.allergies) {
+      for (const category of ["veg", "condiment", "meat", "other"]) {
+        if (Array.isArray(user.allergies[category])) {
+          user.allergies[category] = user.allergies[category].filter(
+            (item) => item !== itemName
+          );
+        }
+      }
+    }
+
+    user.updated_at = new Date();
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: `ลบ "${itemName}" สำเร็จ`,
+      data: user.allergies,
+    });
+  } catch (error) {
+    console.error("❌ Delete User Allergy Error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ==========================================
+// PUT /api/user/profile-picture
+// อัปเดตรูปโปรไฟล์ (base64 หรือ URL)
+// ==========================================
+const updateProfilePicture = async (req, res) => {
+  try {
+    const { userId, avatar_url } = req.body;
+    if (!userId) {
+      return res.status(400).json({ success: false, message: "กรุณาส่ง userId" });
+    }
+    if (!avatar_url) {
+      return res.status(400).json({ success: false, message: "กรุณาส่ง avatar_url" });
+    }
+
+    const user = await User.findOne({ user_id: userId });
+    if (!user) {
+      return res.status(404).json({ success: false, message: "ไม่พบผู้ใช้" });
+    }
+
+    user.avatar_url = avatar_url;
+    user.updated_at = new Date();
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "อัปเดตรูปโปรไฟล์สำเร็จ",
+      data: { avatar_url: user.avatar_url },
+    });
+  } catch (error) {
+    console.error("❌ Update Profile Picture Error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 const updateMealWaterSettings = async (req, res) => {
   try {
     const { userId, meals, water_target_ml } = req.body;
@@ -518,5 +682,9 @@ module.exports = {
   updateUserDislikedFoods,
   updateUserInterestedCuisines,
   updateMealWaterSettings,
-  uploadAvatar
+  uploadAvatar,
+  getUserAllergies,
+  saveUserAllergies,
+  deleteUserAllergy,
+  updateProfilePicture,
 };

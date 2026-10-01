@@ -25,6 +25,7 @@ type FoodDetail = {
     kcal?: number;
     calories?: number;
     protein_g?: number;
+    carb_g?: number;
     carbs_g?: number;
     fat_g?: number;
     fiber_g?: number;
@@ -32,6 +33,7 @@ type FoodDetail = {
   };
 
   ingredients?: Array<{
+    ingredient_id?: string;
     name?: string;
     qty?: number | string;
     unit?: string;
@@ -102,7 +104,7 @@ export default function FoodDetailScreen() {
     0;
 
   const protein = nutrition.protein_g ?? 0;
-  const carbs = nutrition.carbs_g ?? 0;
+  const carbs = nutrition.carb_g ?? nutrition.carbs_g ?? 0;
   const fat = nutrition.fat_g ?? 0;
   const fiber = nutrition.fiber_g ?? 0;
   const sodium = nutrition.sodium_mg ?? 0;
@@ -341,14 +343,14 @@ export default function FoodDetailScreen() {
               <View style={styles.ingredientList}>
                 {food.ingredients.map((ingredient, index) => (
                   <View
-                    key={`${ingredient.name}-${index}`}
+                    key={`${ingredient.ingredient_id || ingredient.name || "ing"}-${index}`}
                     style={styles.ingredientRow}
                   >
                     <View style={styles.ingredientLeft}>
                       <View style={styles.dot} />
 
                       <Text style={styles.ingredientName}>
-                        {ingredient.name || "-"}
+                        {ingredient.name || ingredient.ingredient_id || "-"}
                       </Text>
                     </View>
 

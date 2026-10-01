@@ -8,6 +8,15 @@ import { Platform } from 'react-native';
 const tintColorLight = '#0a7ea4';
 const tintColorDark = '#fff';
 
+// =============================================
+// Official Brand / Primary Color Palette
+// =============================================
+export const Brand = {
+  primary: '#F26522',
+  primaryLight: '#FFF3EB',
+  primaryDark: '#D4550E',
+} as const;
+
 export const Colors = {
   light: {
     text: '#11181C',

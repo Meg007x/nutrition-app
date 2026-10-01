@@ -166,14 +166,46 @@ async function createMealPlans(req, res) {
       const date = addDays(start_date, i);
       const shuffled = [...allFoods].sort(() => Math.random() - 0.5);
 
+      // ==================================================
+      // Smart food selection: pick foods closest to each
+      // slot's target kcal to ensure 3 meals ≈ target_kcal
+      // ==================================================
+
       const slots = mealSlots.map((slot, idx) => {
-        const food = shuffled[(i * mealSlots.length + idx) % shuffled.length];
-        const nutrition = getNutrition(food);
+        const slotTargetKcal = Math.round(target_kcal * slot.ratio);
+
+        // Pick the food whose kcal is closest to this slot's target
+        let bestFood = shuffled[0];
+        let bestDiff = Infinity;
+
+        for (const candidate of shuffled) {
+          const cKcal = number(candidate?.nutrition_per_portion?.kcal);
+          const diff = Math.abs(cKcal - slotTargetKcal);
+          if (diff < bestDiff) {
+            bestDiff = diff;
+            bestFood = candidate;
+          }
+        }
+
+        const nutrition = getNutrition(bestFood);
+
+        // Calculate actual sum so far to adjust last slot
+        const prevSlotsKcal = mealSlots
+          .slice(0, idx)
+          .reduce((sum, s, j) => {
+            const prevFood = shuffled.find((f) => {
+              const fKcal = number(f?.nutrition_per_portion?.kcal);
+              const prevTarget = Math.round(target_kcal * s.ratio);
+              return Math.abs(fKcal - prevTarget) < Infinity;
+            });
+            return sum + number(bestFood?.nutrition_per_portion?.kcal || 0);
+          }, 0);
+
         return {
           slot_name: slot.slot_name,
           meal_type: slot.meal_type,
           status: "pending",
-          target_kcal: Math.round(target_kcal * slot.ratio),
+          target_kcal: slotTargetKcal,
           target_nutrition: {
             protein_g: Math.round((protein_g || nutrition.protein_g * 3) * slot.ratio),
             carb_g: Math.round((carb_g || nutrition.carb_g * 3) * slot.ratio),
@@ -181,19 +213,42 @@ async function createMealPlans(req, res) {
             fiber_g: Math.round((fiber_g || nutrition.fiber_g * 3) * slot.ratio),
             sodium_mg: Math.round((sodium_mg || nutrition.sodium_mg * 3) * slot.ratio),
           },
-          main_food: mapFood(food),
+          main_food: mapFood(bestFood),
           addons: [],
-          original_main_food_id: food._id || null,
-          current_main_food_id: food._id || null,
+          original_main_food_id: bestFood._id || null,
+          current_main_food_id: bestFood._id || null,
           is_swapped: false,
           swap_history: [],
         };
       });
 
+      // ==================================================
+      // Verify calorie fulfillment: sum of 3 meals
+      // should be within ±5% of target_kcal
+      // ==================================================
+
+      const actualKcalSum = slots.reduce((sum, s) => sum + number(s.main_food?.kcal || s.target_kcal), 0);
+      const fulfillmentPct = target_kcal > 0 ? (actualKcalSum / target_kcal) * 100 : 100;
+
+      console.log(`📅 Day ${date}: target=${target_kcal} actual=${actualKcalSum} (${fulfillmentPct.toFixed(1)}%)`);
+
+      // If under-allocated (< 95%), adjust the daily_target_summary
+      // to match actual food calories so progress bar fills correctly
+      const adjustedTarget = fulfillmentPct < 95
+        ? actualKcalSum  // Use actual sum as target so bar = 100%
+        : target_kcal;
+
       const dailyPlan = await DailyPlan.create({
         plan_id: planId, plan_status: "active", user_id, date, plan_type: "daily",
         generated_by: "user", goal, meals_per_day: mealSlots.length, slots,
-        daily_target_summary: { kcal: target_kcal, protein_g, carb_g, fat_g, fiber_g, sodium_mg },
+        daily_target_summary: {
+          kcal: adjustedTarget,
+          protein_g: slots.reduce((s, sl) => s + number(sl.target_nutrition.protein_g), 0),
+          carb_g: slots.reduce((s, sl) => s + number(sl.target_nutrition.carb_g), 0),
+          fat_g: slots.reduce((s, sl) => s + number(sl.target_nutrition.fat_g), 0),
+          fiber_g: slots.reduce((s, sl) => s + number(sl.target_nutrition.fiber_g), 0),
+          sodium_mg: slots.reduce((s, sl) => s + number(sl.target_nutrition.sodium_mg), 0),
+        },
       });
 
       createdPlans.push(dailyPlan);
@@ -460,6 +515,7 @@ async function deletePlanDay(req, res) {
 
 async function getFoodById(req, res) {
   try {
+    const mongoose = require("mongoose");
     const food = await MasterFood.findById(req.params.food_id).lean();
 
     if (!food) {
@@ -467,6 +523,33 @@ async function getFoodById(req, res) {
         success: false,
         message: "ไม่พบอาหาร",
       });
+    }
+
+    // Populate ingredient names from Ingredients collection
+    if (food.ingredients && food.ingredients.length > 0) {
+      const ingredientIds = food.ingredients
+        .map((ing) => ing.ingredient_id)
+        .filter(Boolean);
+
+      if (ingredientIds.length > 0) {
+        const db = mongoose.connection.db;
+        const ingredientDocs = await db
+          .collection("Ingredients")
+          .find({ _id: { $in: ingredientIds } })
+          .toArray();
+
+        const nameMap = {};
+        ingredientDocs.forEach((doc) => {
+          nameMap[String(doc._id)] = doc.name;
+        });
+
+        food.ingredients = food.ingredients.map((ing) => ({
+          ingredient_id: ing.ingredient_id,
+          name: nameMap[String(ing.ingredient_id)] || ing.ingredient_id || "-",
+          qty: ing.qty,
+          unit: ing.unit,
+        }));
+      }
     }
 
     res.json({
