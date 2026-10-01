@@ -10,7 +10,7 @@ import * as FileSystem from 'expo-file-system';
 
 import { Brand } from '../../constants/theme';
 
-const ORANGE = Brand.primary;
+const ORANGE = "#F5A400";
 const LIGHT_BG = '#F8F8F8';
 
 export default function EditProfileScreen() {

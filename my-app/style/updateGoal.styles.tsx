@@ -1,6 +1,6 @@
 import { StyleSheet } from 'react-native';
 
-export const ORANGE = '#E67E22';
+export const ORANGE = "#F5A400";
 export const BG = '#FFFDE7'; // สีเหลืองนวลตามหน้าหลักสมัครสมาชิก
 
 export const styles = StyleSheet.create({
