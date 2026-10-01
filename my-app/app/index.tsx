@@ -61,7 +61,7 @@ export default function WelcomeScreen() {
   );
 }
 
-const ORANGE = "#E8921D";
+const ORANGE = "#F5A400";
 const YELLOW = "#FFB300";
 
 const styles = StyleSheet.create({
