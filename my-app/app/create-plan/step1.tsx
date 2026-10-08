@@ -23,6 +23,7 @@ import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { BASE_URL } from "../../constants/config";
+import { Brand } from "../../constants/theme";
 
 // ======================================================
 // Helpers
@@ -1066,7 +1067,7 @@ export default function Step1Screen() {
       >
         <StatusBar
           barStyle="dark-content"
-          backgroundColor="#F29913"
+          backgroundColor="Brand.primary"
         />
 
         <View
@@ -1076,7 +1077,7 @@ export default function Step1Screen() {
         >
           <ActivityIndicator
             size="large"
-            color="#F29913"
+            color="Brand.primary"
           />
 
           <Text
@@ -1101,7 +1102,7 @@ export default function Step1Screen() {
     >
       <StatusBar
         barStyle="dark-content"
-        backgroundColor="#F29913"
+        backgroundColor="Brand.primary"
       />
 
       {/* Header */}
@@ -1397,7 +1398,7 @@ const styles =
 
     header: {
       height: 60,
-      backgroundColor: "#F29913",
+      backgroundColor: "Brand.primary",
       flexDirection: "row",
       alignItems: "center",
       justifyContent:
@@ -1492,7 +1493,7 @@ const styles =
     daysNumber: {
       fontSize: 22,
       fontWeight: "bold",
-      color: "#F29913",
+      color: "Brand.primary",
       fontFamily: "NotoSansThaiBold",
     },
 

@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Brand } from "../../constants/theme";
 
 const { width } = Dimensions.get("window");
 
@@ -33,7 +34,7 @@ export default function ManualFoodScreen() {
       title: "เครื่องปรุง / ส่วนผสม",
       items: ["น้ำปลาม", "ซีอิ๊วขาว", "น้ำตาล", "เกลือ", "ผงปรุงรส"],
       icon: "beaker-outline",
-      color: "#FF9800"
+      color: Brand.primary
     },
     {
       id: "meat",

@@ -8,6 +8,9 @@ const Notification = require('../models/Notification');
 const startNotificationCron = () => {
   console.log('⏰ ระบบตั้งเวลาแจ้งเตือนอัตโนมัติ (Cron Job) เริ่มทำงานแล้ว...');
 
+  // ============================================================
+  // 🍽️ Meal Reminder Cron (ทุก 1 นาที ตรวจจับเวลาอาหาร)
+  // ============================================================
   cron.schedule('* * * * *', async () => {
     try {
       // 1. ดึงเวลาปัจจุบันออกมาในฟอร์แมต "HH:MM"
@@ -73,7 +76,71 @@ const startNotificationCron = () => {
       }
 
     } catch (error) {
-      console.error('❌ เกิดข้อผิดพลาดในระบบตั้งเวลาแจ้งเตือน:', error);
+      console.error('❌ เกิดข้อผิดพลาดในระบบตั้งเวลาแจ้งเตือนมื้ออาหาร:', error);
+    }
+  });
+
+  // ============================================================
+  // 💧 Water Intake Reminder Cron (ทุก 30 นาที ระหว่าง 8:00-22:00)
+  // ============================================================
+  cron.schedule('*/30 * * * *', async () => {
+    try {
+      const now = new Date();
+      const hour = now.getHours();
+
+      // แจ้งเตือนเฉพาะช่วง 8:00 - 22:00 เท่านั้น
+      if (hour < 8 || hour >= 22) return;
+
+      const currentMinutes = String(now.getMinutes()).padStart(2, '0');
+      const currentTimeString = `${String(hour).padStart(2, '0')}:${currentMinutes}`;
+
+      let User;
+      try {
+        User = mongoose.model('User');
+      } catch (e) {
+        User = require('../models/User');
+      }
+
+      // หาผู้ใช้ที่มีเป้าหมายน้ำดื่ม (water_target_ml > 0)
+      const usersWithWaterTarget = await User.find({
+        $or: [
+          { water_target_ml: { $gt: 0 } },
+          { 'health_goals.water_target_ml': { $gt: 0 } }
+        ]
+      });
+
+      if (usersWithWaterTarget.length === 0) return;
+
+      console.log(`💧 ตรวจจับ Water Reminder สำหรับ ${usersWithWaterTarget.length} คน เวลา ${currentTimeString}`);
+
+      for (const user of usersWithWaterTarget) {
+        // เช็กซ้ำ: ส่งแค่ 1 ครั้งต่อช่วง 30 นาที
+        const thirtyMinAgo = new Date(now.getTime() - 30 * 60 * 1000);
+
+        const alreadyExists = await Notification.findOne({
+          user_id: user.user_id,
+          type: 'water',
+          createdAt: { $gte: thirtyMinAgo }
+        });
+
+        if (alreadyExists) continue;
+
+        const waterTarget = user.water_target_ml || (user.health_goals && user.health_goals.water_target_ml) || 2000;
+
+        const waterNotification = new Notification({
+          user_id: user.user_id,
+          type: 'water',
+          title: `💧 ดื่มน้ำสักแก้วไหม?`,
+          message: `อย่าลืมดื่มน้ำให้ได้ ${waterTarget} มล. ต่อวันนะคะ จิบน้ำตอนนี้เลย!`,
+          isRead: false
+        });
+
+        await waterNotification.save();
+        console.log(`✅ แจ้งเตือนดื่มน้ำให้ [${user.username || user.user_id}] เวลา ${currentTimeString}`);
+      }
+
+    } catch (error) {
+      console.error('❌ เกิดข้อผิดพลาดในระบบตั้งเวลาแจ้งเตือนดื่มน้ำ:', error);
     }
   });
 };

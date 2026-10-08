@@ -1,5 +1,7 @@
 ﻿const DailyPlan = require("../models/DailyPlan");
 const MasterFood = require("../models/MasterFood");
+const User = require("../models/User");
+const { getNutritionWithFallback, buildDailyTarget, buildDailySummary, num } = require("../utils/nutritionCalculator");
 
 // ======================================================
 // Shared: Calculate Daily Nutrition Target from User
@@ -18,6 +20,8 @@ function calculateDailyNutritionTarget(user) {
     fat_g,
     fiber_g: 0,
     sodium_mg: 0,
+    // v2: daily_target for DailyPlan schema
+    daily_target: buildDailyTarget(user),
   };
 }
 
@@ -55,15 +59,21 @@ function number(value) {
 }
 
 function getNutrition(food) {
+  // Sync fallback: nutrition_per_portion (v1 static)
   const nutrition = food?.nutrition_per_portion || {};
   return {
-    kcal: number(nutrition.kcal),
-    protein_g: number(nutrition.protein_g),
-    carb_g: number(nutrition.carb_g),
-    fat_g: number(nutrition.fat_g),
-    fiber_g: number(nutrition.fiber_g),
-    sodium_mg: number(nutrition.sodium_mg),
+    kcal: num(nutrition.kcal),
+    protein_g: num(nutrition.protein_g),
+    carb_g: num(nutrition.carb_g),
+    fat_g: num(nutrition.fat_g),
+    fiber_g: num(nutrition.fiber_g),
+    sodium_mg: num(nutrition.sodium_mg),
   };
+}
+
+// v2: Async version with USDA-based calculation
+async function getNutritionAsync(food) {
+  return getNutritionWithFallback(food);
 }
 
 function addNutrition(current, nutrition) {
@@ -83,6 +93,7 @@ function mapFood(food) {
   return {
     food_id: food._id || food.food_id || null,
     name: food.name || "",
+    name_en: food.name_en || "",
     image_url: food.image || food.image_url || "",
     category: food.category || "",
     kcal: nutrition.kcal,
@@ -94,6 +105,11 @@ function mapFood(food) {
       fiber_g: nutrition.fiber_g,
       sodium_mg: nutrition.sodium_mg,
     },
+    // v2 fields
+    portion_multiplier: 1.0,
+    actual_weight_g: food.portion?.gram || 0,
+    calculated_nutrition: null,
+    allergens_summary: food.allergens_summary || [],
   };
 }
 
@@ -138,15 +154,31 @@ async function createMealPlans(req, res) {
     const planDays = Math.min(Math.max(Number(days) || 7, 1), 7);
     const planId = generatePlanId();
 
-    // Build exclude filter
+    // Build exclude filter — v1 (legacy string matching)
     const allergyList = Array.isArray(allergies) ? allergies : flattenValues(allergies);
     const dislikedList = Array.isArray(disliked_foods) ? disliked_foods : flattenValues(disliked_foods);
     const excludeList = [...new Set([...allergyList, ...dislikedList])];
 
+    // v2: Build allergen code set from user.allergies_v2
+    const userDoc = await User.findOne({ $or: [{ user_id }, { username: user_id }, { email: user_id }] }).lean();
+    const allergyV2Codes = [];
+    if (userDoc && Array.isArray(userDoc.allergies_v2)) {
+      userDoc.allergies_v2.forEach(function(a) { if (a.code) allergyV2Codes.push(a.code); });
+    }
+
     let foodQuery = {};
-    if (excludeList.length > 0) {
-      const excludeRegex = excludeList.map((item) => new RegExp(item.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
-      foodQuery = { $and: [{ allergens: { $not: { $elemMatch: { $in: excludeRegex } } } }, { name: { $not: { $in: excludeRegex } } }] };
+    if (excludeList.length > 0 || allergyV2Codes.length > 0) {
+      const conditions = [];
+      if (excludeList.length > 0) {
+        const excludeRegex = excludeList.map((item) => new RegExp(item.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
+        conditions.push({ allergens: { $not: { $elemMatch: { $in: excludeRegex } } } });
+        conditions.push({ name: { $not: { $in: excludeRegex } } });
+      }
+      // v2: exclude by allergens_summary codes
+      if (allergyV2Codes.length > 0) {
+        conditions.push({ allergens_summary: { $nin: allergyV2Codes } });
+      }
+      foodQuery = conditions.length > 0 ? { $and: conditions } : {};
     }
 
     const allFoods = await MasterFood.find(foodQuery).lean();
@@ -219,6 +251,11 @@ async function createMealPlans(req, res) {
           current_main_food_id: bestFood._id || null,
           is_swapped: false,
           swap_history: [],
+          // v2 fields
+          portion_multiplier: 1.0,
+          actual_weight_g: bestFood.portion?.gram || 0,
+          custom_ingredients: [],
+          calculated_nutrition: null,
         };
       });
 
@@ -243,12 +280,15 @@ async function createMealPlans(req, res) {
         generated_by: "user", goal, meals_per_day: mealSlots.length, slots,
         daily_target_summary: {
           kcal: adjustedTarget,
-          protein_g: slots.reduce((s, sl) => s + number(sl.target_nutrition.protein_g), 0),
-          carb_g: slots.reduce((s, sl) => s + number(sl.target_nutrition.carb_g), 0),
-          fat_g: slots.reduce((s, sl) => s + number(sl.target_nutrition.fat_g), 0),
-          fiber_g: slots.reduce((s, sl) => s + number(sl.target_nutrition.fiber_g), 0),
-          sodium_mg: slots.reduce((s, sl) => s + number(sl.target_nutrition.sodium_mg), 0),
+          protein_g: slots.reduce((s, sl) => s + num(sl.target_nutrition.protein_g), 0),
+          carb_g: slots.reduce((s, sl) => s + num(sl.target_nutrition.carb_g), 0),
+          fat_g: slots.reduce((s, sl) => s + num(sl.target_nutrition.fat_g), 0),
+          fiber_g: slots.reduce((s, sl) => s + num(sl.target_nutrition.fiber_g), 0),
+          sodium_mg: slots.reduce((s, sl) => s + num(sl.target_nutrition.sodium_mg), 0),
         },
+        // v2 fields
+        daily_target: dailyTarget.daily_target,
+        daily_summary: buildDailySummary(slots, dailyTarget.daily_target),
       });
 
       createdPlans.push(dailyPlan);
@@ -477,6 +517,10 @@ function mapFoodForResponse(f) {
     nutrition_per_portion: f.nutrition_per_portion || {},
     allergens: f.allergens || [], portion: f.portion || null,
     ingredients: f.ingredients || [],
+    // v2 fields
+    allergens_summary: f.allergens_summary || [],
+    category_type: f.category_type || "",
+    portion_reference: f.portion_reference || null,
   };
 }
 // Exports

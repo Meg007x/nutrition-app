@@ -2,6 +2,7 @@ const MealLog = require("../models/MealLog");
 const ScanSession = require("../models/ScanSession");
 const { updateStreak } = require("../utils/streakUpdater");
 const User = require("../models/User");
+const { calculateFromIngredients, num } = require("../utils/nutritionCalculator");
 
 // 🟢 ฟังก์ชันช่วยจัดการข้อมูลเดิมของระบบ
 function buildMealKey(mealType) {
@@ -67,19 +68,33 @@ exports.saveMealCart = async (req, res) => {
       });
     }
 
-    // 2. คำนวณสารอาหารรวมทั้งหมดในมื้อ (Totals) จากตะกร้าที่ส่งมา ป้องกันการคลาดเคลื่อน
-    const totals = items.reduce(
-      (acc, item) => {
-        acc.kcal += Number(item?.nutrition?.kcal || 0);
-        acc.protein_g += Number(item?.nutrition?.protein_g || 0);
-        acc.fat_g += Number(item?.nutrition?.fat_g || 0);
-        acc.carb_g += Number(item?.nutrition?.carb_g || 0);
-        acc.fiber_g += Number(item?.nutrition?.fiber_g || 0);
-        acc.sodium_mg += Number(item?.nutrition?.sodium_mg || 0);
-        return acc;
-      },
-      { kcal: 0, protein_g: 0, fat_g: 0, carb_g: 0, fiber_g: 0, sodium_mg: 0 }
-    );
+    // 2. คำนวณสารอาหารรวม — v2: ลองคำนวณจาก ingredients ก่อน, fallback เป็น frontend values
+    let totals = { kcal: 0, protein_g: 0, fat_g: 0, carb_g: 0, fiber_g: 0, sodium_mg: 0 };
+
+    // ลองคำนวณจาก ingredients (ถ้า item มี ingredient_ids + weight_g)
+    const allIngredients = items.flatMap(item => (item.ingredients || []).filter(i => i.ingredient_id));
+    if (allIngredients.length > 0 && allIngredients.some(i => (i.weight_g || i.qty) > 0)) {
+      const dynamicTotals = await calculateFromIngredients(allIngredients);
+      if (dynamicTotals.kcal > 0) {
+        totals = dynamicTotals;
+      }
+    }
+
+    // Fallback: ถ้า dynamic ไม่ได้ค่า ใช้ frontend nutrition values
+    if (totals.kcal === 0) {
+      totals = items.reduce(
+        (acc, item) => {
+          acc.kcal += Number(item?.nutrition?.kcal || 0);
+          acc.protein_g += Number(item?.nutrition?.protein_g || 0);
+          acc.fat_g += Number(item?.nutrition?.fat_g || 0);
+          acc.carb_g += Number(item?.nutrition?.carb_g || 0);
+          acc.fiber_g += Number(item?.nutrition?.fiber_g || 0);
+          acc.sodium_mg += Number(item?.nutrition?.sodium_mg || 0);
+          return acc;
+        },
+        { kcal: 0, protein_g: 0, fat_g: 0, carb_g: 0, fiber_g: 0, sodium_mg: 0 }
+      );
+    }
 
     // ทำการแมปโครงสร้างของ items แต่ละตัวเพื่อให้มั่นใจว่าฟอร์แมต display_text ถูกต้องตามระบบของเพื่อนคุณ
     const formattedItems = items.map((item, index) => ({
@@ -245,18 +260,27 @@ exports.finalizeMealLog = async (req, res) => {
       logged_at: item.created_at || new Date(),
     }));
 
-    const totals = items.reduce(
-      (acc, item) => {
-        acc.kcal += Number(item?.nutrition?.kcal || 0);
-        acc.protein_g += Number(item?.nutrition?.protein_g || 0);
-        acc.fat_g += Number(item?.nutrition?.fat_g || 0);
-        acc.carb_g += Number(item?.nutrition?.carb_g || 0);
-        acc.fiber_g += Number(item?.nutrition?.fiber_g || 0);
-        acc.sodium_mg += Number(item?.nutrition?.sodium_mg || 0);
-        return acc;
-      },
-      { kcal: 0, protein_g: 0, fat_g: 0, carb_g: 0, fiber_g: 0, sodium_mg: 0 }
-    );
+    // v2: คำนวณ totals — ลองจาก ingredients ก่อน, fallback เป็น scan nutrition
+    let totals = { kcal: 0, protein_g: 0, fat_g: 0, carb_g: 0, fiber_g: 0, sodium_mg: 0 };
+    const allIngredients = items.flatMap(item => (item.ingredients || []).filter(i => i.ingredient_id));
+    if (allIngredients.length > 0 && allIngredients.some(i => (i.weight_g || i.qty) > 0)) {
+      const dynamicTotals = await calculateFromIngredients(allIngredients);
+      if (dynamicTotals.kcal > 0) totals = dynamicTotals;
+    }
+    if (totals.kcal === 0) {
+      totals = items.reduce(
+        (acc, item) => {
+          acc.kcal += Number(item?.nutrition?.kcal || 0);
+          acc.protein_g += Number(item?.nutrition?.protein_g || 0);
+          acc.fat_g += Number(item?.nutrition?.fat_g || 0);
+          acc.carb_g += Number(item?.nutrition?.carb_g || 0);
+          acc.fiber_g += Number(item?.nutrition?.fiber_g || 0);
+          acc.sodium_mg += Number(item?.nutrition?.sodium_mg || 0);
+          return acc;
+        },
+        { kcal: 0, protein_g: 0, fat_g: 0, carb_g: 0, fiber_g: 0, sodium_mg: 0 }
+      );
+    }
 
     const payload = {
       _id: mealLogId,

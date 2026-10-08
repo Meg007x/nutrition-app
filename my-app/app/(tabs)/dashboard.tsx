@@ -13,6 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { BASE_URL } from "../../constants/config";
+import { Brand } from "../../constants/theme";
 
 type BackendDashboardDTO = {
   userName: string;
@@ -509,7 +510,7 @@ const styles = StyleSheet.create({
   },
   loginAgainButton: {
     marginTop: 16,
-    backgroundColor: "#F5A400",
+    backgroundColor: Brand.primary,
     paddingHorizontal: 18,
     paddingVertical: 12,
     borderRadius: 12,

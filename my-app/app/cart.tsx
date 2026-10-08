@@ -426,7 +426,7 @@ return (
                 {item.source === "plan" && (
                   <View style={{ flexDirection: "row", alignItems: "center", marginTop: 4, alignSelf: "flex-start" }}>
                     <View style={{ backgroundColor: "#FFF3E0", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, flexDirection: "row", alignItems: "center", gap: 4 }}>
-                      <ThemedText style={{ fontSize: 11, color: "#E65100", fontWeight: "700" }}>📌 จากแผนอาหาร</ThemedText>
+                      <ThemedText style={{ fontSize: 11, color: ORANGE, fontWeight: "700" }}>📌 จากแผนอาหาร</ThemedText>
                     </View>
                   </View>
                 )}

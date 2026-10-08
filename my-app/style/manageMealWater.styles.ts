@@ -1,6 +1,7 @@
 import { StyleSheet, Platform } from 'react-native';
+import { Brand } from '../constants/theme';
 
-export const ORANGE = "#F5A400";
+export const ORANGE = Brand.primary;
 export const BG = "#F3F3F3";
 export const IOS_GREEN = "#34C759";
 export const ERROR_RED = "#E53935";

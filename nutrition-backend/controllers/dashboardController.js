@@ -1,5 +1,10 @@
 const mongoose = require("mongoose");
 const WaterLog = require("../models/WaterLog");
+const User = require("../models/User");
+const DailyPlan = require("../models/DailyPlan");
+const ScanSession = require("../models/ScanSession");
+const MealLog = require("../models/MealLog");
+const { num } = require("../utils/nutritionCalculator");
 
 const getDashboardData = async (req, res) => {
   const LP = "🔍 [DASHBOARD]";
@@ -34,7 +39,9 @@ const getDashboardData = async (req, res) => {
     const userFilter = { $or: [{ username: userId }, { user_id: userId }, { email: userId }] };
     console.log(`${LP} User filter:`, JSON.stringify(userFilter));
 
-    const user = await db.collection(usersColName).findOne(userFilter);
+    const user = await User.findOne({
+      $or: [{ username: userId }, { user_id: userId }, { email: userId }],
+    }).lean();
     console.log(`${LP} User found:`, user ? `YES (user_id=${user.user_id}, username=${user.username})` : "NO");
 
     if (!user) {
@@ -53,7 +60,7 @@ const getDashboardData = async (req, res) => {
     try {
       const waterFilter = { user_id: currentUserId, date: todayStr };
       console.log(`${LP} WaterLogs filter:`, JSON.stringify(waterFilter));
-      const waterLog = await db.collection("WaterLogs").findOne(waterFilter);
+      const waterLog = await WaterLog.findOne({ user_id: currentUserId, date: todayStr }).lean();
       console.log(`${LP} WaterLog:`, waterLog ? `found (drank=${waterLog.total_drank_ml}, target=${waterLog.target_ml})` : "null");
       consumedWater = waterLog ? Number(waterLog.total_drank_ml || 0) : 0;
       targetWater = waterLog ? Number(waterLog.target_ml || 2000) : (user?.health_goals?.water_target_ml || 2000);
@@ -67,7 +74,7 @@ const getDashboardData = async (req, res) => {
       const scanColName = allColNames.includes("ScanSessions") ? "ScanSessions" : (allColNames.includes("scansessions") ? "scansessions" : null);
       console.log(`${LP} Scan col:`, scanColName);
       if (scanColName) {
-        todayScans = await db.collection(scanColName).find({ user_id: currentUserId, date: todayStr }).toArray();
+        todayScans = await ScanSession.find({ user_id: currentUserId, date: todayStr }).lean();
         console.log(`${LP} Scans count:`, todayScans.length);
       }
     } catch (e) {
@@ -77,12 +84,8 @@ const getDashboardData = async (req, res) => {
     // ดึง MealLogs
     let todayMealLogs = [];
     try {
-      const mealLogColName = allColNames.includes("MealLogs") ? "MealLogs" : (allColNames.includes("meallogs") ? "meallogs" : null);
-      console.log(`${LP} MealLog col:`, mealLogColName);
-      if (mealLogColName) {
-        todayMealLogs = await db.collection(mealLogColName).find({ user_id: currentUserId, date: todayStr }).toArray();
-        console.log(`${LP} MealLogs count:`, todayMealLogs.length);
-      }
+      todayMealLogs = await MealLog.find({ user_id: currentUserId, date: todayStr }).lean();
+      console.log(`${LP} MealLogs count:`, todayMealLogs.length);
     } catch (e) {
       console.error(`${LP} ⚠️ MealLogs error:`, e.message);
     }
@@ -120,40 +123,54 @@ const getDashboardData = async (req, res) => {
     });
 
     // รวมสารอาหารจาก DailyPlan slots ที่ status === "eaten"
+    // v2: ใช้ calculated_nutrition ก่อน, fallback เป็น nutrition_per_portion
     try {
-      const dailyPlansColName = allColNames.includes("DailyPlans") ? "DailyPlans" : (allColNames.includes("dailyplans") ? "dailyplans" : null);
-      if (dailyPlansColName) {
-        const todayPlans = await db.collection(dailyPlansColName).find({ user_id: currentUserId, date: todayStr, plan_status: "active" }).toArray();
-        console.log(`${LP} DailyPlans count:`, todayPlans.length);
-        todayPlans.forEach((dp) => {
-          (dp.slots || []).forEach((slot) => {
-            if (slot.status !== "eaten") return;
-            const n = slot.main_food?.nutrition_per_portion || {};
-            consumedKcal += Number(n.kcal || 0);
-            proteinCurrent += Number(n.protein_g || 0);
-            carbCurrent += Number(n.carb_g || 0);
-            fatCurrent += Number(n.fat_g || 0);
-            (slot.addons || []).forEach((addon) => {
-              const an = addon?.nutrition_per_portion || {};
-              consumedKcal += Number(an.kcal || 0);
-              proteinCurrent += Number(an.protein_g || 0);
-              carbCurrent += Number(an.carb_g || 0);
-              fatCurrent += Number(an.fat_g || 0);
-            });
+      const todayPlans = await DailyPlan.find({ user_id: currentUserId, date: todayStr, plan_status: "active" }).lean();
+      console.log(`${LP} DailyPlans count:`, todayPlans.length);
+      todayPlans.forEach((dp) => {
+        (dp.slots || []).forEach((slot) => {
+          if (slot.status !== "eaten") return;
+          // v2: calculated_nutrition (dynamic) → fallback nutrition_per_portion (static)
+          const n = slot.calculated_nutrition || slot.main_food?.nutrition_per_portion || {};
+          consumedKcal += num(n.kcal);
+          proteinCurrent += num(n.protein_g);
+          carbCurrent += num(n.carb_g);
+          fatCurrent += num(n.fat_g);
+          (slot.addons || []).forEach((addon) => {
+            const an = addon?.calculated_nutrition || addon?.nutrition_per_portion || {};
+            consumedKcal += num(an.kcal);
+            proteinCurrent += num(an.protein_g);
+            carbCurrent += num(an.carb_g);
+            fatCurrent += num(an.fat_g);
           });
         });
-      }
+      });
     } catch (e) {
       console.error(`${LP} ⚠️ DailyPlans nutrition error:`, e.message);
     }
 
-    // คำนวณเป้าหมายสารอาหาร (ใช้สูตรเดียวกับ mealController)
-    const targetKcal = user?.health_goals?.tdee_target_kcal || 0;
-    const proteinTarget = user?.health_goals?.protein_target_g || 0;
-    const percentage = targetKcal > 0 ? Math.round((consumedKcal / targetKcal) * 100) : 0;
+    // คำนวณเป้าหมายสารอาหาร — v2: ใช้ daily_target จาก DailyPlan ถ้ามี, fallback เป็น TDEE formula
+    let targetKcal = 0;
+    let proteinTarget = 0;
+    let carbTarget = 0;
+    let fatTarget = 0;
 
-    const carbTarget = targetKcal > 0 ? Math.round((targetKcal * 0.5) / 4) : 0;
-    const fatTarget = targetKcal > 0 ? Math.round((targetKcal * 0.25) / 9) : 0;
+    // ลองหา daily_target จาก DailyPlan ล่าสุดของวันนี้
+    const latestPlan = await DailyPlan.findOne({ user_id: currentUserId, date: todayStr, plan_status: "active" }).lean();
+    if (latestPlan && latestPlan.daily_target) {
+      targetKcal = num(latestPlan.daily_target.target_kcal);
+      proteinTarget = num(latestPlan.daily_target.target_protein_g);
+      carbTarget = num(latestPlan.daily_target.target_carb_g);
+      fatTarget = num(latestPlan.daily_target.target_fat_g);
+    }
+    // Fallback: คำนวณจาก health_goals
+    if (targetKcal === 0) {
+      targetKcal = num(user?.health_goals?.tdee_target_kcal);
+      proteinTarget = num(user?.health_goals?.protein_target_g);
+      carbTarget = targetKcal > 0 ? Math.round((targetKcal * 0.5) / 4) : 0;
+      fatTarget = targetKcal > 0 ? Math.round((targetKcal * 0.25) / 9) : 0;
+    }
+    const percentage = targetKcal > 0 ? Math.round((consumedKcal / targetKcal) * 100) : 0;
 
     const mealSchedules = Array.isArray(user?.meal_settings?.schedules) ? user.meal_settings.schedules : [];
     console.log(`${LP} mealSchedules:`, mealSchedules.length, `| health_goals:`, JSON.stringify(user?.health_goals));

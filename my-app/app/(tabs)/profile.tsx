@@ -10,6 +10,8 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import { Brand } from '../../constants/theme';
 
+const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png';
+
 interface MenuItem {
   id: number;
   title: string;
@@ -23,6 +25,7 @@ const ProfileScreen: React.FC = () => {
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
 
   const fetchUserData = async () => {
     try {
@@ -43,30 +46,30 @@ const ProfileScreen: React.FC = () => {
   const handlePickAvatar = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) { Alert.alert('ต้องการสิทธิ์', 'กรุณาอนุญาตเข้าถึงรูปภาพ'); return; }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.5 });
-    if (!result.canceled && result.assets?.length > 0) { await uploadAvatar(result.assets[0].uri); }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.5, base64: true });
+    if (!result.canceled && result.assets?.length > 0) {
+      const asset = result.assets[0];
+      let avatarData: string;
+      if (asset.base64) {
+        const mime = asset.mimeType || 'image/jpeg';
+        avatarData = `data:${mime};base64,${asset.base64}`;
+      } else {
+        const b64 = await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.Base64 });
+        const ext = asset.uri.split('.').pop()?.toLowerCase() || 'jpeg';
+        const mime = ext === 'png' ? 'image/png' : 'image/jpeg';
+        avatarData = `data:${mime};base64,${b64}`;
+      }
+      await uploadAvatar(avatarData);
+    }
   };
 
-  const uploadAvatar = async (uri: string) => {
+  const uploadAvatar = async (avatarData: string) => {
     setUploadingAvatar(true);
     try {
       const userJson = await AsyncStorage.getItem('currentUser');
       if (!userJson) return;
       const userObj = JSON.parse(userJson);
       const userId = userObj.user_id || userObj.id;
-
-      // Convert local URI to base64 for database storage
-      let avatarData = uri;
-      try {
-        const base64 = await FileSystem.readAsStringAsync(uri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-        const ext = uri.split('.').pop()?.toLowerCase() || 'jpeg';
-        const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
-        avatarData = `data:${mimeType};base64,${base64}`;
-      } catch (convErr) {
-        console.warn('Base64 conversion failed, sending URI as-is:', convErr);
-      }
 
       const response = await fetch(`${BASE_URL}/api/users/profile-picture`, {
         method: 'PUT',
@@ -75,7 +78,11 @@ const ProfileScreen: React.FC = () => {
       });
       const json = await response.json();
       if (json.success) {
-        setUserData((prev: any) => ({ ...prev, avatar_url: avatarData }));
+        const savedUrl = json.data?.avatar_url || avatarData;
+        // Persist to AsyncStorage so avatar survives screen refocus / app restart
+        const updatedUser = { ...userObj, avatar_url: savedUrl };
+        await AsyncStorage.setItem('currentUser', JSON.stringify(updatedUser));
+        setUserData((prev: any) => ({ ...prev, avatar_url: savedUrl }));
         Alert.alert('สำเร็จ', 'อัปเดตรูปโปรไฟล์แล้ว');
       }
     } catch (error) {
@@ -117,7 +124,7 @@ const ProfileScreen: React.FC = () => {
      { id: 5, 
       title: 'อาหารที่ไม่ชอบ', 
       subtitle: 'สิ่งที่ไม่ชอบ', 
-      icon: () => <MaterialCommunityIcons name="emoticon-sad" size={24} color="#F57C00" />,
+      icon: () => <MaterialCommunityIcons name="emoticon-sad" size={24} color={Brand.primary} />,
       path: '/profile/editDislikedFoodScreen' // 👈 เติมที่อยู่หน้าใหม่เข้าไปตรงนี้เลยครับ!
      },
     { id: 6, 
@@ -148,8 +155,9 @@ const ProfileScreen: React.FC = () => {
         <View style={styles.userCard}>
           <TouchableOpacity style={styles.avatarContainer} onPress={handlePickAvatar} activeOpacity={0.7}>
             <Image 
-              source={{ uri: userData?.avatar_url || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png' }} 
-              style={styles.avatar} 
+              source={{ uri: avatarError ? DEFAULT_AVATAR : (userData?.avatar_url || DEFAULT_AVATAR) }} 
+              style={[styles.avatar, { resizeMode: 'cover' }]}
+              onError={() => setAvatarError(true)}
             />
             {uploadingAvatar && (
               <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 30 }}>

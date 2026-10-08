@@ -1,267 +1,195 @@
 import { StyleSheet } from "react-native";
-import { Brand } from "../constants/theme";
 
-export const ORANGE = Brand.primary;
-export const ORANGE_LIGHT = Brand.primaryLight;
-export const BG = "#FFFFFF";
-export const CARD = "#FFFFFF";
-export const BORDER = "#E8E8E8";
+export const ROW_COLOR_1 = "#EBA032";
+export const ROW_COLOR_2 = "#DF9226";
 
-export const FONT_REGULAR = "NotoSansThai";
-export const FONT_BOLD = "NotoSansThaiBold";
-
-const styles = StyleSheet.create({
+export const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: ROW_COLOR_1,
   },
-
-  // --- Hero Section ---
   heroSection: {
-    backgroundColor: ORANGE,
-    paddingTop: 10,
-    paddingBottom: 32,
     paddingHorizontal: 24,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
-    alignItems: "center",
+    paddingTop: 32,
+    paddingBottom: 24,
+    backgroundColor: ROW_COLOR_1,
   },
-
   brandRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 16,
-    gap: 8,
+    marginBottom: 20,
   },
-
   brandIcon: {
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.25)",
     justifyContent: "center",
+    alignItems: "center",
+    marginRight: 10,
   },
-
   brandName: {
-    color: "#fff",
     fontSize: 20,
-    fontFamily: FONT_BOLD,
-    letterSpacing: 0.5,
+    fontWeight: "bold",
+    color: "#FFFFFF",
   },
-
   heroTitle: {
-    color: "#fff",
-    fontSize: 26,
-    fontFamily: FONT_BOLD,
-    textAlign: "center",
-    lineHeight: 34,
+    fontSize: 28,
+    fontWeight: "bold",
+    color: "#FFFFFF",
+    lineHeight: 36,
     marginBottom: 8,
   },
-
   heroSubtitle: {
-    color: "rgba(255,255,255,0.85)",
     fontSize: 14,
-    fontFamily: FONT_REGULAR,
-    textAlign: "center",
+    color: "rgba(255, 255, 255, 0.9)",
     lineHeight: 20,
   },
-
-  // --- Floating Brand Tag ---
-  floatingTag: {
-    position: "absolute",
-    top: -1,
-    alignSelf: "center",
-    backgroundColor: ORANGE,
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
-    zIndex: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-
-  floatingTagText: {
-    color: "#fff",
-    fontSize: 13,
-    fontFamily: FONT_BOLD,
-    letterSpacing: 0.3,
-  },
-
-  // --- Content Card ---
   content: {
     flex: 1,
-    justifyContent: "center",
-    padding: 20,
-    paddingTop: 28,
+    backgroundColor: "#F8F9FA",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingTop: 24,
+    paddingHorizontal: 20,
   },
-
   card: {
-    backgroundColor: CARD,
+    backgroundColor: "#FFFFFF",
     borderRadius: 20,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 24,
-    shadowColor: "#000",
+    padding: 20,
+    shadowColor: "#000000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 6,
+    shadowRadius: 12,
+    elevation: 3,
   },
-
   label: {
     fontSize: 14,
-    color: "#666",
-    marginBottom: 6,
+    fontWeight: "600",
+    color: "#333333",
+    marginBottom: 8,
     marginTop: 12,
-    fontFamily: FONT_BOLD,
   },
-
   input: {
-    backgroundColor: "#F8F8F8",
+    backgroundColor: "#F5F5F5",
     borderRadius: 12,
-    borderWidth: 1.2,
-    borderColor: "#E0E0E0",
     paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: "#222",
-    marginBottom: 4,
-    fontFamily: FONT_REGULAR,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: "#222222",
+    borderWidth: 1,
+    borderColor: "#EEEEEE",
   },
-
   inputError: {
     borderColor: "#E53935",
-    backgroundColor: "#FFF8F8",
   },
-
-  errorText: {
-    color: "#E53935",
-    fontSize: 12,
-    marginBottom: 8,
-    fontFamily: FONT_REGULAR,
-    marginLeft: 4,
-  },
-
   passwordWrap: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F8F8F8",
+    backgroundColor: "#F5F5F5",
     borderRadius: 12,
-    borderWidth: 1.2,
-    borderColor: "#E0E0E0",
-    paddingHorizontal: 12,
-    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: "#EEEEEE",
   },
-
   passwordWrapError: {
     borderColor: "#E53935",
-    backgroundColor: "#FFF8F8",
   },
-
   passwordInput: {
     flex: 1,
-    fontSize: 16,
-    paddingVertical: 14,
-    color: "#222",
-    fontFamily: FONT_REGULAR,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: "#222222",
   },
-
   eyeButton: {
-    paddingHorizontal: 6,
+    paddingHorizontal: 12,
   },
-
-  loginButton: {
-    marginTop: 20,
-    backgroundColor: ORANGE,
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: ORANGE,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-
-  loginButtonText: {
-    color: "#fff",
-    fontSize: 18,
-    fontFamily: FONT_BOLD,
-  },
-
-  registerLink: {
-    marginTop: 16,
-    alignItems: "center",
-  },
-
-  registerLinkText: {
-    color: ORANGE,
-    fontSize: 14,
-    fontFamily: FONT_BOLD,
-  },
-
-  // --- Social Login Divider ---
-  dividerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginVertical: 20,
-    gap: 12,
-  },
-
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: "#E0E0E0",
-  },
-
-  dividerText: {
-    color: "#999",
+  errorText: {
+    color: "#E53935",
     fontSize: 12,
-    fontFamily: FONT_REGULAR,
+    marginTop: 4,
   },
-
-  socialRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 16,
-  },
-
-  socialBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 14,
-    backgroundColor: "#F8F8F8",
-    borderWidth: 1,
-    borderColor: "#E8E8E8",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  // --- Error Alert Banner ---
   errorBanner: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#FFEBEE",
-    borderRadius: 12,
+    borderRadius: 10,
     padding: 12,
-    marginBottom: 16,
-    gap: 10,
-    borderWidth: 1,
-    borderColor: "#FFCDD2",
+    marginBottom: 12,
+    gap: 8,
   },
-
   errorBannerText: {
-    color: "#C62828",
+    color: "#D32F2F",
     fontSize: 13,
     flex: 1,
-    fontFamily: FONT_REGULAR,
-    lineHeight: 18,
+  },
+  forgotLink: {
+    alignSelf: "flex-end",
+    marginTop: 10,
+    marginBottom: 16,
+  },
+  forgotLinkText: {
+    color: ROW_COLOR_2,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  loginButton: {
+    backgroundColor: ROW_COLOR_1,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 8,
+    shadowColor: ROW_COLOR_1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  loginButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  dividerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 20,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#EEEEEE",
+  },
+  dividerText: {
+    fontSize: 12,
+    color: "#999999",
+    paddingHorizontal: 12,
+  },
+  socialRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 16,
+    marginBottom: 20,
+  },
+  socialBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "#EEEEEE",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+  },
+  registerLink: {
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+  registerLinkText: {
+    color: ROW_COLOR_2,
+    fontSize: 14,
+    fontWeight: "600",
   },
 });
 

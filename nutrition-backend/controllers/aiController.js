@@ -149,11 +149,14 @@ async function hydrateIngredients(foodIngredients = []) {
 
     return {
       ingredient_id: item.ingredient_id,
-      name: info?.name || item.ingredient_id,
+      name: info?.name || item.name_snap || item.ingredient_id,
       category: info?.category || "other",
       qty: item.qty || 0,
       unit: item.unit || "",
+      weight_g: item.weight_g || 0,
       keywords: info?.keywords || [],
+      // v2: เพิ่ม nutrition_per_100g จาก Ingredient
+      nutrition_per_100g: info?.nutrition_per_100g || null,
     };
   });
 }
@@ -206,7 +209,25 @@ exports.analyzeFood = async (req, res) => {
     // 4) ดึงรายละเอียด ingredient จากคอลเลกชัน Ingredients
     const hydratedIngredients = await hydrateIngredients(food.ingredients || []);
 
-    // 5) ส่งข้อมูลกลับ
+    // 5) คำนวณสารอาหารสดจาก ingredients × weight_g (v2)
+    const { calculateFromIngredients } = require("../utils/nutritionCalculator");
+    let dynamicNutrition = null;
+    if (hydratedIngredients.some(ing => (ing.weight_g || ing.qty) > 0)) {
+      dynamicNutrition = await calculateFromIngredients(hydratedIngredients);
+      if (dynamicNutrition.kcal === 0) dynamicNutrition = null; // fallback ถ้าไม่มีข้อมูล USDA
+    }
+
+    // ใช้ dynamic ถ้าได้, fallback เป็น static
+    const finalNutrition = dynamicNutrition || {
+      kcal: food.nutrition_per_portion?.kcal || 0,
+      protein_g: food.nutrition_per_portion?.protein_g || 0,
+      carb_g: food.nutrition_per_portion?.carb_g || 0,
+      fat_g: food.nutrition_per_portion?.fat_g || 0,
+      fiber_g: food.nutrition_per_portion?.fiber_g || 0,
+      sodium_mg: food.nutrition_per_portion?.sodium_mg || 0,
+    };
+
+    // 6) ส่งข้อมูลกลับ
     return res.json({
       success: true,
       source: "database",
@@ -221,16 +242,17 @@ exports.analyzeFood = async (req, res) => {
         tags: food.tags || [],
         image: food.image || null,
 
-        calories: food.nutrition_per_portion?.kcal || 0,
-        protein: food.nutrition_per_portion?.protein_g || 0,
-        carb: food.nutrition_per_portion?.carb_g || 0,
-        fat: food.nutrition_per_portion?.fat_g || 0,
-        fiber: food.nutrition_per_portion?.fiber_g || 0,
-        sodium: food.nutrition_per_portion?.sodium_mg || 0,
+        calories: finalNutrition.kcal,
+        protein: finalNutrition.protein_g,
+        carb: finalNutrition.carb_g,
+        fat: finalNutrition.fat_g,
+        fiber: finalNutrition.fiber_g,
+        sodium: finalNutrition.sodium_mg,
 
         portion: food.portion || { unit: "plate", gram: 100 },
         ingredients: hydratedIngredients,
         allergens: food.allergens || [],
+        allergens_summary: food.allergens_summary || [],
       },
     });
   } catch (error) {

@@ -727,3 +727,73 @@ export function getEatenCount(
     ).length || 0
   );
 }
+/* =========================================================
+   LOG PLANNED MEAL → MealLog
+   POST /api/meal-logs/cart  (reuses saveMealCart endpoint)
+========================================================= */
+
+export async function logPlannedMeal(
+  userId: string,
+  date: string,
+  mealType: string,
+  slot: Slot
+) {
+  if (!userId || !date || !mealType) {
+    throw new Error("ข้อมูลไม่ครบ (user_id, date, meal_type)");
+  }
+
+  const foods: Food[] = [];
+  if (slot.main_food) foods.push(slot.main_food);
+  if (slot.addons?.length) foods.push(...slot.addons);
+
+  if (foods.length === 0) {
+    throw new Error("ไม่มีอาหารในมื้อนี้");
+  }
+
+  const toPortionUnit = (raw: string) => {
+    const u = String(raw || "").toLowerCase();
+    if (u === "จาน") return "plate";
+    if (u === "ชิ้น") return "piece";
+    if (u === "ชาม") return "bowl";
+    if (u === "ถ้วย") return "cup";
+    return u || "g";
+  };
+
+  const items = foods.map((food, idx) => {
+    const n = food.nutrition_per_portion || {};
+    const p = food.portion || {};
+    return {
+      food_id: food.food_id || food._id || null,
+      food_name: String(food.name || ""),
+      food_name_en: String(food.name_en || ""),
+      category: String(food.category || ""),
+      image_uri: String(food.image || food.image_url || ""),
+      selected_portion: {
+        gram: Number(p.gram || 0),
+        unit: toPortionUnit(p.unit || ""),
+        multiplier: Number(p.multiplier || 1),
+      },
+      nutrition: {
+        kcal: Number(n.kcal ?? food.kcal ?? 0),
+        protein_g: Number(n.protein_g ?? food.protein_g ?? 0),
+        carb_g: Number(n.carb_g ?? food.carb_g ?? 0),
+        fat_g: Number(n.fat_g ?? food.fat_g ?? 0),
+        fiber_g: Number(n.fiber_g ?? food.fiber_g ?? 0),
+        sodium_mg: Number(n.sodium_mg ?? food.sodium_mg ?? 0),
+      },
+    };
+  });
+
+  const url = `${API_BASE_URL}/meal-logs/cart`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user_id: userId, date, meal_type: mealType, items }),
+  });
+
+  const data = await parseResponse(response);
+  if (!response.ok) {
+    throw new Error(data?.error || "บันทึกมื้ออาหารไม่สำเร็จ");
+  }
+  return data;
+}

@@ -18,6 +18,7 @@ import {
 } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { BASE_URL } from "../../constants/config";
+import { Brand } from "../../constants/theme";
 
 // ======================================================
 // Component
@@ -173,7 +174,7 @@ export default function Step3Screen() {
     <SafeAreaView style={styles.container}>
       <StatusBar
         barStyle="dark-content"
-        backgroundColor="#F29913"
+        backgroundColor="Brand.primary"
       />
 
       {/* ============================================= */}
@@ -414,7 +415,7 @@ const styles = StyleSheet.create({
 
   header: {
     height: 0,
-    backgroundColor: "#F29913",
+    backgroundColor: "Brand.primary",
   },
 
   // ====================================================

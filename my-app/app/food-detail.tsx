@@ -13,7 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import axios from "axios";
 
-import { BASE_URL } from "../constants/config";
+import { BASE_URL, API_BASE_URL } from "../constants/config";
 
 type FoodDetail = {
   food_id?: string;
@@ -75,12 +75,38 @@ export default function FoodDetailScreen() {
        * เปลี่ยน endpoint ตรงนี้ให้ตรงกับ Backend จริง
        */
       const response = await axios.get(
-        `${BASE_URL}/api/foods/${encodeURIComponent(foodId)}`
+        `${API_BASE_URL}/meal/foods/${encodeURIComponent(foodId)}`
       );
 
       const data = response?.data;
 
-      setFood(data?.food || data?.data || data);
+      const foodData = data?.food || data?.data || data;
+
+      // Normalize field names: backend MasterFood uses 'image', frontend expects 'image_url'
+      if (foodData && !foodData.image_url && foodData.image) {
+        foodData.image_url = foodData.image;
+      }
+
+      // Normalize nutrition field: backend uses 'carb_g', frontend also checks 'carbs_g'
+      if (foodData?.nutrition_per_portion) {
+        const np = foodData.nutrition_per_portion;
+        if (np.carb_g !== undefined && np.carbs_g === undefined) {
+          np.carbs_g = np.carb_g;
+        }
+      }
+
+      // Normalize ingredients: backend returns { ingredient_id, name, qty, unit }
+      // Ensure name field is always populated (fallback to ingredient_id)
+      if (foodData?.ingredients && Array.isArray(foodData.ingredients)) {
+        foodData.ingredients = foodData.ingredients.map((ing: any) => ({
+          ingredient_id: ing.ingredient_id || ing._id || '',
+          name: ing.name || ing.ingredient_name || ing.ingredient_id || '-',
+          qty: ing.qty,
+          unit: ing.unit,
+        }));
+      }
+
+      setFood(foodData);
     } catch (err: any) {
       console.log(
         "loadFoodDetail error:",
