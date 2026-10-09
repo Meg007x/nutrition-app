@@ -1,8 +1,7 @@
 import { StyleSheet, Platform } from "react-native";
-import { Brand } from "../../constants/theme";
 
 // 1. ใส่ export ให้ตัวแปรสี เพื่อส่งไปใช้ในไฟล์หลัก
-export const ORANGE = Brand.primary;
+export const ORANGE = "#DF9226";
 export const BG = "#F3F3F3";
 export const IOS_GREEN = "#34C759";
 export const ROW_COLOR_1 = "#EBA032";
@@ -10,13 +9,13 @@ export const ROW_COLOR_2 = "#DF9226";
 export const WHITE = "#FFFFFF";
 
 // สีเพิ่มเติมที่ใช้ในฟอร์ม (ปรับเปลี่ยนโค้ดสีได้ตามต้องการ)
-export const ORANGE_DK = Brand.primaryDark;
+export const ORANGE_DK = "#D4550E";
 export const RULER_BG = "#F8F8F8";
 export const CARD = "#FFFFFF";
 export const BORDER = "#E5E5E5";
 
 // สีสำหรับสถานะการแจ้งเตือน
-export const WARN_COLOR = "#FF9500";
+export const WARN_COLOR = "#EBA032";
 export const ERROR_COLOR = "#FF3B30";
 
 // 2. ตัวแปรฟอนต์
