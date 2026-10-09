@@ -1,337 +1,254 @@
-import { StyleSheet, Platform } from "react-native";
 
-// 1. ใส่ export ให้ตัวแปรสี เพื่อส่งไปใช้ในไฟล์หลัก
+import { StyleSheet } from "react-native";
+
 export const ORANGE = "#F5A400";
 export const BG = "#F3F3F3";
-export const IOS_GREEN = "#34C759";
-export const ROW_COLOR_1 = "#EBA032";
-export const ROW_COLOR_2 = "#DF9226";
-
-// 2. ตัวแปรฟอนต์
 export const FONT_REGULAR = "NotoSansThai";
 export const FONT_BOLD = "NotoSansThaiBold";
 
-const styles = StyleSheet.create({
+export default StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: BG,
   },
-
   headerBar: {
     backgroundColor: ORANGE,
-    paddingVertical: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
     alignItems: "center",
+    justifyContent: "center",
   },
-
   headerText: {
-    color: "#fff",
-    fontSize: 20,
     fontFamily: FONT_BOLD,
+    fontSize: 18,
+    color: "#FFFFFF",
   },
-
   scroll: {
     flex: 1,
   },
-
   scrollContent: {
-    padding: 16,
+    padding: 20,
     paddingBottom: 30,
-    flexGrow: 1,
   },
-
   stepTitle: {
-    fontSize: 26,
-    color: "#111",
     fontFamily: FONT_BOLD,
+    fontSize: 22,
+    color: "#222222",
+    marginBottom: 16,
   },
-
   progressTrack: {
-    marginTop: 12,
     height: 6,
-    backgroundColor: "#D8D0C0",
-    borderRadius: 8,
-  },
-
-  progressFill: {
-    width: "75%",
-    height: "100%",
-    backgroundColor: ORANGE,
-    borderRadius: 8,
-  },
-
-  subtitle: {
-    marginTop: 24,
-    fontSize: 18,
-    color: "#333",
+    backgroundColor: "#E5E5E5",
+    borderRadius: 10,
+    overflow: "hidden",
     marginBottom: 20,
-    fontFamily: FONT_BOLD,
   },
-
-  // =========================
-  // Search
-  // =========================
-
-  searchContainer: {
-    flexDirection: "row",
-    alignItems: "center",
+  progressFill: {
+    height: "100%",
+    width: "77.78%",
+    backgroundColor: ORANGE,
+    borderRadius: 10,
+  },
+  subtitle: {
+    fontFamily: FONT_REGULAR,
+    fontSize: 14,
+    color: "#666666",
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  searchInput: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E0E0E0",
-    borderRadius: 14,
-    height: 48,
-    paddingHorizontal: 12,
-    marginBottom: 16,
-  },
-
-  searchInput: {
-    flex: 1,
-    marginLeft: 8,
-    fontSize: 14,
-    color: "#333",
-    fontFamily: FONT_REGULAR,
-  },
-
-  noSearchResult: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 16,
-    marginBottom: 12,
-  },
-
-  noSearchResultText: {
-    marginTop: 8,
-    fontSize: 14,
-    color: "#999",
-    fontFamily: FONT_REGULAR,
-  },
-
-  // =========================
-  // Dropdown
-  // =========================
-
-  dropdownWrapper: {
-    marginBottom: 16,
-  },
-
-  dropdownBtn: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: ORANGE,
-    borderRadius: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    zIndex: 2,
-  },
-
-  dropdownLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  emojiIcon: {
-    fontSize: 22,
-  },
-
-  dropdownText: {
-    fontSize: 18,
-    color: "#FFF",
-    marginLeft: 12,
-    fontFamily: FONT_BOLD,
-  },
-
-  listContainer: {
-    backgroundColor: "#FFF",
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 16,
-    marginTop: -12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 4,
-    zIndex: 1,
-  },
-
-  listItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#EAEAEA",
-  },
-
-  listItemText: {
-    fontSize: 16,
-    color: "#333",
-    fontFamily: FONT_REGULAR,
-  },
-
-  customInputRowInList: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 12,
-    gap: 8,
-  },
-
-  customInputInList: {
-    flex: 1,
-    backgroundColor: "#F5F5F5",
-    borderWidth: 1,
-    borderColor: "#DDD",
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: "#222",
-    fontFamily: FONT_REGULAR,
-  },
-
-  addButtonInList: {
-    backgroundColor: ORANGE,
+    borderColor: "#DDDDDD",
     borderRadius: 12,
     paddingHorizontal: 14,
-    paddingVertical: 10,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  addButtonTextInList: {
-    color: "#FFF",
+    paddingVertical: 12,
+    fontFamily: FONT_REGULAR,
     fontSize: 14,
-    fontFamily: FONT_BOLD,
+    marginBottom: 18,
   },
-
-  // =========================
-  // Legacy Custom
-  // =========================
-
-  legacyCustomSection: {
-    marginTop: 4,
-    marginBottom: 12,
-    backgroundColor: "#FFF",
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#EFEFEF",
-  },
-
-  legacyCustomTitle: {
-    fontSize: 15,
-    color: "#666",
-    marginBottom: 8,
-    fontFamily: FONT_BOLD,
-  },
-
-  customChipWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-  },
-
-  customChip: {
+  avoidAllButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFF4DD",
-    borderWidth: 1,
-    borderColor: "#F3D299",
-    borderRadius: 999,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    marginRight: 8,
-    marginBottom: 8,
-  },
-
-  customChipText: {
-    color: "#8A5A00",
-    fontSize: 14,
-    fontFamily: FONT_BOLD,
-  },
-
-  customChipRemove: {
-    marginLeft: 8,
-    color: "#C96E00",
-    fontSize: 14,
-    fontFamily: FONT_BOLD,
-  },
-
-  // =========================
-  // Summary
-  // =========================
-
-  summaryBox: {
-    marginTop: 8,
-    backgroundColor: "#FFF8EC",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#F0D3A3",
     padding: 14,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: "#DDDDDD",
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
   },
-
-  summaryTitle: {
-    fontSize: 15,
-    color: "#6B5A3D",
-    marginBottom: 6,
-    fontFamily: FONT_BOLD,
+  avoidAllButtonActive: {
+    borderColor: ORANGE,
+    backgroundColor: "#FFF5DE",
   },
-
-  summaryText: {
-    fontSize: 14,
-    color: "#333",
-    lineHeight: 20,
-    fontFamily: FONT_BOLD,
-  },
-
-  // =========================
-  // Bottom Buttons
-  // =========================
-
-  spacer: {
+  avoidAllTextContainer: {
     flex: 1,
-    minHeight: 40,
   },
-
+  avoidAllTitle: {
+    fontFamily: FONT_BOLD,
+    fontSize: 14,
+    color: "#333333",
+  },
+  avoidAllTitleActive: {
+    color: "#9A6000",
+  },
+  avoidAllDescription: {
+    fontFamily: FONT_REGULAR,
+    fontSize: 12,
+    color: "#777777",
+    lineHeight: 18,
+    marginTop: 4,
+  },
+  avoidAllDescriptionActive: {
+    color: "#9A6000",
+  },
+  ingredientContainer: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: "#EEEEEE",
+  },
+  categorySection: {
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  categoryTitle: {
+    fontFamily: FONT_BOLD,
+    fontSize: 14,
+    color: "#555555",
+  },
+  ingredientRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 13,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F0F0",
+  },
+  ingredientName: {
+    flex: 1,
+    fontFamily: FONT_REGULAR,
+    fontSize: 14,
+    color: "#333333",
+    marginLeft: 12,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: "#BBBBBB",
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkboxActive: {
+    borderColor: ORANGE,
+    backgroundColor: ORANGE,
+  },
+  checkboxTick: {
+    fontSize: 14,
+    color: "#FFFFFF",
+    fontFamily: FONT_BOLD,
+  },
+  centerBox: {
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+  messageBox: {
+    backgroundColor: "#FFF8E8",
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 14,
+  },
+  emptyTitle: {
+    fontFamily: FONT_BOLD,
+    fontSize: 15,
+    color: "#555555",
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  infoText: {
+    fontFamily: FONT_REGULAR,
+    fontSize: 13,
+    color: "#777777",
+    lineHeight: 21,
+    textAlign: "center",
+  },
+  errorText: {
+    fontFamily: FONT_REGULAR,
+    fontSize: 13,
+    color: "#C62828",
+    lineHeight: 21,
+    textAlign: "center",
+  },
+  retryBackButton: {
+    marginTop: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    backgroundColor: "#EEEEEE",
+  },
+  retryBackText: {
+    fontFamily: FONT_BOLD,
+    fontSize: 13,
+    color: "#444444",
+  },
+  summaryBox: {
+    marginTop: 20,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#EEEEEE",
+  },
+  summaryTitle: {
+    fontFamily: FONT_BOLD,
+    fontSize: 15,
+    color: "#333333",
+    marginBottom: 8,
+  },
+  summaryText: {
+    fontFamily: FONT_REGULAR,
+    fontSize: 13,
+    color: "#666666",
+    lineHeight: 21,
+  },
   buttonRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 20,
+    gap: 12,
+    marginTop: 24,
   },
-
   backButton: {
-    borderWidth: 1.5,
-    borderColor: "#222",
-    borderRadius: 14,
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 14,
-    paddingHorizontal: 28,
-    backgroundColor: "#FFF",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#CCCCCC",
+    backgroundColor: "#FFFFFF",
   },
-
   backText: {
-    color: "#222",
-    fontSize: 16,
     fontFamily: FONT_BOLD,
+    color: "#555555",
+    fontSize: 15,
   },
-
   saveButton: {
-    backgroundColor: ORANGE,
-    borderRadius: 14,
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 14,
-    paddingHorizontal: 36,
+    borderRadius: 12,
+    backgroundColor: ORANGE,
   },
-
   saveText: {
-    color: "#fff",
-    fontSize: 16,
     fontFamily: FONT_BOLD,
+    color: "#FFFFFF",
+    fontSize: 15,
+  },
+  disabledButton: {
+    opacity: 0.45,
   },
 });
-
-export default styles;
