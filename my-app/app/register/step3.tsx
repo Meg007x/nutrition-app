@@ -14,6 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useRegister } from "../../context/register-context";
+import { Brand } from "../../constants/theme";
 import styles, { 
   ORANGE, 
   BG, 
@@ -83,7 +84,7 @@ export default function RegisterStep3Screen() {
       return { text: "ปกติ", color: "#62FF00" };
     }
     if (bmi < 25) {
-      return { text: "น้ำหนักเกิน", color: "#F5A400" };
+      return { text: "น้ำหนักเกิน", color: Brand.primary };
     }
     return { text: "อ้วน", color: "#E74C3C" };
   }, [bmi]);

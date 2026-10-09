@@ -47,11 +47,12 @@ import {
   getTargetKcal,
   getEatenCount,
   getEatenNutrition,
+  logPlannedMeal,
   type DailyPlan,
   type SearchResult,
 } from "../../services/mealPlanService";
 
-const ORANGE = "#F29913";
+const ORANGE = "#F26522";
 
 /* =========================================================
    DATE HELPERS
@@ -1071,6 +1072,64 @@ export default function PlanScreen() {
         e?.message ||
         "ไม่สามารถอัปเดตสถานะมื้ออาหารได้"
       );
+    }
+  }
+  /* =========================================================
+     LOG PLANNED MEAL → MealLog
+  ========================================================= */
+
+  async function handleLogMeal(
+    date: string,
+    mealType: string,
+    slot: any
+  ) {
+    try {
+      const today = getTodayDate();
+      if (date !== today) {
+        Alert.alert(
+          "ไม่สามารถบันทึกได้",
+          "สามารถบันทึกการกินได้เฉพาะวันที่ปัจจุบันเท่านั้น"
+        );
+        return;
+      }
+
+      if (slot.status === "eaten") {
+        Alert.alert("บันทึกแล้ว", "มื้อนี้ถูกบันทึกไปแล้ว");
+        return;
+      }
+
+      if (!userId) {
+        Alert.alert("ไม่พบผู้ใช้", "กรุณาเข้าสู่ระบบใหม่");
+        return;
+      }
+
+      Alert.alert(
+        "บันทึกการกิน",
+        `ต้องการบันทึก "${mealType}" เป็นมื้อที่กินแล้วหรือไม่?`,
+        [
+          { text: "ยกเลิก", style: "cancel" },
+          {
+            text: "บันทึก",
+            onPress: async () => {
+              try {
+                await logPlannedMeal(userId, date, mealType, slot);
+                await toggleMealStatus(
+                  slot._id || slot.meal_id || "",
+                  date,
+                  0,
+                  "eaten"
+                );
+                await loadPlans();
+                Alert.alert("สำเร็จ", "บันทึกการกินเรียบร้อยแล้ว");
+              } catch (err: any) {
+                Alert.alert("บันทึกไม่สำเร็จ", err?.message || "เกิดข้อผิดพลาด");
+              }
+            },
+          },
+        ]
+      );
+    } catch (e: any) {
+      Alert.alert("เกิดข้อผิดพลาด", e?.message || "ไม่สามารถบันทึกได้");
     }
   }
 
@@ -2183,9 +2242,7 @@ export default function PlanScreen() {
 
                     {hasF && (
                       <TouchableOpacity
-                        style={
-                          st.actionBtn
-                        }
+                        style={st.actionBtn}
                         onPress={() =>
                           doDeleteMeal(
                             todayPlan.plan_id,
@@ -2210,6 +2267,42 @@ export default function PlanScreen() {
                           }}
                         >
                           ลบ
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {hasF && !isE && (
+                      <TouchableOpacity
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 4,
+                          backgroundColor: ORANGE,
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          borderRadius: 8,
+                        }}
+                        onPress={() =>
+                          handleLogMeal(
+                            todayPlan.date,
+                            slot.slot_name,
+                            slot
+                          )
+                        }
+                      >
+                        <Ionicons
+                          name="checkmark-done-outline"
+                          size={16}
+                          color="#fff"
+                        />
+                        <Text
+                          style={{
+                            fontSize: 13,
+                            color: "#fff",
+                            fontWeight: "600",
+                          }}
+                        >
+                          บันทึก
                         </Text>
                       </TouchableOpacity>
                     )}
@@ -2645,9 +2738,7 @@ export default function PlanScreen() {
 
                         {hasF && (
                           <TouchableOpacity
-                            style={
-                              st.actionBtn
-                            }
+                            style={st.actionBtn}
                             onPress={() =>
                               doDeleteMeal(
                                 selDay.plan_id,
@@ -2656,25 +2747,28 @@ export default function PlanScreen() {
                               )
                             }
                           >
-                            <Ionicons
-                              name="trash-outline"
-                              size={
-                                16
-                              }
-                              color="#EF4444"
-                            />
+                            <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                            <Text style={{ fontSize: 13, color: "#EF4444", fontWeight: "600" }}>ลบ</Text>
+                          </TouchableOpacity>
+                        )}
 
-                            <Text
-                              style={{
-                                fontSize: 13,
-                                color:
-                                  "#EF4444",
-                                fontWeight:
-                                  "600",
-                              }}
-                            >
-                              ลบ
-                            </Text>
+                        {hasF && !isE && (
+                          <TouchableOpacity
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              gap: 4,
+                              backgroundColor: ORANGE,
+                              paddingHorizontal: 12,
+                              paddingVertical: 6,
+                              borderRadius: 8,
+                            }}
+                            onPress={() =>
+                              handleLogMeal(selDay.date, slot.slot_name, slot)
+                            }
+                          >
+                            <Ionicons name="checkmark-done-outline" size={16} color="#fff" />
+                            <Text style={{ fontSize: 13, color: "#fff", fontWeight: "600" }}>บันทึก</Text>
                           </TouchableOpacity>
                         )}
                       </View>
@@ -3832,8 +3926,7 @@ const st =
       padding: 18,
       marginBottom: 16,
       borderWidth: 1.5,
-      borderColor:
-        "#FF6B00",
+      borderColor: ORANGE,
     },
 
     progressBar: {

@@ -15,6 +15,28 @@ export const Brand = {
   primary: '#F26522',
   primaryLight: '#FFF3EB',
   primaryDark: '#D4550E',
+
+  white: '#FFFFFF',
+  black: '#000000',
+
+  text: '#222222',
+  textSecondary: '#666666',
+  textMuted: '#999999',
+
+  bg: '#FFFFFF',
+  bgInput: '#F8F8F8',
+  bgDisabled: '#F0F0F0',
+
+  border: '#E0E0E0',
+  borderLight: '#E8E8E8',
+
+  error: '#E53935',
+  errorLight: '#FFEBEE',
+  errorBorder: '#FFCDD2',
+  errorDark: '#C62828',
+
+  success: '#22A06B',
+  successLight: '#E8F5E9',
 } as const;
 
 export const Colors = {

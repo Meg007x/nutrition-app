@@ -71,12 +71,6 @@ const getUserProfile = async (req, res) => {
   }
 };
 
-// 🟢 ส่งออกเฉพาะ 2 ฟังก์ชันที่มีอยู่จริงในไฟล์นี้ให้ระบบ Route เรียกใช้งาน
-module.exports = { 
-  getMealSettings,
-  getUserProfile
-};
-
 // 🟢 1. ฟังก์ชันอัปเดตโปรไฟล์ (แก้ไขเพิ่มเติมให้รองรับอีเมล และปิดคำเตือน Mongoose)
 const updateUserProfile = async (req, res) => {
   try {
@@ -201,14 +195,6 @@ const changePassword = async (req, res) => {
   }
 };
 
-// ส่งออกฟังก์ชันอัปเดตทั้งหมดรวมถึงตัวใหม่
-module.exports = {
-  getMealSettings,
-  getUserProfile,
-  updateUserProfile,
-  changePassword // 👈 เพิ่มฟังก์ชันเปลี่ยนรหัสผ่านลงในตัว Export ท้ายไฟล์
-};
-
 // 🎯 ฟังก์ชันปรับเป้าหมายสุขภาพและคำนวณเป้าหมายแคลอรี่ใหม่
 const updateUserGoal = async (req, res) => {
   try {
@@ -251,15 +237,6 @@ const updateUserGoal = async (req, res) => {
   }
 };
 
-// ⚠️ อย่าลืมเพิ่ม "updateUserGoal" ไปที่ module.exports ด้านล่างสุดของไฟล์ด้วยนะครับ!
-module.exports = {
-  getMealSettings,
-  getUserProfile,
-  updateUserProfile,
-  changePassword,
-  updateUserGoal // 👈 เพิ่มต่อท้ายตรงนี้
-};
-
 // ฟังก์ชันสำหรับอัปเดตระดับกิจกรรมและโปรตีน (และคำนวณแคลอรี่ใหม่)
 const updateUserActivity = async (req, res) => {
   try {
@@ -298,16 +275,6 @@ const updateUserActivity = async (req, res) => {
   }
 };
 
-// อย่าลืม export ตัว updateUserActivity ออกไป และไปผูก Route (เช่น router.put('/update-activity', updateUserActivity)) ด้วยนะครับ
-module.exports = {
-  getMealSettings,
-  getUserProfile,
-  updateUserProfile,
-  changePassword,
-  updateUserGoal,
-  updateUserActivity // 👈 เพิ่มตัวนี้เข้าไปใน export ด้วย
-};
-
 const updateUserAllergies = async (req, res) => {
   try {
     const { userId, allergies } = req.body;
@@ -316,29 +283,32 @@ const updateUserAllergies = async (req, res) => {
       return res.status(400).json({ success: false, message: "ไม่มีรหัสผู้ใช้" });
     }
 
+    // Build atomic $set for each category to avoid full-document replacement
+    const setOps = {};
+    if (allergies && typeof allergies === 'object') {
+      if (allergies.veg !== undefined) setOps["allergies.veg"] = allergies.veg;
+      if (allergies.condiment !== undefined) setOps["allergies.condiment"] = allergies.condiment;
+      if (allergies.meat !== undefined) setOps["allergies.meat"] = allergies.meat;
+      if (allergies.other !== undefined) setOps["allergies.other"] = allergies.other;
+    }
+
+    if (Object.keys(setOps).length === 0) {
+      return res.status(400).json({ success: false, message: "ไม่มีข้อมูล allergies ที่ต้องอัปเดต" });
+    }
+
     const updatedUser = await User.findOneAndUpdate(
       { user_id: userId },
-      { $set: { "allergies": allergies } }, // ปรับให้ตรงกับฟิลด์ Database ของคุณ
-      { new: true }
+      { $set: setOps },
+      { new: true, runValidators: false }
     );
 
     if (!updatedUser) return res.status(404).json({ success: false, message: "ไม่พบผู้ใช้" });
 
-    return res.status(200).json({ success: true, message: "อัปเดตอาหารที่แพ้สำเร็จ" });
+    return res.status(200).json({ success: true, message: "อัปเดตอาหารที่แพ้สำเร็จ", data: updatedUser.allergies });
 
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
-};
-
-module.exports = {
-  getMealSettings,
-  getUserProfile, 
-  updateUserProfile,
-  changePassword,
-  updateUserGoal,
-  updateUserActivity,
-  updateUserAllergies // 👈 เพิ่มฟังก์ชันอัปเดตอาหารที่แพ้ลงใน export
 };
 
 const updateUserDislikedFoods = async (req, res) => {
@@ -360,17 +330,6 @@ const updateUserDislikedFoods = async (req, res) => {
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
-};
-
-module.exports = {
-  getMealSettings,
-  getUserProfile,
-  updateUserProfile,
-  changePassword,
-  updateUserGoal,
-  updateUserActivity,
-  updateUserAllergies,
-  updateUserDislikedFoods // 👈 เพิ่มฟังก์ชันอัปเดตอาหารที่ไม่ชอบลงใน export
 };
 
 const updateUserInterestedCuisines = async (req, res) => {
@@ -459,6 +418,8 @@ const getUserAllergies = async (req, res) => {
       data: {
         allergies,
         allItems,
+        // v2: structured allergy array
+        allergies_v2: user.allergies_v2 || [],
       },
     });
   } catch (error) {
@@ -468,48 +429,56 @@ const getUserAllergies = async (req, res) => {
 };
 
 // ==========================================
-// PUT /api/user/allergies
-// เพิ่ม/อัปเดตภูมิแพ้ของผู้ใช้ (batch update)
+// PUT /api/users/allergies
+// อัปเดตภูมิแพ้ของผู้ใช้ทั้งหมด (atomic $set)
 // ==========================================
 const saveUserAllergies = async (req, res) => {
   try {
-    const { userId, allergies } = req.body;
+    const { userId, allergies, allergies_v2 } = req.body;
     if (!userId) {
       return res.status(400).json({ success: false, message: "กรุณาส่ง userId" });
     }
 
-    const user = await User.findOne({ user_id: userId });
-    if (!user) {
+    const setOps = { updated_at: new Date() };
+
+    // v2: บันทึก allergies_v2 ถ้าส่งมา
+    if (Array.isArray(allergies_v2)) {
+      setOps.allergies_v2 = allergies_v2;
+    }
+
+    if (Array.isArray(allergies)) {
+      // Frontend sends flat string[] — clear ALL categories, store all in "other"
+      const cleaned = allergies.filter(Boolean).map(String);
+      setOps["allergies.veg"] = [];
+      setOps["allergies.condiment"] = [];
+      setOps["allergies.meat"] = [];
+      setOps["allergies.other"] = cleaned;
+    } else if (allergies && typeof allergies === "object") {
+      const categories = ["veg", "condiment", "meat", "other"];
+      for (const cat of categories) {
+        if (allergies[cat] !== undefined) {
+          setOps[`allergies.${cat}`] = Array.isArray(allergies[cat])
+            ? allergies[cat].filter(Boolean).map(String)
+            : [];
+        }
+      }
+    }
+
+    const updatedUser = await User.findOneAndUpdate(
+      { user_id: userId },
+      { $set: setOps },
+      { new: true, runValidators: false }
+    );
+
+    if (!updatedUser) {
       return res.status(404).json({ success: false, message: "ไม่พบผู้ใช้" });
     }
-
-    // อัปเดต allergies (merge กับของเดิม)
-    // allergies ที่ส่งมาเป็น object { veg: [...], condiment: [...], meat: [...], other: [...] }
-    // หรือเป็น flat array ของ ingredient names
-    if (Array.isArray(allergies)) {
-      // ถ้าส่งมาเป็น flat array ให้เก็บใน other
-      user.allergies = {
-        veg: user.allergies?.veg || [],
-        condiment: user.allergies?.condiment || [],
-        meat: user.allergies?.meat || [],
-        other: allergies,
-      };
-    } else if (typeof allergies === "object" && allergies !== null) {
-      user.allergies = {
-        veg: allergies.veg || user.allergies?.veg || [],
-        condiment: allergies.condiment || user.allergies?.condiment || [],
-        meat: allergies.meat || user.allergies?.meat || [],
-        other: allergies.other || user.allergies?.other || [],
-      };
-    }
-
-    user.updated_at = new Date();
-    await user.save();
 
     return res.status(200).json({
       success: true,
       message: "อัปเดตภูมิแพ้สำเร็จ",
-      data: user.allergies,
+      data: updatedUser.allergies,
+      allergies_v2: updatedUser.allergies_v2 || [],
     });
   } catch (error) {
     console.error("❌ Save User Allergies Error:", error);
@@ -524,33 +493,48 @@ const saveUserAllergies = async (req, res) => {
 const deleteUserAllergy = async (req, res) => {
   try {
     const { userId, itemName } = req.body;
-    if (!userId || !itemName) {
-      return res.status(400).json({ success: false, message: "กรุณาส่ง userId และ itemName" });
+    const cleanName = String(itemName || "").trim();
+
+    if (!userId || !cleanName) {
+      return res.status(400).json({
+        success: false,
+        message: "กรุณาส่ง userId และ itemName",
+      });
     }
 
-    const user = await User.findOne({ user_id: userId });
-    if (!user) {
+    // Verify user exists
+    const userBefore = await User.findOne({ user_id: userId });
+    if (!userBefore) {
       return res.status(404).json({ success: false, message: "ไม่พบผู้ใช้" });
     }
 
-    // ลบ itemName จากทุก category ใน allergies
-    if (user.allergies) {
-      for (const category of ["veg", "condiment", "meat", "other"]) {
-        if (Array.isArray(user.allergies[category])) {
-          user.allergies[category] = user.allergies[category].filter(
-            (item) => item !== itemName
-          );
-        }
-      }
+    // Atomic $pull: remove itemName from every category in one operation
+    const categories = ["veg", "condiment", "meat", "other"];
+    const pullOps = {};
+    for (const cat of categories) {
+      pullOps[`allergies.${cat}`] = cleanName;
     }
+    // v2: Also remove from allergies_v2 by label match
+    const pullV2 = { allergies_v2: { label: cleanName } };
 
-    user.updated_at = new Date();
-    await user.save();
+    const updatedUser = await User.findOneAndUpdate(
+      { user_id: userId },
+      { $pull: { ...pullOps, ...pullV2 }, $set: { updated_at: new Date() } },
+      { new: true, runValidators: false }
+    );
+
+    // Check if removal actually happened
+    const countBefore = categories.reduce(
+      (sum, c) => sum + ((userBefore.allergies?.[c]) || []).length, 0
+    );
+    const countAfter = categories.reduce(
+      (sum, c) => sum + ((updatedUser.allergies?.[c]) || []).length, 0
+    );
 
     return res.status(200).json({
       success: true,
-      message: `ลบ "${itemName}" สำเร็จ`,
-      data: user.allergies,
+      removed: countBefore > countAfter,
+      allergies: updatedUser.allergies,
     });
   } catch (error) {
     console.error("❌ Delete User Allergy Error:", error);
@@ -572,19 +556,27 @@ const updateProfilePicture = async (req, res) => {
       return res.status(400).json({ success: false, message: "กรุณาส่ง avatar_url" });
     }
 
-    const user = await User.findOne({ user_id: userId });
-    if (!user) {
+    // Atomic update: bypass full-document validation to avoid
+    // MongoServerError Code 28 (schema mismatch on nested allergies)
+    const updatedUser = await User.findOneAndUpdate(
+      { user_id: userId },
+      {
+        $set: {
+          avatar_url: avatar_url,
+          updated_at: new Date(),
+        },
+      },
+      { new: true, runValidators: false }
+    );
+
+    if (!updatedUser) {
       return res.status(404).json({ success: false, message: "ไม่พบผู้ใช้" });
     }
-
-    user.avatar_url = avatar_url;
-    user.updated_at = new Date();
-    await user.save();
 
     return res.status(200).json({
       success: true,
       message: "อัปเดตรูปโปรไฟล์สำเร็จ",
-      data: { avatar_url: user.avatar_url },
+      data: { avatar_url: updatedUser.avatar_url },
     });
   } catch (error) {
     console.error("❌ Update Profile Picture Error:", error);

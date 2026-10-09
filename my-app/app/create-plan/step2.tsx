@@ -324,22 +324,22 @@ export default function Step2Screen() {
       return;
     }
 
-    console.log(
-      "💾 SAVE PLAN"
-    );
+    if (!planId) {
+      Alert.alert("ข้อผิดพลาด", "ไม่พบ plan_id กรุณาสร้างแผนใหม่");
+      return;
+    }
 
-    console.log(
-      "PLAN ID:",
-      planId
-    );
+    if (plans.length === 0) {
+      Alert.alert("ยังไม่มีแผน", "กรุณารอให้โหลดแผนอาหารเสร็จก่อน");
+      return;
+    }
 
-    setSaving(true);
+    console.log("💾 SAVE PLAN — plan_id:", planId);
 
     router.replace({
       pathname: "/(tabs)/plan",
       params: {
-        refresh:
-          Date.now().toString(),
+        refresh: Date.now().toString(),
         plan_id: planId,
       },
     });
@@ -390,7 +390,7 @@ export default function Step2Screen() {
 
           <ActivityIndicator
             size="small"
-            color="#F29913"
+            color="#F26522"
             style={{
               marginTop: 18,
             }}
@@ -1440,7 +1440,7 @@ const styles =
 
     header: {
       height: 68,
-      backgroundColor: "#F29913",
+      backgroundColor: "#F26522",
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
@@ -1471,7 +1471,7 @@ const styles =
     headerStep: {
       marginTop: 2,
       fontSize: 11,
-      color: "#5F3A00",
+      color: "#D4550E",
       fontWeight: "600",
     },
 
@@ -1507,7 +1507,7 @@ const styles =
       width: 48,
       height: 48,
       borderRadius: 15,
-      backgroundColor: "#FFF1D6",
+      backgroundColor: "#FFF3EB",
       justifyContent: "center",
       alignItems: "center",
     },
@@ -1539,7 +1539,7 @@ const styles =
       padding: 16,
       marginBottom: 24,
       borderWidth: 1,
-      borderColor: "#EEEEEE",
+      borderColor: "#FFF3EB",
     },
 
     planInfoTop: {
@@ -1551,7 +1551,7 @@ const styles =
       width: 44,
       height: 44,
       borderRadius: 13,
-      backgroundColor: "#FFF5E5",
+      backgroundColor: "#FFF3EB",
       justifyContent: "center",
       alignItems: "center",
     },
@@ -1610,7 +1610,7 @@ const styles =
     sectionTitle: {
       fontSize: 18,
       fontWeight: "800",
-      color: "#222",
+      color: "#D4550E",
     },
 
     sectionHint: {
@@ -1640,8 +1640,8 @@ const styles =
     },
 
     activeDayTab: {
-      backgroundColor: "#F29913",
-      borderColor: "#F29913",
+      backgroundColor: "#F26522",
+      borderColor: "#F26522",
       transform: [
         {
           scale: 1.02,
@@ -1872,7 +1872,7 @@ const styles =
 
     mealCardMorning: {
       borderLeftWidth: 4,
-      borderLeftColor: "#F29913",
+      borderLeftColor: "#F26522",
     },
 
     mealCardLunch: {
@@ -2050,7 +2050,7 @@ const styles =
       width: 5,
       height: 5,
       borderRadius: 5,
-      backgroundColor: "#F29913",
+      backgroundColor: "#F26522",
       marginRight: 8,
     },
 
@@ -2187,11 +2187,12 @@ const styles =
     saveButton: {
       height: 55,
       borderRadius: 15,
-      backgroundColor: "#F29913",
+      backgroundColor: "#F26522",
       flexDirection: "row",
       justifyContent: "center",
       alignItems: "center",
       gap: 8,
+      shadowColor: "#F26522",
       shadowOffset: {
         width: 0,
         height: 3,

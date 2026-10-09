@@ -14,7 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ThemedText } from "../components/themed-text";
 import { loginUser } from "../services/auth";
-import styles, { ORANGE } from "../style/login.styles";
+import { styles, ROW_COLOR_2 } from "../style/login.styles";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -127,7 +127,7 @@ export default function LoginScreen() {
                 value={email}
                 onChangeText={(t) => { setEmail(t); setEmailError(""); setLoginError(""); }}
                 placeholder="กรอกอีเมล"
-                placeholderTextColor="#BBB"
+                placeholderTextColor="#999"
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -141,7 +141,7 @@ export default function LoginScreen() {
                   value={password}
                   onChangeText={(t) => { setPassword(t); setPasswordError(""); setLoginError(""); }}
                   placeholder="กรอกรหัสผ่าน"
-                  placeholderTextColor="#BBB"
+                  placeholderTextColor="#999"
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -151,6 +151,10 @@ export default function LoginScreen() {
                 </TouchableOpacity>
               </View>
               {passwordError ? <ThemedText style={styles.errorText}>{passwordError}</ThemedText> : null}
+
+              <TouchableOpacity style={styles.forgotLink} onPress={() => router.push("/profile/forgotPassword")}>
+                <ThemedText style={styles.forgotLinkText}>ลืมรหัสผ่าน?</ThemedText>
+              </TouchableOpacity>
 
               <TouchableOpacity style={styles.loginButton} onPress={handleLogin} disabled={submitting} activeOpacity={0.85}>
                 {submitting ? (
@@ -169,7 +173,7 @@ export default function LoginScreen() {
 
               <View style={styles.socialRow}>
                 <TouchableOpacity style={styles.socialBtn} activeOpacity={0.7}>
-                  <Ionicons name="logo-google" size={24} color="#DB4437" />
+                  <Ionicons name="logo-google" size={24} color={ROW_COLOR_2} />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.socialBtn} activeOpacity={0.7}>
                   <Ionicons name="logo-apple" size={24} color="#000" />

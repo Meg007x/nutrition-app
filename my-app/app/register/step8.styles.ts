@@ -1,7 +1,8 @@
 import { StyleSheet, Platform } from "react-native";
+import { Brand } from "../../constants/theme";
 
 // 1. ตัวแปรสี
-export const ORANGE = "#F5A400";
+export const ORANGE = Brand.primary;
 export const BG = "#F3F3F3";
 export const CARD_BG = "#FDF8EA";
 export const IOS_GREEN = "#34C759";
