@@ -182,9 +182,71 @@ async function createMealPlans(req, res) {
     }
 
     const allFoods = await MasterFood.find(foodQuery).lean();
-    console.log("🍽️ Available foods:", allFoods.length);
+    console.log("Available foods after group-level filter:", allFoods.length);
 
-    if (allFoods.length === 0) return res.status(400).json({ success: false, message: "ไม่พบอาหารที่เหมาะสม" });
+    // ─── Ingredient-level filtering (v2) ─────────────────
+    // Check each food's ingredients[] against user's specific allergies & dislikes
+    let filteredFoods = allFoods;
+    if (allergyV2Codes.length > 0 || (userDoc && userDoc.disliked_foods)) {
+      // Build set of blocked ingredient _ids from user's allergies_v2
+      const allV2Codes = [...allergyV2Codes];
+
+      // Collect ingredient_ids from allergies_v2 (specific items)
+      const v2IngredientIds = new Set();
+      if (userDoc && Array.isArray(userDoc.allergies_v2)) {
+        userDoc.allergies_v2.forEach(function(a) {
+          if (a.ingredient_id) v2IngredientIds.add(a.ingredient_id);
+        });
+      }
+
+      // Also find Ingredient docs whose allergens_hierarchy.specific_type matches allergy codes
+      if (allV2Codes.length > 0) {
+        try {
+          const Ingredient = require("../models/Ingredient");
+          const matchingIngs = await Ingredient.find({
+            "allergens_hierarchy.specific_type": { $in: allV2Codes },
+          }).select("_id").lean();
+          matchingIngs.forEach(function(ing) { v2IngredientIds.add(ing._id); });
+        } catch (e) {
+          console.log("Ingredient-level filter skipped:", e.message);
+        }
+      }
+
+      // Build set of disliked ingredient names for name matching
+      const dislikedNames = new Set();
+      if (userDoc && userDoc.disliked_foods) {
+        Object.values(userDoc.disliked_foods).forEach(function(arr) {
+          if (Array.isArray(arr)) arr.forEach(function(n) { dislikedNames.add(String(n).toLowerCase()); });
+        });
+      }
+
+      // Filter foods that contain blocked ingredients
+      if (v2IngredientIds.size > 0 || dislikedNames.size > 0) {
+        filteredFoods = allFoods.filter(function(food) {
+          const ings = food.ingredients || [];
+          for (let i = 0; i < ings.length; i++) {
+            const ingId = ings[i].ingredient_id;
+            const ingName = String(ings[i].name_snap || "").toLowerCase();
+
+            // Check against specific allergy ingredient IDs
+            if (ingId && v2IngredientIds.has(ingId)) {
+              console.log("Blocked (ingredient allergy):", food.name, "→", ingId);
+              return false;
+            }
+
+            // Check against disliked ingredient names
+            if (ingName && dislikedNames.has(ingName)) {
+              console.log("Blocked (disliked ingredient):", food.name, "→", ingName);
+              return false;
+            }
+          }
+          return true;
+        });
+        console.log("After ingredient-level filter:", filteredFoods.length, "(was", allFoods.length + ")");
+      }
+    }
+
+    if (filteredFoods.length === 0) return res.status(400).json({ success: false, message: "ไม่พบอาหารที่เหมาะสม" });
 
     const mealSlots = [
       { slot_name: "มื้อเช้า", meal_type: "breakfast", ratio: 0.3 },
@@ -196,7 +258,7 @@ async function createMealPlans(req, res) {
 
     for (let i = 0; i < planDays; i++) {
       const date = addDays(start_date, i);
-      const shuffled = [...allFoods].sort(() => Math.random() - 0.5);
+      const shuffled = [...filteredFoods].sort(() => Math.random() - 0.5);
 
       // ==================================================
       // Smart food selection: pick foods closest to each

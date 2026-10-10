@@ -46,23 +46,32 @@ async function migrateIngredients() {
   if (count === 0) return { total: 0, updated: 0 };
 
   var docs = await col.find({ $or: [{ serving_base: { $exists: false } }, { source: { $exists: false } }, { nutrition_per_100g: { $exists: false } }] }).toArray();
-  console.log("   🔧 " + docs.length + " need migration");
-  if (docs.length === 0) return { total: count, updated: 0 };
+  console.log("   Phase 1: " + docs.length + " need new fields");
 
-  var ops = docs.map(function(doc) {
-    return { updateOne: { filter: { _id: doc._id }, update: { $set: {
-      allergens_hierarchy: doc.allergens_hierarchy || { parent_category: "", parent_label: "", specific_type: "", specific_label: "" },
-      serving_base: doc.serving_base || { qty: 100, unit: "g" },
-      nutrition_per_100g: doc.nutrition_per_100g || { kcal: 0, protein_g: 0, carb_g: 0, fat_g: 0, fiber_g: 0, sodium_mg: 0 },
-      source: doc.source || "System",
-      is_active: doc.is_active !== undefined ? doc.is_active : true,
-      usda_fdc_id: doc.usda_fdc_id || null,
-      updated_at: new Date()
-    }, $setOnInsert: { created_at: doc.created_at || new Date() } } } };
-  });
+  if (docs.length > 0) {
+    var ops = docs.map(function(doc) {
+      return { updateOne: { filter: { _id: doc._id }, update: { $set: {
+        allergens_hierarchy: doc.allergens_hierarchy || null,
+        serving_base: doc.serving_base || { qty: 100, unit: "g" },
+        nutrition_per_100g: doc.nutrition_per_100g || { kcal: 0, protein_g: 0, carb_g: 0, fat_g: 0, fiber_g: 0, sodium_mg: 0 },
+        source: doc.source || "System",
+        is_active: doc.is_active !== undefined ? doc.is_active : true,
+        usda_fdc_id: doc.usda_fdc_id || null,
+        updated_at: new Date()
+      }, $setOnInsert: { created_at: doc.created_at || new Date() } } } };
+    });
+    var r = await col.bulkWrite(ops, { ordered: false });
+    console.log("   Phase 1: matched=" + r.matchedCount + " modified=" + r.modifiedCount);
+  }
 
-  if (ops.length > 0) { var r = await col.bulkWrite(ops, { ordered: false }); console.log("   ✅ matched=" + r.matchedCount + " modified=" + r.modifiedCount); return { total: count, updated: r.modifiedCount }; }
-  return { total: count, updated: 0 };
+  // Phase 2: Fix empty allergens_hierarchy objects → null
+  var fixResult = await col.updateMany(
+    { "allergens_hierarchy.parent_category": "" },
+    { $set: { "allergens_hierarchy": null, updated_at: new Date() } }
+  );
+  console.log("   Phase 2: fixed empty allergens_hierarchy=" + fixResult.modifiedCount);
+
+  return { total: count, updated: fixResult.modifiedCount };
 }
 
 /* ======================================================
