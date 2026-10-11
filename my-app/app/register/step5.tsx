@@ -1,98 +1,255 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Modal,
-  Pressable,
+  TextInput,
+  Keyboard,
+  TouchableWithoutFeedback,
+  Platform,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useRegister } from "../../context/register-context";
-import styles, { ORANGE, BG, IOS_GREEN, ROW_COLOR_1, ROW_COLOR_2, WHITE } from "./step5.styles";
+import styles, { 
+  ORANGE, 
+  BG, 
+  IOS_GREEN, 
+  ROW_COLOR_1, 
+  ROW_COLOR_2, 
+  WHITE, 
+  WARN_COLOR, 
+  ERROR_COLOR 
+} from "./step5-1.styles";
 
+type ProteinLevel = "low" | "medium" | "high";
+type ProteinMode = "auto" | "custom";
 
-// อัปเดต Type ให้ตรงกับ Context ของคุณ
-type ActivityLevel = "sedentary" | "light" | "moderate" | "active" | "very_active" ;
-
-const activityOptions: { label: string; value: ActivityLevel; desc: string; }[] = [
-  { label: "น้อย", value: "light", desc: "นั่งทำงานเป็นส่วนใหญ่ หรือออกกำลังกายน้อยมาก" },
-  { label: "ปานกลาง", value: "moderate", desc: "มีการเดินหรือออกกำลังกายเบา ๆ 2-3 วันต่อสัปดาห์" },
-  { label: "มาก", value: "active", desc: "ออกกำลังกายสม่ำเสมอ หรือใช้ร่างกายค่อนข้างมาก" },
-  { label: "หนัก", value: "very_active", desc: "ออกกำลังกายหนักหรือใช้แรงงานเป็นประจำเกือบทุกวัน" },
+const proteinOptions: { label: string; value: ProteinLevel; desc: string; hint: string; detail: string; }[] = [
+  {
+    label: "พื้นฐาน",
+    value: "low",
+    desc: "เหมาะกับคนทั่วไปที่ดูแลสุขภาพเบาๆ",
+    hint: "ประมาณ 1.2 กรัม / กก.",
+    detail: "ระดับนี้เพียงพอสำหรับการรักษามวลกล้ามเนื้อและซ่อมแซมเนื้อเยื่อในชีวิตประจำวัน เหมาะหากคุณไม่ได้ออกกำลังกายหนัก หรือต้องการดูแลสุขภาพแบบง่ายๆ",
+  },
+  {
+    label: "สมดุล",
+    value: "medium",
+    desc: "เหมาะกับคนที่ออกกำลังกายสม่ำเสมอ",
+    hint: "ประมาณ 1.6 กรัม / กก.",
+    detail: "ระดับนี้ช่วยเสริมการฟื้นฟูกล้ามเนื้อหลังออกกำลังกายได้ดี เหมาะหากคุณวิ่ง โยคะ ปั่นจักรยาน หรือเข้าฟิตเนส 2-4 วันต่อสัปดาห์",
+  },
+  {
+    label: "สูง",
+    value: "high",
+    desc: "เน้นสร้างกล้ามเนื้อแบบที่คุณต้องการ",
+    hint: "ประมาณ 2.0-2.4 กรัม / กก.",
+    detail: "ระดับนี้ออกแบบมาสำหรับคนที่เล่นเวทเทรนนิ่งเป็นประจำ หรือต้องการเพิ่มมวลกล้ามเนื้ออย่างจริงจัง ช่วยให้ร่างกายสร้างและซ่อมแซมกล้ามเนื้อได้เร็วขึ้น",
+  },
 ];
 
-export default function RegisterStep5Screen() {
-  const { form, updateForm } = useRegister();
-const [selectedActivity, setSelectedActivity] = useState<ActivityLevel>(() => {
-    const savedLevel = form.activityLevel as string;
-    // ดักจับค่าเก่าที่อาจตกค้าง แล้วแปลงเป็นค่าใหม่
-    if (savedLevel === "low") return "light";
-    if (savedLevel === "medium") return "moderate";
-    if (savedLevel === "high") return "active";
-    if (savedLevel === "very_high") return "very_active";
-    
-    // ถ้าเป็นค่าที่ถูกต้องอยู่แล้ว หรือไม่มีค่า ให้ใช้ "moderate" เป็นค่าเริ่มต้น
-    return (savedLevel as ActivityLevel) || "moderate";
-  });
-  const [showActivityModal, setShowActivityModal] = useState(false);
+export default function RegisterStep5_1Screen() {
+  const { form, updateForm, calculateRecommendedProtein } = useRegister();
+  
+  const currentWeight = form.weightKg ? Number(form.weightKg) : 60; // ดึงน้ำหนักมาใช้ประเมิน
+  const currentActivity = form.activityLevel || "medium";
 
-const handleNext = () => {
-    updateForm({ activityLevel: selectedActivity });
-    router.push("/register/step5-1" as any); // (ส่วน router.push ปล่อย as any ไว้ได้ครับ ไม่มีผลกับ DB)
+  // ฟังก์ชันแนะนำโปรตีนคร่าวๆ ตามกิจกรรม (ปรับให้ตรงกับ Type ของ Context)
+  const getRecommendedLevel = (): ProteinLevel => {
+    if (currentActivity === "sedentary" || currentActivity === "light") return "low";
+    if (currentActivity === "active" || currentActivity === "very_active") return "high";
+    return "medium"; // สำหรับ "moderate" หรือ "medium"
   };
 
-  return (
+  const recommendedLevel = getRecommendedLevel();
+
+  const [selectedProtein, setSelectedProtein] = useState<ProteinLevel>(
+    (form.proteinLevel as ProteinLevel) || recommendedLevel
+  );
+  
+  const [proteinMode, setProteinMode] = useState<ProteinMode>(
+    form.recommendedProteinG ? "custom" : "auto"
+  );
+
+  // คำนวณค่าโปรตีนออโต้ตั้งต้น
+  const autoRecommendedProtein = useMemo(() => {
+    const result = calculateRecommendedProtein(String(currentWeight), selectedProtein as any);
+    return result ?? (currentWeight * 1.6); // Fallback
+  }, [calculateRecommendedProtein, currentWeight, selectedProtein]);
+
+  const [customProtein, setCustomProtein] = useState(
+    form.recommendedProteinG ? String(form.recommendedProteinG) : String(autoRecommendedProtein)
+  );
+
+  // อัปเดตค่า Custom เมื่อสลับโหมด หรือเปลี่ยน Level (เพื่อให้ผู้ใช้เห็นค่าที่แนะนำทันที)
+  useEffect(() => {
+    if (proteinMode === "auto") {
+      setCustomProtein(String(autoRecommendedProtein));
+    }
+  }, [autoRecommendedProtein, proteinMode]);
+
+  // --- 💡 ระบบวิเคราะห์และดักจับความเหมาะสมของโปรตีน ---
+  const validationStatus = useMemo(() => {
+    const val = Number(customProtein);
+    if (!customProtein || val <= 0) return { status: "error", msg: "กรุณากรอกจำนวนโปรตีน" };
+    
+    // คำนวณเป็น กรัม/น้ำหนักตัว 1 กก.
+    const ratio = val / currentWeight;
+
+    if (ratio < 0.6) return { status: "error", msg: "ปริมาณโปรตีนน้อยเกินไป อาจส่งผลเสียต่อร่างกาย" };
+    if (ratio >= 2.5 && ratio < 3.0) return { status: "warn", msg: "ปริมาณค่อนข้างสูงมาก แนะนำสำหรับนักกีฬาเพาะกายเท่านั้น" };
+    if (ratio >= 3.0) return { status: "error", msg: `ปริมาณสูงเกินลิมิตความปลอดภัย (> ${Math.round(currentWeight * 3)} กรัม) อาจเป็นอันตรายต่อไต` };
+    
+    return { status: "normal", msg: "" };
+  }, [customProtein, currentWeight]);
+
+  const handleNext = () => {
+    Keyboard.dismiss();
+
+    if (proteinMode === "custom" && validationStatus.status === "error") {
+      Alert.alert("ไม่สามารถไปต่อได้", validationStatus.msg);
+      return;
+    }
+
+    const finalVal = proteinMode === "custom" ? Number(customProtein) : autoRecommendedProtein;
+
+    updateForm({
+      proteinLevel: selectedProtein as any,
+      recommendedProteinG: finalVal,
+    });
+
+    // ไป Step ต่อไป (Step 6 หรือตามแผน)
+    router.push("/register/step6-1" as any);
+  };
+
+  // 📦 รวบหน้าจอไว้ในตัวแปรเดียว เพื่อจัดการเรื่อง Web/Mobile
+  const content = (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.headerBar}>
         <Text style={styles.headerBarText}>ลงทะเบียนผู้ใช้งาน</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={styles.stepTitle}>5. ระดับกิจกรรมต่อวัน</Text>
+      <ScrollView 
+        contentContainerStyle={styles.content} 
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled" // <--- ทำให้จิ้มช่องกรอก/ปุ่มได้ราบรื่นขึ้น
+      >
+        <Text style={styles.stepTitle}>5.1 ระดับโปรตีน</Text>
 
         <View style={styles.progressTrack}>
-          {/* ขยับหลอดให้เป็นสัก 50% */}
-          <View style={[styles.progressFill, { width: "50%" }]} />
+          <View style={[styles.progressFill, { width: "60%" }]} />
         </View>
 
         <Text style={styles.sectionDesc}>
-          ใช้เพื่อช่วยประเมินการใช้พลังงานของร่างกายในการจัดตารางอาหาร
+          ระดับโปรตีนคือปริมาณโปรตีนที่ร่างกายควรได้รับต่อวันตามน้ำหนักและกิจกรรมของคุณ โปรตีนเป็นสารอาหารสำคัญที่ช่วยซ่อมแซมกล้ามเนื้อ เสริมสร้างภูมิคุ้มกัน และรักษาสมดุลของร่างกาย การได้รับโปรตีนในปริมาณที่เหมาะสมจะช่วยให้ร่างกายแข็งแรงและทำงานได้อย่างมีประสิทธิภาพ
         </Text>
 
-        <View style={styles.optionList}>
-          {activityOptions.map((item) => {
-            const active = selectedActivity === item.value;
-            return (
-              <TouchableOpacity
-                key={item.value}
-                style={[styles.optionCard, active && styles.optionCardActive]}
-                onPress={() => setSelectedActivity(item.value)}
-                activeOpacity={0.85}
-              >
-                <View style={styles.optionTopRow}>
-                  <Text style={[styles.optionTitle, active && styles.optionTitleActive]}>
-                    {item.label}
-                  </Text>
-                  {active && <Ionicons name="checkmark-circle" size={20} color="#FFF" />}
-                </View>
-                <Text style={[styles.optionDesc, active && styles.optionDescActive]}>
-                  {item.desc}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+        {/* แสดงค่าโปรตีนที่ได้รับจริง */}
+        <View style={styles.proteinValueCard}>
+          <Text style={styles.proteinValueLabel}>ระดับโปรตีนที่ได้รับจริง</Text>
+          <Text style={styles.proteinValueNumber}>
+            {autoRecommendedProtein} กรัม / วัน
+          </Text>
+          <Text style={styles.proteinValueHint}>
+            คิดเป็นประมาณ {currentWeight > 0 ? (autoRecommendedProtein / currentWeight).toFixed(1) : "1.6"} กรัม ต่อน้ำหนักตัว 1 กก.
+          </Text>
         </View>
 
-        <View style={styles.helpButtonWrap}>
-          <TouchableOpacity style={styles.helperButton} onPress={() => setShowActivityModal(true)}>
-            <Ionicons name="information-circle-outline" size={18} color="#666" />
-            <Text style={styles.helperButtonText}>คำอธิบายเพิ่มเติม</Text>
+        {/* สลับโหมดออโต้ / กรอกเอง */}
+        <View style={styles.modeRow}>
+          <TouchableOpacity
+            style={[styles.modeButton, proteinMode === "auto" && styles.modeButtonActive]}
+            onPress={() => setProteinMode("auto")}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.modeButtonText, proteinMode === "auto" && styles.modeButtonTextActive]}>
+              ให้ระบบแนะนำ
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.modeButton, proteinMode === "custom" && styles.modeButtonActive]}
+            onPress={() => setProteinMode("custom")}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.modeButtonText, proteinMode === "custom" && styles.modeButtonTextActive]}>
+              ปรับแต่งเอง
+            </Text>
           </TouchableOpacity>
         </View>
+
+        {proteinMode === "auto" ? (
+          <View style={styles.optionList}>
+            {proteinOptions.map((item) => {
+              const active = selectedProtein === item.value;
+              const isRecommended = recommendedLevel === item.value;
+
+              return (
+                <TouchableOpacity
+                  key={item.value}
+                  style={[styles.optionCard, active && styles.optionCardActive]}
+                  onPress={() => setSelectedProtein(item.value)}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.optionTopRow}>
+                    <View style={{ flexDirection: "row", alignItems: "center" }}>
+                      <Text style={[styles.optionTitle, active && styles.optionTitleActive]}>
+                        {item.label}
+                      </Text>
+                      {/* ป้ายแนะนำสำหรับคุณ - ปรับสีให้ตัดและมองเห็นง่ายสุดๆ */}
+                      {isRecommended && (
+                        <View style={styles.badgeRecommend}>
+                          <Text style={styles.badgeRecommendText}>⭐️ แนะนำ</Text>
+                        </View>
+                      )}
+                    </View>
+                    {active && <Ionicons name="checkmark-circle" size={20} color="#FFF" />}
+                  </View>
+                  <Text style={[styles.optionDesc, active && styles.optionDescActive]}>{item.desc}</Text>
+                  <Text style={[styles.optionHint, active && styles.optionHintActive]}>{item.hint}</Text>
+                  <Text style={[styles.optionDetail, active && styles.optionDetailActive]}>{item.detail}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ) : (
+          <View style={[
+            styles.customCard, 
+            validationStatus.status === "error" && { borderColor: ERROR_COLOR },
+            validationStatus.status === "warn" && { borderColor: WARN_COLOR }
+          ]}>
+            <Text style={styles.customTitle}>ระบุโปรตีนที่ต้องการต่อวัน</Text>
+            
+            <View style={styles.inputRow}>
+              <TextInput
+                style={styles.customInput}
+                value={customProtein}
+                onChangeText={(text) => setCustomProtein(text.replace(/[^0-9.]/g, ""))}
+                keyboardType="decimal-pad"
+                maxLength={5}
+              />
+              <Text style={styles.customUnit}>กรัม / วัน</Text>
+            </View>
+
+            {/* ข้อความแจ้งเตือนสีแดง/ส้ม */}
+            {validationStatus.msg ? (
+              <Text style={[
+                styles.validationMsg, 
+                validationStatus.status === "error" ? { color: ERROR_COLOR } : { color: WARN_COLOR }
+              ]}>
+                {validationStatus.status === "error" ? "🚨 " : "⚠️ "}{validationStatus.msg}
+              </Text>
+            ) : (
+              <Text style={styles.validationMsgNormal}>
+                ระบบจะใช้ค่านี้ในการคำนวณอาหารให้คุณโดยเฉพาะ
+              </Text>
+            )}
+          </View>
+        )}
 
         <View style={{ flex: 1, minHeight: 40 }} />
 
@@ -101,30 +258,31 @@ const handleNext = () => {
             <Text style={styles.backButtonText}>ย้อนกลับ</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
+          <TouchableOpacity 
+            style={[
+              styles.nextButton, 
+              // ซีดปุ่มลงถ้ามี Error
+              (proteinMode === "custom" && validationStatus.status === "error") && { backgroundColor: "#ccc", shadowOpacity: 0 }
+            ]} 
+            onPress={handleNext}
+            activeOpacity={0.8}
+          >
             <Text style={styles.nextButtonText}>ถัดไป</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
-
-      {/* Modal คำอธิบายกิจกรรม */}
-      <Modal visible={showActivityModal} transparent animationType="fade">
-        <Pressable style={styles.modalOverlay} onPress={() => setShowActivityModal(false)}>
-          <Pressable style={styles.modalCard} onPress={() => {}}>
-            <Text style={styles.modalTitle}>ระดับกิจกรรม</Text>
-            {activityOptions.map((item) => (
-              <View key={item.value} style={styles.modalItem}>
-                <Text style={styles.modalItemTitle}>{item.label}</Text>
-                <Text style={styles.modalItemDesc}>{item.desc}</Text>
-              </View>
-            ))}
-            <TouchableOpacity style={styles.modalCloseButton} onPress={() => setShowActivityModal(false)}>
-              <Text style={styles.modalCloseText}>เข้าใจแล้ว</Text>
-            </TouchableOpacity>
-          </Pressable>
-        </Pressable>
-      </Modal>
     </SafeAreaView>
   );
-}
 
+  // 🚀 ถ้าเป็นเว็บ ให้คืนค่า content ทันที จะได้ไม่โดนบล็อกการคลิก
+  if (Platform.OS === "web") {
+    return content;
+  }
+
+  // ถ้าเป็นมือถือ ให้ครอบ Touchable แบบเดิม เพื่อให้แตะหุบคีย์บอร์ดได้
+  return (
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      {content}
+    </TouchableWithoutFeedback>
+  );
+}

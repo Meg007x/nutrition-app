@@ -286,4 +286,3 @@ export default function RegisterStep5_1Screen() {
     </TouchableWithoutFeedback>
   );
 }
-

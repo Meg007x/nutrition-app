@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native';
-
+import { Brand } from '../constants/theme';
 
 export const styles = StyleSheet.create({
   container: {
@@ -8,7 +8,7 @@ export const styles = StyleSheet.create({
   },
   headerBar: {
     height: 40,
-    backgroundColor: '#F26522',
+    backgroundColor: "#F5A400",
   },
   scrollContainer: {
     padding: 16,
@@ -34,14 +34,13 @@ export const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    borderWidth: 2,
-    borderColor: '#F26522',
+    borderWidth: 1,
+    borderColor: '#000',
     overflow: 'hidden',
   },
   avatar: {
     width: '100%',
     height: '100%',
-    resizeMode: 'cover',
   },
   userInfo: {
     flex: 1,

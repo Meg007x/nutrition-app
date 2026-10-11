@@ -383,4 +383,3 @@ export default function RegisterStep9Screen() {
     </SafeAreaView>
   );
 }
-
