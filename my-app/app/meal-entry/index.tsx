@@ -13,6 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
+import { BASE_URL } from "../../constants/config";
 
 const ORANGE = "#F28A1A";
 const BG = "#F4F4F4";
@@ -47,7 +48,7 @@ type ScanSessionItem = {
 };
 
 function getApiBase() {
-  return "http://172.16.8.225:3000";
+  return BASE_URL;
 }
 
 function getTodayString() {

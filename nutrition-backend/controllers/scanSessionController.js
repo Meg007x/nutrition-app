@@ -1,4 +1,5 @@
 const ScanSession = require("../models/ScanSession");
+const { updateStreak } = require("../utils/streakUpdater");
 
 function getTodayString() {
   const now = new Date();
@@ -111,6 +112,9 @@ exports.createScanSession = async (req, res) => {
       created_at: new Date(),
       updated_at: new Date(),
     });
+
+    // 🔥 ก๊อปปี้บรรทัดนี้ไปวางแทรกตรงนี้เลยครับ
+    await updateStreak(user_id);
 
     return res.status(201).json({
       success: true,

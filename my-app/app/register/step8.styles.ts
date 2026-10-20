@@ -75,15 +75,15 @@ const styles = StyleSheet.create({
   },
 
   cuisineItemUnselected: {
-    backgroundColor: "#EBA032",
+    backgroundColor: "#FFF",
     borderWidth: 1.5,
-    borderColor: "#EBA032",
+    borderColor: "#333",
   },
 
   cuisineItemSelected: {
-    backgroundColor: "#FFF",
+    backgroundColor: ORANGE,
     borderWidth: 1.5,
-    borderColor: "#EBA032",
+    borderColor: ORANGE,
   },
 
   cuisineText: {
@@ -92,11 +92,11 @@ const styles = StyleSheet.create({
   },
 
   cuisineTextUnselected: {
-    color: "#FFF",
+    color: "#111",
   },
 
   cuisineTextSelected: {
-    color: "#222",
+    color: "#FFF",
   },
 
   spacer: {

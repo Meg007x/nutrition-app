@@ -1,5 +1,6 @@
 const WaterLog = require("../models/WaterLog");
 const User = require("../models/User"); // ถ้าไฟล์ชื่ออื่น ให้แก้ตามจริง
+const { updateStreak } = require("../utils/streakUpdater");
 
 const getTodayDateString = () => {
   const now = new Date();
@@ -147,9 +148,12 @@ exports.addWaterRecord = async (req, res) => {
       await doc.save();
     }
 
-    return res.status(201).json({
+    // 🔥 แทรกตรงนี้: บันทึกเพิ่มน้ำสำเร็จ ให้ไปคำนวณไฟต่อทันที!
+    await updateStreak(user_id);
+
+    return res.json({
       success: true,
-      message: "บันทึกการดื่มน้ำเรียบร้อยแล้ว",
+      message: "บันทึกรายการน้ำดื่มเรียบร้อยแล้ว",
       waterLog: doc,
     });
   } catch (error) {
@@ -267,9 +271,12 @@ exports.updateTargetWater = async (req, res) => {
       await doc.save();
     }
 
+    // 🔥 แทรกตรงนี้: มีความเคลื่อนไหวเรื่องน้ำสำเร็จ ให้ไปคำนวณไฟต่อทันที!
+    await updateStreak(userId);
+
     return res.json({
       success: true,
-      message: "อัปเดตเป้าหมายน้ำเรียบร้อยแล้ว",
+      message: "บันทึกเป้าหมายน้ำดื่มเรียบร้อยแล้ว",
       waterLog: doc,
     });
   } catch (error) {

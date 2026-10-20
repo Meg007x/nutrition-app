@@ -14,9 +14,9 @@ const mapGoalToBackend = (goalType: RegisterData["goalType"]) => {
 
 const mapActivityToBackend = (activityLevel: RegisterData["activityLevel"]) => {
   if (activityLevel === "sedentary") return "น้อย";
-  if (activityLevel === "light") return "ปานกลาง";
-  if (activityLevel === "moderate") return "มาก";
-  if (activityLevel === "active") return "หนัก";
+  if (activityLevel === "light") return "น้อย";
+  if (activityLevel === "moderate") return "ปานกลาง";
+  if (activityLevel === "active") return "มาก";
   if (activityLevel === "very_active") return "หนัก";
   return "น้อย";
 };
@@ -59,6 +59,17 @@ export async function registerUserFromForm(form: RegisterData): Promise<AuthResp
     ? Number(String(form.goalDurationWeeks).replace(/[^\d]/g, ""))
     : null;
 
+  // 🟢 คำนวณอายุจากวันเกิดเพื่อส่งให้ Backend
+  const calculateAge = (dob: string): number => {
+    if (!dob) return 20;
+    const birth = new Date(dob);
+    const now = new Date();
+    let a = now.getFullYear() - birth.getFullYear();
+    const m = now.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) a--;
+    return a;
+  };
+
   const payload = {
     username: (form as any).username || form.name,
     email: (form as any).email,
@@ -82,6 +93,9 @@ export async function registerUserFromForm(form: RegisterData): Promise<AuthResp
     meals_per_day: mealSchedules.length || 3,
     meal_schedules: mealSchedules,
   };
+
+  // 🟢 Debug: log payload ก่อนส่ง เพื่อตรวจสอบโครงสร้าง
+  console.log("📤 Payload ที่ส่งไป Backend:", JSON.stringify(payload, null, 2));
 
   return apiRequest<AuthResponse>("/auth/register", {
     method: "POST",

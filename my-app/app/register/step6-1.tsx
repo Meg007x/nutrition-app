@@ -1,291 +1,554 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import {
   View,
   Text,
-  StyleSheet,
+  TextInput,
   TouchableOpacity,
-  Keyboard,
-  TouchableWithoutFeedback,
   ScrollView,
   Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { useRegister } from "../../context/register-context";
-import styles, { ORANGE, BG, IOS_GREEN, ROW_COLOR_1, ROW_COLOR_2 } from "./step6-1.styles";
 
+import styles, {
+  ORANGE,
+} from "./step6-1.styles";
 
-const ALLERGIES = [
-  "แพ้ถั่ว",
-  "แพ้อาหารทะเล",
-  "แพ้นมวัว",
-  "แพ้กลูเตน",
-  "แพ้ไข่",
-  "แพ้แป้งสาลี",
+type AllergyForm = {
+  selectedGroups: string[];
+  details: Record<string, string[]>;
+  detailNames: Record<string, string[]>;
+  allInGroup: string[];
+};
+
+const GROUPS = [
+  {
+    id: "milk",
+    name: "นมวัว",
+    keywords: "นม ผลิตภัณฑ์จากนม",
+  },
+  {
+    id: "egg",
+    name: "ไข่ไก่",
+    keywords: "ไข่ ไข่เป็ด ไข่นกกระทา",
+  },
+  {
+    id: "sesame",
+    name: "งา",
+    keywords: "งาดำ งาขาว น้ำมันงา",
+  },
+  {
+    id: "soy",
+    name: "ถั่วเหลือง",
+    keywords: "เต้าหู้ นมถั่วเหลือง ซีอิ๊ว",
+  },
+  {
+    id: "wheat",
+    name: "ข้าวสาลี",
+    keywords: "แป้งสาลี กลูเตน ขนมปัง",
+  },
+  {
+    id: "peanut",
+    name: "ถั่วลิสง",
+    keywords: "ถั่วลิสง เนยถั่ว",
+  },
+  {
+    id: "tree_nuts",
+    name: "ถั่วเปลือกแข็ง",
+    keywords: "อัลมอนด์ วอลนัท พิสตาชิโอ เม็ดมะม่วงหิมพานต์",
+  },
+  {
+    id: "shellfish",
+    name: "กุ้ง ปู และสัตว์น้ำเปลือกแข็ง",
+    keywords: "กุ้ง ปู กั้ง ล็อบสเตอร์",
+  },
+  {
+    id: "fish",
+    name: "ปลา",
+    keywords: "ปลาทูน่า ปลาแซลมอน ปลาทู",
+  },
 ];
 
-const NONE_OPTION = "ไม่มีอาการแพ้";
+const EMPTY_FORM: AllergyForm = {
+  selectedGroups: [],
+  details: {},
+  detailNames: {},
+  allInGroup: [],
+};
+
+function normalizeAllergies(value: any): AllergyForm {
+  if (!value || Array.isArray(value)) {
+    return {
+      selectedGroups: [],
+      details: {},
+      detailNames: {},
+      allInGroup: [],
+    };
+  }
+
+  return {
+    selectedGroups: Array.isArray(value.selectedGroups)
+      ? value.selectedGroups
+      : [],
+    details: value.details || {},
+    detailNames: value.detailNames || {},
+    allInGroup: Array.isArray(value.allInGroup)
+      ? value.allInGroup
+      : [],
+  };
+}
 
 export default function RegisterStep6Screen() {
   const { form, updateForm } = useRegister();
 
-  // 1. สร้าง State แบบ Object เพื่อให้คุยกับหน้า 6-2 รู้เรื่อง
-  const [localAllergies, setLocalAllergies] = useState(() => {
-    const fa = form.allergies || {};
-    if (Array.isArray(fa)) {
-      return { veg: [], condiment: [], meat: [], other: fa };
-    }
-    return {
-      veg: fa.veg || [],
-      condiment: fa.condiment || [],
-      meat: fa.meat || [],
-      other: fa.other || [],
-    };
-  });
+  const [search, setSearch] = useState("");
 
-  // 2. ดึงข้อมูลใหม่เสมอเมื่อ form.allergies ใน Context เปลี่ยน
+  const [allergies, setAllergies] = useState<AllergyForm>(() =>
+    normalizeAllergies(form.allergies)
+  );
+
   useEffect(() => {
-    const fa = form.allergies || {};
-    if (Array.isArray(fa)) {
-      setLocalAllergies({ veg: [], condiment: [], meat: [], other: fa });
-    } else {
-      setLocalAllergies({
-        veg: fa.veg || [],
-        condiment: fa.condiment || [],
-        meat: fa.meat || [],
-        other: fa.other || [],
-      });
-    }
+    setAllergies(normalizeAllergies(form.allergies));
   }, [form.allergies]);
 
-  // 3. แปลง Object ให้กลับมาเป็น Array ธรรมดา เพื่อให้ UI ของคุณเอาไปใช้งานได้เหมือนเดิมเป๊ะๆ
-  const selectedAllergies = useMemo(() => {
-    return [
-      ...(localAllergies.veg || []),
-      ...(localAllergies.condiment || []),
-      ...(localAllergies.meat || []),
-      ...(localAllergies.other || []),
-    ];
-  }, [localAllergies]);
+  const hasNone =
+    form.hasAllergies === false &&
+    allergies.selectedGroups.length === 0;
 
-  const hasNoneSelected = selectedAllergies.includes(NONE_OPTION);
-  const selectedFoodOnly = selectedAllergies.filter((item) => item !== NONE_OPTION);
+  const filteredGroups = useMemo(() => {
+    const q = search.trim().toLocaleLowerCase();
 
-  const toggleAllergy = (option: string) => {
-    if (hasNoneSelected) {
+    if (!q) return GROUPS;
+
+    return GROUPS.filter((group) =>
+      `${group.name} ${group.keywords}`
+        .toLocaleLowerCase()
+        .includes(q)
+    );
+  }, [search]);
+
+  const selectedGroupNames = useMemo(() => {
+    return allergies.selectedGroups.map((id) => {
+      const group = GROUPS.find((item) => item.id === id);
+      return group?.name || id;
+    });
+  }, [allergies.selectedGroups]);
+
+  const saveAllergies = (
+    next: AllergyForm,
+    has: boolean
+  ) => {
+    setAllergies(next);
+
+    updateForm({
+      hasAllergies: has,
+      allergies: next,
+    });
+  };
+
+  const openGroup = (groupId: string) => {
+    if (hasNone) {
       Alert.alert(
-        "เลือกไม่ได้",
-        "คุณเลือก 'ไม่มีอาการแพ้' อยู่ หากต้องการเลือกอาหารที่แพ้ กรุณายกเลิก 'ไม่มีอาการแพ้' ก่อน"
+        "เลือกประเภทวัตถุดิบ",
+        "หากต้องการเลือกรายการแพ้อาหาร กรุณายกเลิกตัวเลือกไม่มีอาหารที่แพ้ก่อน"
       );
       return;
     }
 
-    setLocalAllergies((prev: any) => {
-      const prevOther = prev.other || [];
-      if (prevOther.includes(option)) {
-        return { ...prev, other: prevOther.filter((item: string) => item !== option) };
-      } else {
-        return { ...prev, other: [...prevOther, option] };
-      }
-    });
+    const next: AllergyForm = {
+      ...allergies,
+      selectedGroups: allergies.selectedGroups.includes(groupId)
+        ? allergies.selectedGroups
+        : [...allergies.selectedGroups, groupId],
+    };
+
+    saveAllergies(next, true);
+
+    const group = GROUPS.find(
+      (item) => item.id === groupId
+    );
+
+    router.push({
+      pathname: "/register/step6-2",
+      params: {
+        groupId,
+        groupName: group?.name || groupId,
+      },
+    } as any);
   };
 
   const toggleNone = () => {
-    if (hasNoneSelected) {
-      setLocalAllergies({ veg: [], condiment: [], meat: [], other: [] });
+    if (hasNone) {
+      saveAllergies(
+        {
+          selectedGroups: [],
+          details: {},
+          detailNames: {},
+          allInGroup: [],
+        },
+        true
+      );
       return;
     }
 
-    if (selectedFoodOnly.length > 0) {
+    if (allergies.selectedGroups.length > 0) {
       Alert.alert(
         "ยืนยันการเลือก",
-        "หากเลือก 'ไม่มีอาการแพ้' ระบบจะล้างรายการอาหารที่แพ้ทั้งหมด",
+        "หากเลือกไม่มีอาหารที่แพ้ ระบบจะล้างรายการที่เลือกไว้ทั้งหมด",
         [
-          { text: "ยกเลิก", style: "cancel" },
+          {
+            text: "ยกเลิก",
+            style: "cancel",
+          },
           {
             text: "ยืนยัน",
-            style: "destructive",
-            onPress: () =>
-              setLocalAllergies({ veg: [], condiment: [], meat: [], other: [NONE_OPTION] }),
+            onPress: () => {
+              saveAllergies(
+                {
+                  selectedGroups: [],
+                  details: {},
+                  detailNames: {},
+                  allInGroup: [],
+                },
+                false
+              );
+            },
           },
         ]
       );
+
       return;
     }
 
-    setLocalAllergies({ veg: [], condiment: [], meat: [], other: [NONE_OPTION] });
+    saveAllergies(
+      {
+        selectedGroups: [],
+        details: {},
+        detailNames: {},
+        allInGroup: [],
+      },
+      false
+    );
   };
 
-  const handleOpenMore = () => {
-    if (hasNoneSelected) {
-      Alert.alert(
-        "เลือกไม่ได้",
-        "คุณเลือก 'ไม่มีอาการแพ้' อยู่ จึงไม่สามารถเพิ่มรายการอาหารที่แพ้ได้"
-      );
-      return;
-    }
+  const removeGroup = (groupId: string) => {
+    const next: AllergyForm = {
+      selectedGroups: allergies.selectedGroups.filter(
+        (id) => id !== groupId
+      ),
+      details: { ...allergies.details },
+      detailNames: { ...allergies.detailNames },
+      allInGroup: allergies.allInGroup.filter(
+        (id) => id !== groupId
+      ),
+    };
 
-    // ส่ง Object เข้า Context
-    updateForm({
-      hasAllergies: true,
-      allergies: localAllergies,
-    });
+    delete next.details[groupId];
+    delete next.detailNames[groupId];
 
-    router.push("/register/step6-2" as any);
+    saveAllergies(
+      next,
+      next.selectedGroups.length > 0
+    );
   };
 
   const handleNext = () => {
-    if (selectedAllergies.length === 0) {
-      Alert.alert(
-        "ยังไม่ได้เลือกข้อมูล",
-        "กรุณาเลือกอาการแพ้อาหาร หรือเลือก 'ไม่มีอาการแพ้'"
-      );
-      return;
-    }
+    const hasSelectedGroups =
+      allergies.selectedGroups.length > 0;
 
-    // ส่ง Object เข้า Context
     updateForm({
-      hasAllergies: !hasNoneSelected,
-      allergies: localAllergies,
+      hasAllergies: hasSelectedGroups
+        ? true
+        : form.hasAllergies,
+      allergies: hasSelectedGroups
+        ? allergies
+        : { ...EMPTY_FORM },
     });
 
     router.push("/register/step7" as any);
   };
 
-  const removeSelectedItem = (itemToRemove: string) => {
-    // ลบออกจากทุกหมวดหมู่
-    setLocalAllergies((prev: any) => ({
-      veg: (prev.veg || []).filter((item: string) => item !== itemToRemove),
-      condiment: (prev.condiment || []).filter((item: string) => item !== itemToRemove),
-      meat: (prev.meat || []).filter((item: string) => item !== itemToRemove),
-      other: (prev.other || []).filter((item: string) => item !== itemToRemove),
-    }));
-  };
-
-  const isSelected = (option: string) => selectedAllergies.includes(option);
-
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <SafeAreaView style={styles.container}>
-        <View style={styles.headerBar}>
-          <Text style={styles.headerText}>ลงทะเบียนผู้ใช้งาน</Text>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.headerBar}>
+        <Text style={styles.headerText}>
+          ลงทะเบียนผู้ใช้งาน
+        </Text>
+      </View>
+
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.stepTitle}>
+          6. วัตถุดิบที่แพ้
+        </Text>
+
+        <View style={styles.progressTrack}>
+          <View style={styles.progressFill} />
         </View>
 
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <Text style={styles.stepTitle}>6. อาการแพ้อาหาร</Text>
+        <Text style={styles.subtitle}>
+          เลือกประเภทเพื่อระบุวัตถุดิบที่ต้องการหลีกเลี่ยง
+        </Text>
 
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: "75%" }]} />
-          </View>
+        {/* ช่องค้นหา */}
+        <View style={styles.searchBox}>
+          <Ionicons
+            name="search-outline"
+            size={21}
+            color="#777"
+          />
 
-          <Text style={styles.subtitle}>
-            คุณมีอาการแพ้อาหารหรือโรคประจำตัวหรือไม่?
-          </Text>
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="ค้นหาประเภทวัตถุดิบ..."
+            placeholderTextColor="#999"
+            style={styles.searchInput}
+            returnKeyType="search"
+            autoCorrect={false}
+            autoCapitalize="none"
+            blurOnSubmit={false}
+          />
 
-          <View style={styles.gridContainer}>
-            {ALLERGIES.map((item) => {
-              const active = isSelected(item);
-              const disabled = hasNoneSelected;
+          {search.length > 0 && (
+            <TouchableOpacity
+              onPress={() => setSearch("")}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="ล้างคำค้นหา"
+            >
+              <Ionicons
+                name="close-circle"
+                size={20}
+                color="#999"
+              />
+            </TouchableOpacity>
+          )}
+        </View>
 
-              return (
-                <TouchableOpacity
-                  key={item}
-                  style={[
-                    styles.allergyBtn,
-                    active && styles.allergyBtnActive,
-                    disabled && !active && styles.disabledButton,
-                  ]}
-                  onPress={() => toggleAllergy(item)}
-                  activeOpacity={0.85}
-                >
+        {/* รายการประเภทวัตถุดิบ 2 คอลัมน์ */}
+        <View style={styles.groupList}>
+          {filteredGroups.map((group) => {
+            const selected =
+              allergies.selectedGroups.includes(group.id);
+
+            const names =
+              allergies.detailNames[group.id] || [];
+
+            const allSelected =
+              allergies.allInGroup.includes(group.id);
+
+            return (
+              <TouchableOpacity
+                key={group.id}
+                style={[
+                  styles.groupCard,
+                  selected && styles.groupCardSelected,
+                ]}
+                activeOpacity={0.8}
+                onPress={() => openGroup(group.id)}
+              >
+                <View style={styles.groupInfo}>
                   <Text
                     style={[
-                      styles.allergyText,
-                      active && styles.allergyTextActive,
-                      disabled && !active && styles.disabledText,
+                      styles.groupName,
+                      selected && styles.groupNameSelected,
                     ]}
                   >
-                    {item}
+                    {group.name}
                   </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
 
-          <TouchableOpacity
-            style={[styles.otherBtn, hasNoneSelected && styles.disabledOtherBtn]}
-            onPress={handleOpenMore}
-            activeOpacity={0.85}
-          >
-            <Text
-              style={[
-                styles.otherBtnText,
-                hasNoneSelected && styles.disabledText,
-              ]}
-            >
-              + อื่นๆ / รายการเพิ่มเติม
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.noneBtn,
-              isSelected(NONE_OPTION) && styles.noneBtnActive,
-            ]}
-            onPress={toggleNone}
-            activeOpacity={0.85}
-          >
-            <Text
-              style={[
-                styles.noneBtnText,
-                isSelected(NONE_OPTION) && styles.noneBtnTextActive,
-              ]}
-            >
-              ไม่มีอาการแพ้
-            </Text>
-          </TouchableOpacity>
-
-          <View style={styles.summaryBox}>
-            <Text style={styles.summaryTitle}>สรุปรายการที่เลือก</Text>
-
-            {selectedAllergies.length > 0 ? (
-              <View style={styles.summaryChipWrap}>
-                {selectedAllergies.map((item) => (
-                  <View key={item} style={styles.summaryChip}>
-                    <Text style={styles.summaryChipText}>{item}</Text>
-                    <TouchableOpacity
-                      onPress={() => removeSelectedItem(item)}
-                      activeOpacity={0.8}
+                  {!selected ? (
+                    <Text style={styles.groupHint}>
+                      กดเพื่อเลือก
+                    </Text>
+                  ) : allSelected ? (
+                    <Text style={styles.selectedDescription}>
+                      เลือกทั้งหมด
+                    </Text>
+                  ) : names.length > 0 ? (
+                    <Text
+                      style={styles.selectedDescription}
+                      numberOfLines={2}
                     >
-                      <Text style={styles.summaryChipRemove}>✕</Text>
-                    </TouchableOpacity>
+                      {names.join(", ")}
+                    </Text>
+                  ) : (
+                    <Text style={styles.groupHint}>
+                      ยังไม่ได้เลือกรายละเอียด
+                    </Text>
+                  )}
+                </View>
+
+                {/* ไอคอนด้านขวา */}
+                <View style={styles.groupRight}>
+                  {selected && (
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={18}
+                      color={ORANGE}
+                    />
+                  )}
+
+                  <Ionicons
+                    name="chevron-forward"
+                    size={17}
+                    color="#888"
+                  />
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+
+          {filteredGroups.length === 0 && (
+            <Text style={styles.emptyText}>
+              ไม่พบประเภทวัตถุดิบที่ค้นหา
+            </Text>
+          )}
+        </View>
+
+        {/* สรุปรายการที่เลือก */}
+        <View style={styles.summaryBox}>
+          <Text style={styles.summaryTitle}>
+            สรุปรายการที่เลือก
+          </Text>
+
+          {hasNone ? (
+            <View style={styles.noneChip}>
+              <Text style={styles.noneChipText}>
+                ไม่มีอาหารที่แพ้
+              </Text>
+
+              <TouchableOpacity
+                onPress={toggleNone}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="ยกเลิกไม่มีอาหารที่แพ้"
+              >
+                <Ionicons
+                  name="close-circle"
+                  size={20}
+                  color="#A66B00"
+                />
+              </TouchableOpacity>
+            </View>
+          ) : selectedGroupNames.length > 0 ? (
+            allergies.selectedGroups.map((id) => {
+              const group = GROUPS.find(
+                (item) => item.id === id
+              );
+
+              const names =
+                allergies.detailNames[id] || [];
+
+              const allSelected =
+                allergies.allInGroup.includes(id);
+
+              return (
+                <View
+                  key={id}
+                  style={styles.summaryRow}
+                >
+                  <View style={styles.summaryInfo}>
+                    <Text style={styles.summaryGroupName}>
+                      {group?.name || id}
+                    </Text>
+
+                    <Text style={styles.summaryDetail}>
+                      {allSelected
+                        ? "หลีกเลี่ยงทั้งหมดในกลุ่มนี้"
+                        : names.length > 0
+                        ? names.join(", ")
+                        : "ยังไม่ได้เลือกรายละเอียด"}
+                    </Text>
                   </View>
-                ))}
-              </View>
-            ) : (
-              <Text style={styles.summaryText}>-</Text>
-            )}
-          </View>
 
-          <View style={styles.buttonRow}>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => router.replace("/register/step5" as any)}
-            >
-              <Text style={styles.backText}>ย้อนกลับ</Text>
-            </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => removeGroup(id)}
+                    hitSlop={10}
+                    accessibilityRole="button"
+                    accessibilityLabel={`ลบ${group?.name || id}`}
+                  >
+                    <Ionicons
+                      name="close-circle-outline"
+                      size={22}
+                      color="#B76A00"
+                    />
+                  </TouchableOpacity>
+                </View>
+              );
+            })
+          ) : (
+            <Text style={styles.emptyText}>
+              ยังไม่มีรายการที่เลือก
+            </Text>
+          )}
+        </View>
 
-            <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
-              <Text style={styles.nextText}>ถัดไป</Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </SafeAreaView>
-    </TouchableWithoutFeedback>
+        {/* ปุ่มไม่มีอาหารที่แพ้ */}
+        <TouchableOpacity
+          style={[
+            styles.noneButton,
+            hasNone && styles.noneButtonActive,
+          ]}
+          onPress={toggleNone}
+          activeOpacity={0.75}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: hasNone }}
+        >
+          <Ionicons
+            name={
+              hasNone
+                ? "checkmark-circle"
+                : "ellipse-outline"
+            }
+            size={22}
+            color={hasNone ? "#FFFFFF" : "#555"}
+          />
+
+          <Text
+            style={[
+              styles.noneButtonText,
+              hasNone && styles.noneButtonTextActive,
+            ]}
+          >
+            ไม่มีอาหารที่แพ้
+          </Text>
+        </TouchableOpacity>
+
+        <Text style={styles.note}>
+          หากเลือกประเภทวัตถุดิบ กรุณาระบุรายละเอียดในหน้าถัดไป
+        </Text>
+
+        {/* ปุ่มย้อนกลับและถัดไป */}
+        <View style={styles.buttonRow}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() =>
+              router.replace("/register/step5" as any)
+            }
+          >
+            <Text style={styles.backText}>
+              ย้อนกลับ
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.nextButton}
+            onPress={handleNext}
+          >
+            <Text style={styles.nextText}>
+              ถัดไป
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
-

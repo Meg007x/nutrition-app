@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
   },
 
   optionTitleActive: {
-    color: "#fff",
+    color: "#FFF",
   },
 
   optionDesc: {
@@ -143,7 +143,7 @@ const styles = StyleSheet.create({
   },
 
   optionDescActive: {
-    color: "#FFF7E8",
+    color: "rgba(255,255,255,0.85)",
   },
 
   optionHint: {
@@ -154,7 +154,49 @@ const styles = StyleSheet.create({
   },
 
   optionHintActive: {
-    color: "#fff",
+    color: "rgba(255,255,255,0.9)",
+  },
+
+  optionDetail: {
+    marginTop: 6,
+    fontSize: 13,
+    lineHeight: 19,
+    color: "#777",
+    fontFamily: FONT_REGULAR,
+  },
+
+  optionDetailActive: {
+    color: "rgba(255,255,255,0.75)",
+  },
+
+  proteinValueCard: {
+    marginTop: 16,
+    backgroundColor: WHITE,
+    borderRadius: 14,
+    borderWidth: 1.4,
+    borderColor: "#D9D9D9",
+    padding: 16,
+    alignItems: "center",
+  },
+
+  proteinValueLabel: {
+    fontSize: 14,
+    color: "#555",
+    fontFamily: FONT_BOLD,
+    marginBottom: 6,
+  },
+
+  proteinValueNumber: {
+    fontSize: 28,
+    color: ORANGE,
+    fontFamily: FONT_BOLD,
+  },
+
+  proteinValueHint: {
+    marginTop: 6,
+    fontSize: 13,
+    color: "#777",
+    fontFamily: FONT_REGULAR,
   },
 
   // --- ปรับสีป้ายแนะนำให้ตัดกันสุดๆ (สีเขียวมรกต + ตัวหนังสือสีขาว) ---

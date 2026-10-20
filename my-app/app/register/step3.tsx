@@ -320,4 +320,3 @@ export default function RegisterStep3Screen() {
     </SafeAreaView>
   );
 }
-
