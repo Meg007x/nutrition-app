@@ -1,233 +1,384 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, Text, TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator, Platform, Switch 
+import {
+  View, Text, TouchableOpacity, ScrollView, SafeAreaView,
+  ActivityIndicator, TextInput, Modal, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import { styles, ORANGE } from '@/style/editDislikedFood.styles';
-import { BASE_URL } from '../../constants/config';
+import { styles, ORANGE, FONT_BOLD } from '@/style/editDislikedFood.styles';
+import { BASE_URL, API_BASE_URL } from '../../constants/config';
 
-// โครงสร้างประเภทข้อมูลที่จัดกลุ่มแล้ว
-type GroupedIngredients = {
-  [categoryKey: string]: {
-    title: string;
-    items: string[];
-  }
-};
+type Tier3Item = { id: string; name: string };
+type Tier2Category = { id: string; name: string; items: Tier3Item[] };
+type Tier1Category = { id: string; name: string; emoji?: string; subCategories: Tier2Category[] };
 
 export default function EditDislikedFoodScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [currentUserId, setCurrentUserId] = useState<string>('');
-  
-  // เก็บสถานะการเปิด/ปิด Accordion หมวดหมู่
-  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState('');
+  const [selectedFoods, setSelectedFoods] = useState<Set<string>>(new Set());
+  const [hierarchy, setHierarchy] = useState<Tier1Category[]>([]);
+  const [hierarchyLoading, setHierarchyLoading] = useState(false);
+  const [showSelectorModal, setShowSelectorModal] = useState(false);
+  const [expandedT1, setExpandedT1] = useState<Set<string>>(new Set());
+  const [expandedT2, setExpandedT2] = useState<Set<string>>(new Set());
+  const [modalSearchQuery, setModalSearchQuery] = useState('');
+  const [modalSelected, setModalSelected] = useState<Set<string>>(new Set());
+  const [toast, setToast] = useState({ visible: false, message: '', type: 'success' as 'success' | 'error' });
 
-  // เก็บโครงสร้างอาหารจาก DB ที่จัดกลุ่มแล้ว
-  const [groupedIngredients, setGroupedIngredients] = useState<GroupedIngredients>({});
-  
-  // เก็บรายการที่ผู้ใช้เลือก (ติ๊กไม่กิน)
-  // รูปแบบ: { nuts: ["วอลนัท"], sweet: ["ไอศกรีม"] }
-  const [selectedFoods, setSelectedFoods] = useState<Record<string, string[]>>({});
+  useEffect(() => { loadUserProfile(); loadHierarchy(); }, []);
 
-  // แบนเนอร์แจ้งเตือน
-  const [toast, setToast] = useState<{ visible: boolean; message: string; type: 'success' | 'error' }>({
-    visible: false, message: '', type: 'success'
-  });
+  const goBack = () => {
+    try { if (router.canGoBack()) { router.back(); } else { router.replace('/(tabs)/profile'); } }
+    catch { router.replace('/(tabs)/profile'); }
+  };
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (!modalSearchQuery.trim() || hierarchy.length === 0) {
+      if (!modalSearchQuery.trim()) { setExpandedT1(new Set()); setExpandedT2(new Set()); }
+      return;
+    }
+    const q = modalSearchQuery.toLowerCase();
+    const newT1 = new Set<string>();
+    const newT2 = new Set<string>();
+    hierarchy.forEach(cat => {
+      cat.subCategories.forEach(sub => {
+        const hasMatch = sub.items.some(item => item.name.toLowerCase().includes(q));
+        if (hasMatch) { newT1.add(cat.id); newT2.add(sub.id); }
+      });
+    });
+    if (newT1.size > 0) setExpandedT1(prev => { const merged = new Set(prev); newT1.forEach(id => merged.add(id)); return merged; });
+    if (newT2.size > 0) setExpandedT2(prev => { const merged = new Set(prev); newT2.forEach(id => merged.add(id)); return merged; });
+  }, [modalSearchQuery, hierarchy]);
 
-  const showNotification = (msg: string, type: 'success' | 'error') => {
-    setToast({ visible: true, message: msg, type });
+  const showNotification = (message: string, type: 'success' | 'error') => {
+    setToast({ visible: true, message, type });
     setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 2500);
   };
 
-  const loadData = async () => {
+  const loadUserProfile = async () => {
     try {
       const userJson = await AsyncStorage.getItem('currentUser');
-      if (!userJson) return;
+      if (!userJson) { setLoading(false); return; }
       const userObj = JSON.parse(userJson);
-      
       const userId = userObj.user_id;
-      if (!userId) return;
+      if (!userId) { setLoading(false); return; }
       setCurrentUserId(userId);
-
-      // 🟢 ดึงข้อมูลโปรไฟล์ และ รายการอาหารที่ไม่ชอบ พร้อมกัน
-      const [profileRes, dislikedRes] = await Promise.all([
-        fetch(`${BASE_URL}/api/users/profile?userId=${userId}`),
-        fetch(`${BASE_URL}/api/disliked-foods`)
-      ]);
-
-      const profileJson = await profileRes.json();
-      const dislikedJson = await dislikedRes.json();
-
-      // 1. แปลงข้อมูลจาก API เป็นโครงสร้าง GroupedIngredients
-      if (dislikedJson.success && Array.isArray(dislikedJson.data)) {
-        const grouped: GroupedIngredients = {};
-        dislikedJson.data.forEach((cat: any) => {
-          if (cat.foods && cat.foods.length > 0) {
-            grouped[cat.id] = {
-              title: cat.name,
-              items: cat.foods.map((f: any) => f.name)
-            };
-          }
-        });
-        setGroupedIngredients(grouped);
+      const response = await fetch(`${BASE_URL}/api/users/dislikes?userId=${userId}`);
+      const json = await response.json();
+      if (json.success) {
+        const v2 = json.disliked_ingredients_v2 || [];
+        if (Array.isArray(v2) && v2.length > 0) {
+          setSelectedFoods(new Set(v2.map((d: any) => d.name).filter(Boolean)));
+        } else {
+          const legacy = json.data || {};
+          const all: string[] = [];
+          Object.values(legacy).forEach((arr: any) => { if (Array.isArray(arr)) arr.forEach((n: any) => all.push(String(n))); });
+          setSelectedFoods(new Set(all.filter(Boolean)));
+        }
       }
-
-      // 2. นำข้อมูลเก่าที่ผู้ใช้เคยเลือกไว้มาเซ็ตลง State
-      if (profileJson.success && profileJson.data && profileJson.data.disliked_foods) {
-        setSelectedFoods(profileJson.data.disliked_foods);
-      } else {
-        setSelectedFoods({});
-      }
-
-    } catch (error) {
-      console.error("❌ Error loading data:", error);
-    } finally {
-      setLoading(false);
-    }
+    } catch (error) { console.error('Load profile error:', error); }
+    finally { setLoading(false); }
   };
 
-  // เปิด/ปิด Accordion ของหมวดหมู่นั้นๆ
-  const toggleCategory = (catKey: string) => {
-    setExpandedCategory(expandedCategory === catKey ? null : catKey);
+  const loadHierarchy = async () => {
+    setHierarchyLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/food/ingredients/hierarchy`);
+      const json = await response.json();
+      if (json.success && Array.isArray(json.data)) { setHierarchy(json.data); }
+    } catch (error) { console.error('Load hierarchy error:', error); }
+    finally { setHierarchyLoading(false); }
   };
 
-  // สลับสถานะวัตถุดิบ (สวิตช์)
-  const toggleFood = (catKey: string, foodName: string) => {
-    setSelectedFoods(prev => {
-      const catFoods = prev[catKey] || [];
-      const updatedCatFoods = catFoods.includes(foodName)
-        ? catFoods.filter(item => item !== foodName)
-        : [...catFoods, foodName];
-
-      return { ...prev, [catKey]: updatedCatFoods };
+  const toggleFood = (name: string) => {
+    setModalSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) { next.delete(name); } else { next.add(name); }
+      return next;
     });
+  };
+  const toggleT1 = (id: string) => {
+    setExpandedT1(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) { next.delete(id); } else { next.add(id); }
+      return next;
+    });
+  };
+  const toggleT2 = (id: string) => {
+    setExpandedT2(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) { next.delete(id); } else { next.add(id); }
+      return next;
+    });
+  };
+
+  const countSelectedInT1 = (cat: Tier1Category) => {
+    let count = 0;
+    cat.subCategories.forEach(sub => sub.items.forEach(item => { if (modalSelected.has(item.name)) count++; }));
+    return count;
+  };
+  const countSelectedInT2 = (sub: Tier2Category) => sub.items.filter(item => modalSelected.has(item.name)).length;
+
+  const getSelectedByCategory = () => {
+    const groups: { catName: string; emoji: string; items: string[] }[] = [];
+    hierarchy.forEach(cat => {
+      const catItems: string[] = [];
+      cat.subCategories.forEach(sub => sub.items.forEach(item => { if (selectedFoods.has(item.name)) catItems.push(item.name); }));
+      if (catItems.length > 0) groups.push({ catName: cat.name, emoji: cat.emoji || '📦', items: catItems });
+    });
+    const allHierarchyNames = new Set(hierarchy.flatMap(c => c.subCategories.flatMap(s => s.items.map(i => i.name))));
+    const unmatched = Array.from(selectedFoods).filter(a => a && !allHierarchyNames.has(a));
+    if (unmatched.length > 0) groups.push({ catName: 'อื่นๆ', emoji: '📦', items: unmatched });
+    return groups;
   };
 
   const handleSave = async () => {
     if (!currentUserId) return;
     setSaving(true);
-
-    const payload = {
-      userId: currentUserId,
-      disliked_foods: selectedFoods 
-    };
-
     try {
-      const response = await fetch(`${BASE_URL}/api/users/update-disliked-foods`, {
+      const selectedArray = Array.from(selectedFoods).filter(Boolean);
+      const disliked_ingredients_v2 = selectedArray.map(name => ({
+        ingredient_id: null,
+        name: String(name),
+        category_key: '',
+        category_name: '',
+        sub_category: '',
+      }));
+      const disliked_foods: Record<string, string[]> = {};
+      hierarchy.forEach(cat => {
+        const catItems = cat.subCategories.flatMap(sub => sub.items.filter(i => selectedFoods.has(i.name)).map(i => i.name));
+        if (catItems.length > 0) disliked_foods[cat.id] = catItems;
+      });
+      const response = await fetch(`${BASE_URL}/api/users/dislikes`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ userId: currentUserId, disliked_ingredients_v2, disliked_foods }),
       });
       const json = await response.json();
-
-      if (response.ok && json.success) {
-        showNotification("🎉 บันทึกรายการที่ไม่ชอบสำเร็จ!", "success");
-        setTimeout(() => router.back(), 1200);
-      } else {
-        showNotification(`❌ บันทึกไม่สำเร็จ: ${json.message}`, "error");
-      }
-    } catch (error) {
-      showNotification("❌ ไม่สามารถติดต่อเซิร์ฟเวอร์ได้", "error");
-    } finally {
-      setSaving(false);
-    }
+      if (json.success) {
+        const clearedSlots = json.cleared_slots || 0;
+        const msg = clearedSlots > 0 ? `บันทึกสำเร็จ (ล้าง ${clearedSlots} มื้อที่มีวัตถุดิบที่ไม่ชอบ)` : 'บันทึกสำเร็จ';
+        showNotification(msg, 'success');
+        setTimeout(() => goBack(), 1200);
+      } else { showNotification(json.message || 'บันทึกไม่สำเร็จ', 'error'); }
+    } catch { showNotification('เกิดข้อผิดพลาด', 'error'); }
+    finally { setSaving(false); }
   };
+
+  const handleRemoveFood = (name: string) => {
+    setSelectedFoods(prev => { const next = new Set(prev); next.delete(name); return next; });
+  };
+
+  const handleClearAll = () => {
+    Alert.alert('ล้างทั้งหมด', 'ต้องการยกเลิกการเลือกทั้งหมดหรือไม่?', [
+      { text: 'ยกเลิก', style: 'cancel' },
+      { text: 'ล้าง', style: 'destructive', onPress: () => setSelectedFoods(new Set()) },
+    ]);
+  };
+
+  const openSelector = () => {
+    setModalSelected(new Set(selectedFoods));
+    setShowSelectorModal(true);
+  };
+
+  const confirmSelector = () => {
+    setSelectedFoods(new Set(modalSelected));
+    setShowSelectorModal(false);
+    setModalSearchQuery('');
+  };
+
+  const filteredHierarchy = modalSearchQuery.trim()
+    ? hierarchy.map(cat => ({
+        ...cat,
+        subCategories: cat.subCategories.map(sub => ({
+          ...sub,
+          items: sub.items.filter(item => item.name.toLowerCase().includes(modalSearchQuery.toLowerCase())),
+        })).filter(sub => sub.items.length > 0),
+      })).filter(cat => cat.subCategories.length > 0)
+    : hierarchy;
 
   if (loading) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={ORANGE} />
-      </View>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.headerBar}>
+          <TouchableOpacity onPress={goBack} style={styles.backIcon}><Ionicons name='chevron-back' size={28} color='#fff' /></TouchableOpacity>
+          <Text style={styles.headerTitle}>อาหารที่ไม่ชอบ</Text>
+          <View style={{ width: 28 }} />
+        </View>
+        <View style={styles.loadingContainer}><ActivityIndicator size='large' color={ORANGE} /></View>
+      </SafeAreaView>
     );
   }
 
+  const selectedArray = Array.from(selectedFoods).filter(Boolean);
+  const grouped = getSelectedByCategory();
+
   return (
     <SafeAreaView style={styles.container}>
-      {/* 🚀 SMART BANNER */}
       {toast.visible && (
-        <View style={[{
-          position: 'absolute', top: Platform.OS === 'ios' ? 50 : 20, left: 16, right: 16,
-          backgroundColor: toast.type === 'success' ? '#E8F5E9' : '#FFEBEE',
-          borderColor: toast.type === 'success' ? '#4CAF50' : '#FF5252',
-          borderWidth: 1.5, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 14,
-          flexDirection: 'row', alignItems: 'center', zIndex: 9999, elevation: 5,
-        }, Platform.OS === 'web' ? ({ boxShadow: '0px 4px 6px rgba(0,0,0,0.15)' } as any) : {}]}>
-          <View style={{ marginRight: 10 }}>
-            <Ionicons name={toast.type === 'success' ? "checkmark-circle" : "alert-circle"} size={24} color={toast.type === 'success' ? '#2E7D32' : '#C62828'} />
-          </View>
-          <Text style={{ fontFamily: 'NotoSansThaiBold', fontSize: 15, color: toast.type === 'success' ? '#2E7D32' : '#C62828', flex: 1 }}>{toast.message}</Text>
+        <View style={[styles.toast, toast.type === 'success' ? styles.toastSuccess : styles.toastError]}>
+          <Text style={styles.toastText}>{toast.message}</Text>
         </View>
       )}
-
       <View style={styles.headerBar}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backIcon}>
-          <Ionicons name="chevron-back" size={28} color="white" />
-        </TouchableOpacity>
+        <TouchableOpacity onPress={goBack} style={styles.backIcon}><Ionicons name='chevron-back' size={28} color='#fff' /></TouchableOpacity>
         <Text style={styles.headerTitle}>อาหารที่ไม่ชอบ</Text>
         <View style={{ width: 28 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.sectionTitle}>เลือกวัตถุดิบที่คุณไม่ทาน</Text>
+      <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 20 }}>
+        <Text style={styles.sectionTitle}>วัตถุดิบที่คุณไม่ชอบ</Text>
+        <Text style={styles.sectionSubtitle}>
+          {selectedArray.length > 0 ? `คุณเลือก ${selectedArray.length} รายการ แตะ ✕ เพื่อลบ` : 'ยังไม่มีรายการ กดปุ่มด้านล่างเพื่อเพิ่ม'}
+        </Text>
 
-        {Object.keys(groupedIngredients).map(catKey => {
-          const category = groupedIngredients[catKey];
-          const isExpanded = expandedCategory === catKey;
-          const selectedCount = (selectedFoods[catKey] || []).length;
-
-          return (
-            <View key={catKey} style={styles.categoryCard}>
-              {/* Header ของหมวดหมู่ (กดเพื่อกางออก) */}
-              <TouchableOpacity 
-                style={styles.categoryHeader} 
-                onPress={() => toggleCategory(catKey)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.categoryTitle}>{category.title}</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  {selectedCount > 0 && (
-                    <View style={styles.badge}><Text style={styles.badgeText}>{selectedCount} รายการ</Text></View>
-                  )}
-                  <Ionicons name={isExpanded ? "chevron-up" : "chevron-down"} size={20} color="#666" />
+        {selectedArray.length > 0 && (
+          <View style={{ marginBottom: 16 }}>
+            {grouped.map((group) => (
+              <View key={`group-${group.catName}`} style={styles.summaryCategoryCard}>
+                <View style={styles.summaryCategoryHeader}>
+                  <Text style={styles.summaryCategoryEmoji}>{group.emoji}</Text>
+                  <Text style={styles.summaryCategoryName}>{group.catName}</Text>
+                  <View style={styles.summaryCountBadge}>
+                    <Text style={styles.summaryCountBadgeText}>{group.items.length}</Text>
+                  </View>
                 </View>
-              </TouchableOpacity>
-
-              {/* รายการวัตถุดิบ (จะแสดงเมื่อถูกกาง) */}
-              {isExpanded && (
-                <View style={styles.foodListContainer}>
-                  {category.items.map(food => {
-                    const isSelected = (selectedFoods[catKey] || []).includes(food);
+                <View style={styles.chipContainer}>
+                  {group.items.map((item) => {
+                    const displayName = String(item);
                     return (
-                      <View key={food} style={styles.foodItemRow}>
-                        <Text style={styles.foodItemText}>{food}</Text>
-                        <Switch
-                          value={isSelected}
-                          onValueChange={() => toggleFood(catKey, food)}
-                          trackColor={{ false: "#D1D1D6", true: "#FAD896" }}
-                          thumbColor={isSelected ? ORANGE : "#f4f3f4"}
-                        />
-                      </View>
+                      <TouchableOpacity
+                        key={`sel-${group.catName}-${displayName}`}
+                        onPress={() => handleRemoveFood(displayName)}
+                        style={[styles.chip, styles.summaryChipSelected, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.chipText, styles.summaryChipTextSelected]}>{displayName}</Text>
+                        <Ionicons name='close-circle' size={14} color='#888888' />
+                      </TouchableOpacity>
                     );
                   })}
                 </View>
-              )}
-            </View>
-          );
-        })}
+              </View>
+            ))}
+          </View>
+        )}
 
-        <View style={{ flex: 1, minHeight: 40 }} />
-        
+        <TouchableOpacity style={styles.addBtn} onPress={openSelector}>
+          <Ionicons name='add-circle-outline' size={22} color={ORANGE} />
+          <Text style={styles.addBtnText}>{selectedArray.length > 0 ? 'แก้ไข' : 'เพิ่มวัตถุดิบที่ไม่ชอบ'}</Text>
+        </TouchableOpacity>
+
+        {selectedArray.length > 0 && (
+          <TouchableOpacity style={styles.editBtn} onPress={handleClearAll}>
+            <Ionicons name='trash-outline' size={20} color='#666' />
+            <Text style={styles.editBtnText}>ล้างทั้งหมด</Text>
+          </TouchableOpacity>
+        )}
+
         <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={saving}>
-          {saving ? <ActivityIndicator color="white" /> : <Text style={styles.saveButtonText}>บันทึกข้อมูล</Text>}
+          {saving ? <ActivityIndicator color='#fff' /> : <Text style={styles.saveButtonText}>บันทึกข้อมูล</Text>}
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Selector Modal (Mode 2) */}
+      <Modal visible={showSelectorModal} animationType='slide' presentationStyle='pageSheet'>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#E8E8E8' }}>
+            <TouchableOpacity onPress={() => { setShowSelectorModal(false); setModalSearchQuery(''); }}>
+              <Ionicons name='close' size={26} color='#222' />
+            </TouchableOpacity>
+            <Text style={{ fontSize: 18, fontFamily: FONT_BOLD, color: '#222' }}>เลือกวัตถุดิบที่ไม่ชอบ</Text>
+            <View style={{ width: 26 }} />
+          </View>
+          <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+            <View style={styles.searchWrap}>
+              <Ionicons name='search' size={18} color='#999' />
+              <TextInput style={styles.searchInput} placeholder='ค้นหา...' placeholderTextColor='#999' value={modalSearchQuery} onChangeText={setModalSearchQuery} />
+              {modalSearchQuery.length > 0 && (<TouchableOpacity onPress={() => setModalSearchQuery('')}><Ionicons name='close-circle' size={18} color='#999' /></TouchableOpacity>)}
+            </View>
+          </View>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4 }}>
+            {hierarchyLoading ? (<ActivityIndicator size='large' color={ORANGE} style={{ marginTop: 40 }} />)
+            : filteredHierarchy.length === 0 ? (
+              <View style={styles.emptyContainer}><Ionicons name='search-outline' size={48} color='#E0E0E0' /><Text style={styles.emptyText}>ไม่พบรายการ</Text></View>
+            ) : (
+              filteredHierarchy.map((cat) => {
+                const isOpen = expandedT1.has(cat.id);
+                const cnt = countSelectedInT1(cat);
+                return (
+                  <View key={cat.id} style={[styles.categoryCard, isOpen && styles.categoryCardExpanded]}>
+                    <TouchableOpacity style={styles.categoryHeader} onPress={() => toggleT1(cat.id)} activeOpacity={0.7}>
+                      <View style={styles.categoryHeaderLeft}>
+                        <Text style={styles.categoryEmoji}>{cat.emoji || '📦'}</Text>
+                        <Text style={styles.categoryName}>{cat.name}</Text>
+                        {cnt > 0 && <View style={styles.categoryBadge}><Text style={styles.categoryBadgeText}>{cnt}</Text></View>}
+                      </View>
+                      <Ionicons name={isOpen ? 'chevron-up' : 'chevron-down'} size={20} color='#999' />
+                    </TouchableOpacity>
+                    {isOpen && (
+                      <View style={styles.subCategoryArea}>
+                        {cat.subCategories.map((sub) => {
+                          const isSubOpen = expandedT2.has(sub.id);
+                          const subCnt = countSelectedInT2(sub);
+                          return (
+                            <View key={sub.id} style={styles.subCategoryCard}>
+                              <TouchableOpacity style={styles.subCategoryHeader} onPress={() => toggleT2(sub.id)} activeOpacity={0.7}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                                  <Text style={styles.subCategoryName}>{sub.name}</Text>
+                                  {subCnt > 0 && <View style={styles.categoryBadge}><Text style={styles.categoryBadgeText}>{subCnt}</Text></View>}
+                                </View>
+                                <Ionicons name={isSubOpen ? 'chevron-up' : 'chevron-down'} size={16} color='#999' />
+                              </TouchableOpacity>
+                              {isSubOpen && (
+                                <View style={styles.chipContainer}>
+                                  {sub.items.map((item) => {
+                                    const sel = modalSelected.has(item.name);
+                                    return (
+                                      <TouchableOpacity key={item.id} style={[styles.chip, sel ? styles.chipSelected : styles.chipUnselected]} onPress={() => toggleFood(item.name)} activeOpacity={0.7}>
+                                        <Text style={[styles.chipText, sel ? styles.chipTextSelected : styles.chipTextUnselected]}>{item.name}</Text>
+                                      </TouchableOpacity>
+                                    );
+                                  })}
+                                </View>
+                              )}
+                            </View>
+                          );
+                        })}
+                      </View>
+                    )}
+                  </View>
+                );
+              })
+            )}
+          </ScrollView>
+          {/* Selected summary + Bottom Buttons */}
+          <View style={styles.selectedStrip}>
+            <Text style={styles.selectedStripTitle}>รายการที่คุณเลือก ({modalSelected.size})</Text>
+            {modalSelected.size === 0 ? (<Text style={styles.noneText}>ยังไม่มีรายการ</Text>) : (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 60 }} contentContainerStyle={{ gap: 6 }}>
+                {Array.from(modalSelected).map((item) => (
+                  <TouchableOpacity key={`modal-sel-${item}`} onPress={() => toggleFood(item)} style={[styles.chip, styles.summaryChipSelected, { flexDirection: 'row', alignItems: 'center', gap: 4 }]} activeOpacity={0.7}>
+                    <Text style={[styles.chipText, styles.summaryChipTextSelected]}>{item}</Text>
+                    <Ionicons name='close-circle' size={14} color='#888888' />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+          <View style={styles.bottomBar}>
+            <TouchableOpacity onPress={() => { if (modalSelected.size > 0) { Alert.alert('ล้างทั้งหมด', 'ต้องการยกเลิกการเลือกทั้งหมดหรือไม่?', [{ text: 'ยกเลิก', style: 'cancel' }, { text: 'ล้าง', style: 'destructive', onPress: () => setModalSelected(new Set()) }]); } }} style={styles.cancelBtn}>
+              <Text style={styles.cancelBtnText}>ยกเลิกทั้งหมด</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={confirmSelector} style={styles.confirmBtn}>
+              <Text style={styles.confirmBtnText}>ตกลง</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }

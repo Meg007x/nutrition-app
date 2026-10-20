@@ -10,6 +10,8 @@ import {
   TouchableWithoutFeedback,
   Platform,
   Alert,
+  Modal,
+  Pressable,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -86,6 +88,9 @@ export default function RegisterStep5_1Screen() {
     form.recommendedProteinG ? String(form.recommendedProteinG) : String(autoRecommendedProtein)
   );
 
+  // Info modal toggle
+  const [showProteinInfo, setShowProteinInfo] = useState(false);
+
   // อัปเดตค่า Custom เมื่อสลับโหมด หรือเปลี่ยน Level (เพื่อให้ผู้ใช้เห็นค่าที่แนะนำทันที)
   useEffect(() => {
     if (proteinMode === "auto") {
@@ -149,6 +154,14 @@ export default function RegisterStep5_1Screen() {
           ระดับโปรตีนคือปริมาณโปรตีนที่ร่างกายควรได้รับต่อวันตามน้ำหนักและกิจกรรมของคุณ โปรตีนเป็นสารอาหารสำคัญที่ช่วยซ่อมแซมกล้ามเนื้อ เสริมสร้างภูมิคุ้มกัน และรักษาสมดุลของร่างกาย การได้รับโปรตีนในปริมาณที่เหมาะสมจะช่วยให้ร่างกายแข็งแรงและทำงานได้อย่างมีประสิทธิภาพ
         </Text>
 
+        {/* Why Protein Matters — helper button (mirrors step5) */}
+        <View style={styles.helpButtonWrap}>
+          <TouchableOpacity style={styles.helperButton} onPress={() => setShowProteinInfo(true)}>
+            <Ionicons name="information-circle-outline" size={18} color="#666" />
+            <Text style={styles.helperButtonText}>ทำไมโปรตีนถึงสำคัญ?</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* แสดงค่าโปรตีนที่ได้รับจริง */}
         <View style={styles.proteinValueCard}>
           <Text style={styles.proteinValueLabel}>ระดับโปรตีนที่ได้รับจริง</Text>
@@ -211,7 +224,6 @@ export default function RegisterStep5_1Screen() {
                   </View>
                   <Text style={[styles.optionDesc, active && styles.optionDescActive]}>{item.desc}</Text>
                   <Text style={[styles.optionHint, active && styles.optionHintActive]}>{item.hint}</Text>
-                  <Text style={[styles.optionDetail, active && styles.optionDetailActive]}>{item.detail}</Text>
                 </TouchableOpacity>
               );
             })}
@@ -271,6 +283,43 @@ export default function RegisterStep5_1Screen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Modal คำอธิบายระดับโปรตีนแต่ละประเภท */}
+      <Modal visible={showProteinInfo} transparent animationType="fade">
+        <Pressable style={styles.modalOverlay} onPress={() => setShowProteinInfo(false)}>
+          <Pressable style={styles.modalCard} onPress={() => {}}>
+            <Text style={styles.modalTitle}>ความสำคัญของแต่ละระดับโปรตีน</Text>
+
+            <View style={styles.modalItem}>
+              <Text style={styles.modalItemTitle}>1. ระดับพื้นฐาน (1.2 กรัม / น้ำหนักตัว 1 กก.)</Text>
+              <Text style={styles.modalItemDesc}>
+                • <Text style={{ fontWeight: "bold" }}>เหมาะสำหรับ:</Text> ผู้เริ่มต้นดูแลสุขภาพ พนักงานออฟฟิศ หรือผู้ที่ออกกำลังกายเบาๆ (1-2 วัน/สัปดาห์){"\n"}
+                • <Text style={{ fontWeight: "bold" }}>ผลต่อร่างกาย:</Text> เพียงพอต่อการรักษามวลกล้ามเนื้อเดิมไม่ให้สูญหาย รักษาสมดุลฮอร์โมน และซ่อมแซมเนื้อเยื่อในชีวิตประจำวันทั่วไป
+              </Text>
+            </View>
+
+            <View style={styles.modalItem}>
+              <Text style={styles.modalItemTitle}>2. ระดับสมดุล (1.6 กรัม / น้ำหนักตัว 1 กก.)</Text>
+              <Text style={styles.modalItemDesc}>
+                • <Text style={{ fontWeight: "bold" }}>เหมาะสำหรับ:</Text> ผู้ที่ออกกำลังกายปานกลาง (3-4 วัน/สัปดาห์) หรือผู้ที่ต้องการคุมน้ำหนักอย่างมีประสิทธิภาพ{"\n"}
+                • <Text style={{ fontWeight: "bold" }}>ผลต่อร่างกาย:</Text> ช่วยให้อิ่มนาน ลดความอยากอาหารจุกจิก กระตุ้นอัตราการเผาผลาญ และช่วยฟื้นฟูกล้ามเนื้อหลังออกกำลังกายได้อย่างเหมาะสม
+              </Text>
+            </View>
+
+            <View style={styles.modalItem}>
+              <Text style={styles.modalItemTitle}>3. ระดับสูง (2.0 - 2.4 กรัม / น้ำหนักตัว 1 กก.)</Text>
+              <Text style={styles.modalItemDesc}>
+                • <Text style={{ fontWeight: "bold" }}>เหมาะสำหรับ:</Text> ผู้ที่เล่นเวทเทรนนิ่ง ออกกำลังกายหนัก (5-6 วัน/สัปดาห์) หรือผู้ที่ตั้งเป้าหมายสร้างกล้ามเนื้อ{"\n"}
+                • <Text style={{ fontWeight: "bold" }}>ผลต่อร่างกาย:</Text> เร่งการซ่อมแซมเส้นใยกล้ามเนื้อที่ฉีกขาดจากการออกกำลังกาย ช่วยสร้างมวลกล้ามเนื้อใหม่ และป้องกันการสลายตัวของกล้ามเนื้อขณะลดไขมัน
+              </Text>
+            </View>
+
+            <TouchableOpacity style={styles.modalCloseButton} onPress={() => setShowProteinInfo(false)}>
+              <Text style={styles.modalCloseText}>เข้าใจแล้ว</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 
@@ -286,4 +335,3 @@ export default function RegisterStep5_1Screen() {
     </TouchableWithoutFeedback>
   );
 }
-

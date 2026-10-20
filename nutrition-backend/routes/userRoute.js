@@ -9,7 +9,6 @@ const {
     changePassword,
     updateUserGoal,
     updateUserActivity,
-    updateUserAllergies,
     updateUserDislikedFoods,
     updateUserInterestedCuisines,
     updateMealWaterSettings,
@@ -17,7 +16,9 @@ const {
     getUserAllergies,
     saveUserAllergies,
     deleteUserAllergy,
-    updateProfilePicture
+    updateProfilePicture,
+    saveUserDislikes,
+    getUserDislikes,
 } = require("../controllers/userController");
 
 // 2. เรียกใช้งานชื่อฟังก์ชันที่ดึงมาตรง ๆ ได้เลย (ห้ามใส่ userController. นำหน้า)
@@ -28,12 +29,15 @@ router.put('/update-profile', updateUserProfile);
 router.put('/change-password', changePassword);
 router.put('/update-goal', updateUserGoal);
 router.put('/update-activity', updateUserActivity);
-router.put('/update-allergies', updateUserAllergies);
 router.put('/update-disliked-foods', updateUserDislikedFoods);
 router.put('/update-interested-cuisines', updateUserInterestedCuisines);
 router.put('/update-meal-water-settings', updateMealWaterSettings);
 router.put('/upload-avatar', uploadAvatar);
 router.put('/profile-picture', updateProfilePicture);
+
+// Dislikes CRUD
+router.get('/dislikes', getUserDislikes);
+router.put('/dislikes', saveUserDislikes);
 
 // Allergy CRUD
 router.get('/allergies', getUserAllergies);

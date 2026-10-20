@@ -53,6 +53,7 @@ export default function TabsLayout() {
           paddingVertical: 2,
         },
         tabBarLabelStyle: {
+          fontFamily: "NotoSansThaiBold", // 👈 บังคับ sans-serif
           fontSize: 12,
           fontWeight: "800",
           marginTop: 2,

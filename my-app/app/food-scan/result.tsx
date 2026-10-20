@@ -107,6 +107,9 @@ type CurrentUser = {
   health_goals?: {
     protein_target_g?: number;
     tdee_target_kcal?: number;
+    target_calories?: number;
+    target_carb_g?: number;
+    target_fat_g?: number;
   };
   meal_settings?: {
     meals_per_day?: number;
@@ -326,14 +329,17 @@ function fallbackSubCategoryLabel(subCategory?: string) {
 }
 
 function buildDynamicDailyTarget(user: CurrentUser | null) {
-  const calories = Number(user?.health_goals?.tdee_target_kcal);
+  // Use stored targets (Single Source of Truth) — carbs/fat too!
+  const calories = Number(user?.health_goals?.target_calories) || Number(user?.health_goals?.tdee_target_kcal);
   const protein = Number(user?.health_goals?.protein_target_g);
+  const carb = Number(user?.health_goals?.target_carb_g);
+  const fat = Number(user?.health_goals?.target_fat_g);
 
   return {
     calories: calories > 0 ? Math.round(calories) : DEFAULT_DAILY_TARGET.calories,
     protein: protein > 0 ? Math.round(protein) : DEFAULT_DAILY_TARGET.protein,
-    carb: DEFAULT_DAILY_TARGET.carb,
-    fat: DEFAULT_DAILY_TARGET.fat,
+    carb: carb > 0 ? Math.round(carb) : DEFAULT_DAILY_TARGET.carb,
+    fat: fat > 0 ? Math.round(fat) : DEFAULT_DAILY_TARGET.fat,
     fiber: DEFAULT_DAILY_TARGET.fiber,
     sodium: DEFAULT_DAILY_TARGET.sodium,
   };

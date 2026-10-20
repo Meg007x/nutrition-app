@@ -45,10 +45,24 @@ const styles = StyleSheet.create({
   backIconBtn: { flexDirection: "row", alignItems: "center", marginRight: 12 },
   backIconText: { fontSize: 16, color: "#333", marginLeft: 4, fontFamily: FONT_BOLD },
   subScreenTitle: { fontSize: 20, color: "#222", fontFamily: FONT_BOLD },
-  subListWrapOuter: { backgroundColor: "#FFF", borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: "#E5E5E5" },
+  subListWrapOuter: { backgroundColor: "#FFF8ED", borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: "#F0E0C8", padding: 10 },
   subItemRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 14, paddingHorizontal: 16, backgroundColor: "#FFF" },
   subItemRowBorder: { borderBottomWidth: 1, borderBottomColor: "#F0F0F0" },
   subItemText: { fontSize: 16, color: "#333", marginLeft: 4, fontFamily: FONT_BOLD },
+
+  // ─── Sub-Category Card (Tier 2 container) ───
+  subCategoryCard: { backgroundColor: "#FFFFFF", borderRadius: 10, borderWidth: 1, borderColor: "#F0E0C8", marginBottom: 8, overflow: "hidden" },
+  subCategoryHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 10, paddingHorizontal: 12 },
+  subCategoryTitle: { fontSize: 14, fontFamily: FONT_BOLD, color: "#C67A1A" },
+
+  // ─── Tier 3 Ingredient Chips ───
+  chipContainer: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 10, paddingBottom: 10 },
+  chip: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1.5 },
+  chipSelected: { backgroundColor: ROW_COLOR_2, borderColor: ROW_COLOR_2 },
+  chipUnselected: { backgroundColor: "#FFFFFF", borderColor: "#E0E0E0" },
+  chipText: { fontSize: 14, fontFamily: FONT_REGULAR },
+  chipTextSelected: { color: "#FFFFFF", fontFamily: FONT_BOLD },
+  chipTextUnselected: { color: "#666666" },
   emptyText: { padding: 20, textAlign: "center", fontSize: 16, color: "#666", backgroundColor: "#FFF", fontFamily: FONT_REGULAR },
   doneBtn: { backgroundColor: "#222", borderRadius: 12, paddingVertical: 14, alignItems: "center", marginTop: 24 },
   doneBtnText: { color: "#FFF", fontSize: 16, fontFamily: FONT_BOLD },

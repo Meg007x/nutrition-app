@@ -8,7 +8,7 @@ export const styles = StyleSheet.create({
   },
   headerBar: {
     height: 40,
-    backgroundColor: '#F26522',
+    backgroundColor: '#DF9226',
   },
   scrollContainer: {
     padding: 16,
@@ -35,7 +35,7 @@ export const styles = StyleSheet.create({
     height: 60,
     borderRadius: 30,
     borderWidth: 2,
-    borderColor: '#F26522',
+    borderColor: '#DF9226',
     overflow: 'hidden',
   },
   avatar: {

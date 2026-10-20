@@ -192,12 +192,18 @@ export async function getFood(foodId: string) {
 
 export async function searchFoods(
   q: string,
-  limit = 20
+  limit = 20,
+  userId?: string
 ) {
+  const params = new URLSearchParams({
+    q: q,
+    limit: String(limit),
+  });
+  if (userId) params.set("user_id", userId);
+
   const url =
     `${API_BASE_URL}/meal/search-foods` +
-    `?q=${encodeURIComponent(q)}` +
-    `&limit=${limit}`;
+    `?${params.toString()}`;
 
   const r = await fetch(url);
 

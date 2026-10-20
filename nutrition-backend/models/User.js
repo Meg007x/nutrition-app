@@ -40,6 +40,10 @@ const UserSchema = new mongoose.Schema(
       activity_level: { type: String, default: "" },
       protein_target_g: { type: Number, default: 0 },
       tdee_target_kcal: { type: Number, default: 0 },
+      // v2: Stored daily targets (Single Source of Truth)
+      target_calories: { type: Number, default: 0 },
+      target_carb_g: { type: Number, default: 0 },
+      target_fat_g: { type: Number, default: 0 },
     },
 
     // ── v2: allergies เปลี่ยนเป็น structured array ──
@@ -68,10 +72,23 @@ const UserSchema = new mongoose.Schema(
       veg_fruit: { type: [String], default: [] },
     },
 
+    // v2: structured disliked ingredients (flat array for easy filtering)
+    disliked_ingredients_v2: {
+      type: [{
+        ingredient_id: { type: String, default: null },
+        name: { type: String, default: "" },
+        category_key: { type: String, default: "" },
+        category_name: { type: String, default: "" },
+        sub_category: { type: String, default: "" },
+      }],
+      default: [],
+    },
+
     interested_cuisines: { type: [String], default: [] },
 
     meal_settings: {
       meals_per_day: { type: Number, default: 3 },
+      hide_allergen_meals: { type: Boolean, default: false },
       schedules: [
         {
           name: { type: String, default: "" },

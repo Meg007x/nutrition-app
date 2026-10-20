@@ -170,6 +170,57 @@ async function migrateUsers() {
 }
 
 /* ======================================================
+   M3b: Users — Populate stored targets (Single Source of Truth)
+   คำนวณ target_calories, target_carb_g, target_fat_g สำหรับ users ที่ยังไม่มี
+====================================================== */
+
+async function migrateUserTargets() {
+  console.log("\n🔍 [M3b] Migrating User Targets...");
+  var db = mongoose.connection.db;
+  var cols = await db.listCollections({ name: "Users" }).toArray();
+  if (cols.length === 0) { console.log("   ⏭️  Users not found"); return { total: 0, updated: 0 }; }
+  var col = db.collection("Users");
+  var count = await col.countDocuments();
+  console.log("   📦 " + count + " users");
+  if (count === 0) return { total: 0, updated: 0 };
+
+  // Find users who have tdee but no target_calories
+  var docs = await col.find({
+    "health_goals.tdee_target_kcal": { $gt: 0 },
+    "health_goals.target_calories": { $exists: false }
+  }).toArray();
+  console.log("   " + docs.length + " need targets migration");
+  if (docs.length === 0) return { total: count, updated: 0 };
+
+  var ops = docs.map(function(doc) {
+    var hg = doc.health_goals || {};
+    var tdee = Number(hg.tdee_target_kcal) || 0;
+    var protein = Number(hg.protein_target_g) || 0;
+    var goal = String(hg.primary_goal || '').trim();
+
+    // Apply goal-based calorie adjustment
+    var targetCalories = tdee;
+    if (goal === 'ลดน้ำหนัก' || goal === 'lose_weight' || goal === 'ลดน้ำหนัก/ลดไขมัน') {
+      targetCalories = Math.max(1000, Math.round(tdee - 300));
+    } else if (goal === 'เพิ่มกล้ามเนื้อ' || goal === 'build_muscle' || goal === 'gain_weight') {
+      targetCalories = Math.round(tdee + 200);
+    }
+    var targetCarbG = targetCalories > 0 ? Math.round((targetCalories * 0.5) / 4) : 0;
+    var targetFatG  = targetCalories > 0 ? Math.round((targetCalories * 0.25) / 9) : 0;
+
+    return { updateOne: { filter: { _id: doc._id }, update: { $set: {
+      "health_goals.target_calories": targetCalories,
+      "health_goals.target_carb_g": targetCarbG,
+      "health_goals.target_fat_g": targetFatG,
+      updated_at: new Date()
+    } } } };
+  });
+
+  if (ops.length > 0) { var r = await col.bulkWrite(ops, { ordered: false }); console.log("   ✅ matched=" + r.matchedCount + " modified=" + r.modifiedCount); return { total: count, updated: r.modifiedCount }; }
+  return { total: count, updated: 0 };
+}
+
+/* ======================================================
    M4: DailyPlans Migration
 ====================================================== */
 
@@ -263,6 +314,7 @@ async function run() {
     results.ingredients = await migrateIngredients();
     results.masterFoods = await migrateMasterFoods();
     results.users = await migrateUsers();
+    results.userTargets = await migrateUserTargets();
     results.dailyPlans = await migrateDailyPlans();
   } catch (err) {
     console.error("Migration error: " + err.message);

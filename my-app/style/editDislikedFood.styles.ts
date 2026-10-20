@@ -1,103 +1,73 @@
-import { StyleSheet, Platform } from 'react-native';
-import { Brand } from '../constants/theme';
+import { StyleSheet } from 'react-native';
 
-export const ORANGE = Brand.primary;
-export const BG = "#F3F3F3";
+export const ORANGE = '#DF9226';
+export const ORANGE_LIGHT = '#EBA032';
+export const BG = '#F5F5F5';
+export const DARK = '#C67A1A';
+export const FONT_REGULAR = 'NotoSansThai';
+export const FONT_BOLD = 'NotoSansThaiBold';
 
 export const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: BG,
-    position: 'relative',
-  },
-  headerBar: {
-    backgroundColor: ORANGE,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-  },
+  container: { flex: 1, backgroundColor: BG, position: 'relative' },
+  headerBar: { backgroundColor: ORANGE, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, paddingHorizontal: 16 },
   backIcon: { padding: 4 },
-  headerTitle: {
-    color: '#fff',
-    fontSize: 20,
-    fontFamily: 'NotoSansThaiBold',
-  },
-  content: {
-    padding: 16,
-    paddingBottom: 40,
-    flexGrow: 1,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    color: '#111',
-    fontFamily: 'NotoSansThaiBold',
-    marginBottom: 16,
-  },
-  // สไตล์สำหรับ Accordion หมวดหมู่อาหาร
-  categoryCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 14,
-    marginBottom: 12,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#E5E5E5',
-  },
-  categoryHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    backgroundColor: '#FFF',
-  },
-  categoryTitle: {
-    fontSize: 16,
-    color: '#333',
-    fontFamily: 'NotoSansThaiBold',
-  },
-  badge: {
-    backgroundColor: '#FFF4DD',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-    marginRight: 10,
-  },
-  badgeText: {
-    color: ORANGE,
-    fontSize: 12,
-    fontFamily: 'NotoSansThaiBold',
-  },
-  // รายการย่อยด้านในหมวดหมู่
-  foodListContainer: {
-    backgroundColor: '#FAFAFA',
-    borderTopWidth: 1,
-    borderColor: '#E5E5E5',
-    paddingVertical: 8,
-  },
-  foodItemRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-  },
-  foodItemText: {
-    fontSize: 15,
-    color: '#444',
-    fontFamily: 'NotoSansThai',
-  },
-  // ปุ่ม
-  saveButton: {
-    backgroundColor: ORANGE,
-    paddingVertical: 16,
-    borderRadius: 14,
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  saveButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontFamily: 'NotoSansThaiBold',
-  }
+  headerTitle: { color: '#FFFFFF', fontSize: 20, fontFamily: FONT_BOLD },
+  headerRight: { width: 32 },
+  content: { padding: 16, flexGrow: 1 },
+  sectionTitle: { fontSize: 17, color: '#222222', fontFamily: FONT_BOLD, marginBottom: 12 },
+  sectionSubtitle: { fontSize: 13, color: '#999999', fontFamily: FONT_REGULAR, marginBottom: 16, marginTop: -6 },
+  categoryCard: { backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: '#E8E8E8', marginBottom: 10, overflow: 'hidden' },
+  categoryCardExpanded: { borderColor: ORANGE },
+  categoryHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, paddingHorizontal: 16 },
+  categoryHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  categoryEmoji: { fontSize: 22 },
+  categoryName: { fontSize: 15, fontFamily: FONT_BOLD, color: '#222222' },
+  categoryBadge: { backgroundColor: '#FFF8ED', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2, marginLeft: 6, borderWidth: 1, borderColor: '#F0E0C8' },
+  categoryBadgeText: { fontSize: 11, fontFamily: FONT_BOLD, color: ORANGE },
+  subCategoryArea: { backgroundColor: '#FFF8ED', paddingTop: 6, paddingBottom: 10, paddingHorizontal: 12 },
+  subCategoryCard: { backgroundColor: '#FFFFFF', borderRadius: 10, borderWidth: 1, borderColor: '#F0E0C8', marginBottom: 8, overflow: 'hidden' },
+  subCategoryHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, paddingHorizontal: 12 },
+  subCategoryName: { fontSize: 14, fontFamily: FONT_BOLD, color: DARK },
+  chipContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 10, paddingBottom: 10 },
+  chip: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1.5, backgroundColor: '#FFFFFF', borderColor: '#DCDCDC' },
+  chipSelected: { backgroundColor: ORANGE, borderColor: ORANGE },
+  chipUnselected: { backgroundColor: '#FFFFFF', borderColor: '#DCDCDC' },
+  chipText: { fontSize: 14, fontFamily: FONT_REGULAR, color: '#000000' },
+  chipTextSelected: { color: '#FFFFFF', fontFamily: FONT_BOLD },
+  chipTextUnselected: { color: '#000000' },
+  summaryCategoryCard: { backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: '#E8E8E8', marginBottom: 12, overflow: 'hidden' },
+  summaryCategoryHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 14, backgroundColor: '#FFF8ED', borderBottomWidth: 1, borderBottomColor: '#F0E0C8' },
+  summaryCategoryEmoji: { fontSize: 20 },
+  summaryCategoryName: { fontSize: 14, fontFamily: FONT_BOLD, color: '#333333', flex: 1 },
+  summaryCountBadge: { backgroundColor: 'rgba(0,0,0,0.05)', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
+  summaryCountBadgeText: { fontSize: 11, fontFamily: FONT_BOLD, color: ORANGE },
+  summaryChipSelected: { backgroundColor: '#FFFFFF', borderRadius: 20, borderWidth: 1.5, borderColor: '#DCDCDC' },
+  summaryChipTextSelected: { color: '#000000', fontFamily: FONT_REGULAR },
+  selectedStrip: { backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#E8E8E8', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
+  selectedStripTitle: { fontSize: 13, color: '#333333', fontFamily: FONT_BOLD, marginBottom: 8 },
+  noneText: { fontSize: 13, color: '#999999', fontFamily: FONT_REGULAR, paddingVertical: 4 },
+  addBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 12, borderWidth: 1.5, borderColor: ORANGE, backgroundColor: '#FFFFFF', marginTop: 12 },
+  addBtnText: { fontSize: 15, color: ORANGE, fontFamily: FONT_BOLD },
+  editBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 12, backgroundColor: '#F5F5F5', borderWidth: 1, borderColor: '#E0E0E0', marginTop: 8 },
+  editBtnText: { fontSize: 15, color: '#333333', fontFamily: FONT_BOLD },
+  saveButton: { backgroundColor: ORANGE, paddingVertical: 16, borderRadius: 14, alignItems: 'center', marginTop: 20, marginBottom: 12 },
+  saveButtonText: { color: '#FFFFFF', fontSize: 18, fontFamily: FONT_BOLD },
+  bottomBar: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#E8E8E8' },
+  cancelBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, borderWidth: 1.5, borderColor: '#E0E0E0', backgroundColor: '#F0F0F0', alignItems: 'center' },
+  cancelBtnText: { fontSize: 15, color: '#666666', fontFamily: FONT_BOLD },
+  confirmBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: ORANGE, alignItems: 'center' },
+  confirmBtnText: { fontSize: 15, color: '#FFFFFF', fontFamily: FONT_BOLD },
+  toast: { position: 'absolute', top: 70, alignSelf: 'center', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, zIndex: 999 },
+  toastSuccess: { backgroundColor: '#22A06B' },
+  toastError: { backgroundColor: '#E53935' },
+  toastText: { color: '#FFFFFF', fontSize: 14, fontFamily: FONT_BOLD },
+  emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
+  emptyText: { fontSize: 15, color: '#999999', fontFamily: FONT_REGULAR, marginTop: 12, textAlign: 'center' },
+  searchWrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 12, borderWidth: 1, borderColor: '#E8E8E8', paddingHorizontal: 12, marginBottom: 12 },
+  searchInput: { flex: 1, paddingVertical: 10, fontSize: 14, color: '#222222', fontFamily: FONT_REGULAR },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  summaryChipsArea: { padding: 12, flexDirection: 'row', flexWrap: 'wrap', gap: 8, backgroundColor: '#FFFFFF' },
+  summaryChip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FFFFFF', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: '#DCDCDC' },
+  summaryChipText: { fontSize: 13, color: '#000000', fontFamily: FONT_REGULAR },
+  summaryChipRemove: { marginLeft: 4, color: '#888888', fontSize: 14 },
 });

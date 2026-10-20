@@ -52,7 +52,7 @@ import {
   type SearchResult,
 } from "../../services/mealPlanService";
 
-const ORANGE = "#F26522";
+const ORANGE = "#DF9226";
 
 /* =========================================================
    DATE HELPERS
@@ -3835,7 +3835,7 @@ const st =
       fontWeight:
         "bold",
       color: "#fff",
-      fontFamily: "System",
+      fontFamily: "NotoSansThaiBold",
     },
 
     center: {

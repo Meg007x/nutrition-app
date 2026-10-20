@@ -180,7 +180,25 @@ const registerUser = async (req, res) => {
         duration_weeks: d.duration_weeks ? Number(d.duration_weeks) : null,
         activity_level: normalizedActivity,
         protein_target_g: d.protein_target_g ? Number(d.protein_target_g) : 140,
-        tdee_target_kcal: tdeeResult
+        tdee_target_kcal: tdeeResult,
+        // v2: Stored daily targets (Single Source of Truth)
+        target_calories: (function() {
+          if (normalizedGoal === 'ลดน้ำหนัก') return Math.max(1000, Math.round(tdeeResult - 300));
+          if (normalizedGoal === 'เพิ่มกล้ามเนื้อ') return Math.round(tdeeResult + 200);
+          return Math.round(tdeeResult);
+        })(),
+        target_carb_g: (function() {
+          var tc = (normalizedGoal === 'ลดน้ำหนัก') ? Math.max(1000, Math.round(tdeeResult - 300))
+                 : (normalizedGoal === 'เพิ่มกล้ามเนื้อ') ? Math.round(tdeeResult + 200)
+                 : Math.round(tdeeResult);
+          return tc > 0 ? Math.round((tc * 0.5) / 4) : 0;
+        })(),
+        target_fat_g: (function() {
+          var tc = (normalizedGoal === 'ลดน้ำหนัก') ? Math.max(1000, Math.round(tdeeResult - 300))
+                 : (normalizedGoal === 'เพิ่มกล้ามเนื้อ') ? Math.round(tdeeResult + 200)
+                 : Math.round(tdeeResult);
+          return tc > 0 ? Math.round((tc * 0.25) / 9) : 0;
+        })(),
       },
 
 // [หน้า 6] การแพ้อาหาร (แก้ให้เป็น Object)

@@ -2,8 +2,8 @@ import React, {
   useEffect,
   useMemo,
   useState,
+  useRef,
 } from "react";
-
 import {
   View,
   Text,
@@ -13,70 +13,33 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Modal,
+  TextInput,
+  FlatList,
+  Image,
+  Platform,
 } from "react-native";
-
 import { Ionicons } from "@expo/vector-icons";
-
-import {
-  router,
-  useLocalSearchParams,
-} from "expo-router";
-
+import { router, useLocalSearchParams } from "expo-router";
 import axios from "axios";
-
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { BASE_URL } from "../../constants/config";
+
+const ORANGE = "#DF9226";
 
 // ======================================================
 // Types
 // ======================================================
-
 type Food = {
-  food_id: string;
+  _id?: string;
+  food_id?: string;
   name: string;
+  name_en?: string;
+  image?: string;
   image_url?: string;
   category?: string;
   kcal?: number;
-};
-
-type Slot = {
-  slot_name: string;
-  meal_type: string;
-  status?: string;
-  target_kcal?: number;
-
-  target_nutrition?: {
-    protein_g?: number;
-    carb_g?: number;
-    fat_g?: number;
-    fiber_g?: number;
-    sodium_mg?: number;
-  };
-
-  main_food?: Food | null;
-
-  addons?: Food[];
-
-  original_main_food_id?: string | null;
-  current_main_food_id?: string | null;
-
-  is_swapped?: boolean;
-
-  swap_history?: any[];
-};
-
-type DailyPlan = {
-  plan_id: string;
-  plan_status: string;
-  user_id: string;
-  date: string;
-  plan_type: string;
-  generated_by: string;
-  goal: string;
-  meals_per_day: number;
-
-  slots: Slot[];
-
-  daily_target_summary?: {
+  nutrition_per_portion?: {
     kcal?: number;
     protein_g?: number;
     carb_g?: number;
@@ -84,2165 +47,641 @@ type DailyPlan = {
     fiber_g?: number;
     sodium_mg?: number;
   };
+  portion?: {
+    gram?: number;
+    unit?: string;
+  };
+  ingredients?: any[];
+};
+
+type Slot = {
+  slot_name: string;
+  meal_type: string;
+  status?: string;
+  target_kcal?: number;
+  target_nutrition?: {
+    protein_g?: number;
+    carb_g?: number;
+    fat_g?: number;
+  };
+  main_food?: Food | null;
+  is_swapped?: boolean;
+};
+
+type DailyPlan = {
+  plan_id: string;
+  date: string;
+  meals_per_day: number;
+  slots: Slot[];
+  daily_target_summary?: {
+    kcal?: number;
+    protein_g?: number;
+    carb_g?: number;
+    fat_g?: number;
+  };
 };
 
 // ======================================================
-// Helpers
+// Date & Format Helpers (Mirroring plan.tsx)
 // ======================================================
-
-function parseDate(dateString: string) {
-  const [year, month, day] = dateString
-    .split("-")
-    .map(Number);
-
-  return new Date(
-    year,
-    month - 1,
-    day
-  );
+function parseDate(ds: string) {
+  const [y, m, d] = ds.split("-").map(Number);
+  return new Date(y, m - 1, d);
 }
 
-function formatShortDate(dateString: string) {
-  const date = parseDate(dateString);
-
-  return `${String(
-    date.getDate()
-  ).padStart(2, "0")}/${String(
-    date.getMonth() + 1
-  ).padStart(2, "0")}`;
+function fmtShort(ds: string) {
+  const d = parseDate(ds);
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-function getThaiDay(dateString: string) {
-  const date = parseDate(dateString);
-
-  const days = [
-    "อา.",
-    "จ.",
-    "อ.",
-    "พ.",
-    "พฤ.",
-    "ศ.",
-    "ส.",
-  ];
-
-  return days[date.getDay()];
+function thaiDay(ds: string) {
+  return ["อา.", "จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส."][parseDate(ds).getDay()];
 }
 
-function createDateList(
-  startDate: string,
-  days: number
-) {
-  if (!startDate || days <= 0) {
-    return [];
-  }
+function thaiDate(ds: string) {
+  const d = parseDate(ds);
+  const mo = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+  return `${d.getDate()} ${mo[d.getMonth()]} ${d.getFullYear() + 543}`;
+}
 
+function createDateList(startDate: string, days: number) {
+  if (!startDate || days <= 0) return [];
   const start = parseDate(startDate);
+  return Array.from({ length: days }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  });
+}
 
-  return Array.from(
-    {
-      length: days,
-    },
-    (_, index) => {
-      const date = new Date(start);
+function mealIcon(mt: string) {
+  const t = String(mt || "").toLowerCase();
+  if (t.includes("breakfast") || t.includes("เช้า")) return "sunny-outline";
+  if (t.includes("lunch") || t.includes("กลางวัน")) return "partly-sunny-outline";
+  if (t.includes("dinner") || t.includes("เย็น")) return "moon-outline";
+  return "restaurant-outline";
+}
 
-      date.setDate(
-        start.getDate() + index
-      );
+// ======================================================
+// Food Display Helpers
+// ======================================================
+function getFoodImage(food: any): string | null {
+  if (!food) return null;
+  const image = food.image || food.image_url || null;
+  if (!image || typeof image !== "string") return null;
+  const value = image.trim();
+  if (!value) return null;
+  if (value.startsWith("http://") || value.startsWith("https://")) return value;
+  let filename = value.replace(/\\/g, "/").replace(/^\/+/, "").replace(/^uploads\/master\//i, "").replace(/^master\//i, "");
+  filename = filename.split("/").pop() || filename;
+  return `${BASE_URL}/uploads/master/${encodeURIComponent(filename)}`;
+}
 
-      const year =
-        date.getFullYear();
+function getFoodName(food: any): string {
+  return food?.name || food?.food_name || food?.menu_name || "ไม่มีชื่อเมนู";
+}
 
-      const month = String(
-        date.getMonth() + 1
-      ).padStart(2, "0");
+function getNutrition(food: any) {
+  const n = food?.nutrition_per_portion || food?.nutrition || food?.nutrients || {};
+  return {
+    kcal: Number(n?.kcal ?? food?.kcal ?? 0) || 0,
+    protein: Number(n?.protein_g ?? food?.protein_g ?? 0) || 0,
+    carbs: Number(n?.carb_g ?? food?.carb_g ?? 0) || 0,
+    fat: Number(n?.fat_g ?? food?.fat_g ?? 0) || 0,
+    fiber: Number(n?.fiber_g ?? food?.fiber_g ?? 0) || 0,
+    sodium: Number(n?.sodium_mg ?? food?.sodium_mg ?? 0) || 0,
+  };
+}
 
-      const day = String(
-        date.getDate()
-      ).padStart(2, "0");
-
-      return `${year}-${month}-${day}`;
-    }
+function FoodImage({ food, size = 72 }: { food: any; size?: number }) {
+  const image = getFoodImage(food);
+  if (image) {
+    return (
+      <Image
+        source={{ uri: image }}
+        style={{ width: size, height: size, borderRadius: 12, backgroundColor: "#f0f0f0" }}
+        resizeMode="cover"
+      />
+    );
+  }
+  return (
+    <View style={{ width: size, height: size, borderRadius: 12, backgroundColor: "#f0f0f0", justifyContent: "center", alignItems: "center" }}>
+      <Ionicons name="fast-food-outline" size={size * 0.42} color="#ccc" />
+    </View>
   );
 }
 
 // ======================================================
-// Component
+// Main Component
 // ======================================================
-
 export default function Step2Screen() {
-  const params =
-    useLocalSearchParams<{
-      startDate?: string;
-      endDate?: string;
-      days?: string;
-      plan_id?: string;
-    }>();
+  const params = useLocalSearchParams<{ startDate?: string; endDate?: string; days?: string; plan_id?: string; }>();
+  const startDate = params.startDate || "";
+  const planId = params.plan_id || "";
+  const planDays = Number(params.days) || 0;
 
-  const startDate =
-    params.startDate || "";
+  const dateTabs = useMemo(() => createDateList(startDate, planDays), [startDate, planDays]);
+  const [selectedDay, setSelectedDay] = useState(0);
 
-  const endDate =
-    params.endDate || "";
+  const [plans, setPlans] = useState<DailyPlan[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [userId, setUserId] = useState<string>("");
+  // User profile targets (Single Source of Truth)
+  const [userTargets, setUserTargets] = useState<{ kcal: number; protein_g: number; carb_g: number; fat_g: number }>({ kcal: 0, protein_g: 0, carb_g: 0, fat_g: 0 });
 
-  const planId =
-    params.plan_id || "";
+  // Swap Modal State
+  const [showSwapModal, setShowSwapModal] = useState(false);
+  const [selSlot, setSelSlot] = useState<{ date: string; idx: number; name: string } | null>(null);
+  const [searchQ, setSearchQ] = useState("");
+  const [safeFoods, setSafeFoods] = useState<any[]>([]);
+  const [searching, setSearching] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const planDays =
-    Number(params.days) || 0;
+  // Detail Modal State
+  const [showFoodDetail, setShowFoodDetail] = useState(false);
+  const [selectedFood, setSelectedFood] = useState<any>(null);
 
-  // ====================================================
-  // Date Tabs
-  // ====================================================
+  const selectedDate = dateTabs[selectedDay];
+  const selectedPlan = plans.find((p) => p.date === selectedDate);
 
-  const dateTabs = useMemo(
-    () =>
-      createDateList(
-        startDate,
-        planDays
-      ),
-    [startDate, planDays]
-  );
-
-  const [
-    selectedDay,
-    setSelectedDay,
-  ] = useState(0);
-
-  // ====================================================
-  // State
-  // ====================================================
-
-  const [
-    plans,
-    setPlans,
-  ] = useState<DailyPlan[]>([]);
-
-  const [
-    loading,
-    setLoading,
-  ] = useState(true);
-
-  const [
-    saving,
-    setSaving,
-  ] = useState(false);
-
-  // ====================================================
-  // Selected Date
-  // ====================================================
-
-  const selectedDate =
-    dateTabs[selectedDay];
-
-  const selectedPlan =
-    plans.find(
-      (plan) =>
-        plan.date ===
-        selectedDate
-    );
-
-  // ====================================================
-  // Load Plans
-  // ====================================================
-
+  // ─── Initialization ───
   useEffect(() => {
-    loadPlans();
+    loadUserId().then(() => loadPlans());
   }, [planId]);
+
+  async function loadUserId() {
+    try {
+      const raw = await AsyncStorage.getItem("currentUser");
+      if (raw) {
+        const obj = JSON.parse(raw);
+        if (obj?.user_id) {
+          setUserId(String(obj.user_id));
+          // Load user profile targets (Single Source of Truth)
+          const hg = obj?.health_goals;
+          if (hg?.target_calories > 0) {
+            setUserTargets({
+              kcal: Number(hg.target_calories) || 0,
+              protein_g: Number(hg.protein_target_g) || 0,
+              carb_g: Number(hg.target_carb_g) || 0,
+              fat_g: Number(hg.target_fat_g) || 0,
+            });
+          } else {
+            // Fetch from API if not in local storage
+            try {
+              const resp = await fetch(`${BASE_URL}/api/users/profile?userId=${obj.user_id}`);
+              const profileJson = await resp.json();
+              if (profileJson?.success && profileJson?.data?.health_goals) {
+                const p = profileJson.data.health_goals;
+                setUserTargets({
+                  kcal: Number(p.target_calories) || Number(p.tdee_target_kcal) || 0,
+                  protein_g: Number(p.protein_target_g) || 0,
+                  carb_g: Number(p.target_carb_g) || 0,
+                  fat_g: Number(p.target_fat_g) || 0,
+                });
+              }
+            } catch (e) {
+              console.log("loadUserTargets API error:", e);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.log("loadUserId error:", e);
+    }
+  }
 
   async function loadPlans() {
     try {
       setLoading(true);
-
-      if (!planId) {
-        throw new Error(
-          "ไม่พบ plan_id"
-        );
-      }
-
-      const url =
-        `${BASE_URL}/api/meal/plans/${planId}`;
-
-      console.log(
-        "📤 GET:",
-        url
-      );
-
-      const response =
-        await axios.get(
-          url,
-          {
-            timeout: 30000,
-          }
-        );
-
-      console.log(
-        "📥 RESPONSE:",
-        response.data
-      );
-
-      if (
-        !response.data?.success
-      ) {
-        throw new Error(
-          response.data?.message ||
-            "โหลดแผนอาหารไม่สำเร็จ"
-        );
-      }
-
-      setPlans(
-        response.data.plans || []
-      );
+      if (!planId) throw new Error("ไม่พบ plan_id");
+      const url = `${BASE_URL}/api/meal/plans/${planId}`;
+      const response = await axios.get(url, { timeout: 30000 });
+      if (!response.data?.success) throw new Error(response.data?.message || "โหลดแผนอาหารไม่สำเร็จ");
+      setPlans(response.data.plans || []);
     } catch (error: any) {
-      console.error(
-        "❌ LOAD PLAN ERROR:",
-        error
-      );
-
-      const message =
-        axios.isAxiosError(error)
-          ? error.response?.data
-              ?.message ||
-            error.message
-          : error?.message ||
-            "ไม่สามารถโหลดแผนอาหารได้";
-
-      Alert.alert(
-        "โหลดแผนไม่สำเร็จ",
-        message
-      );
+      Alert.alert("โหลดแผนไม่สำเร็จ", error?.message || "ไม่สามารถโหลดแผนอาหารได้");
     } finally {
       setLoading(false);
     }
   }
 
-  // ====================================================
-  // Save
-  // ====================================================
-
-  function handleSave() {
-    if (saving) {
-      return;
+  // ─── Safe Swap Foods (Strict Allergen Filtering Backend Call) ───
+  async function loadSafeFoods(query: string = "") {
+    if (!userId) return;
+    setSearching(true);
+    try {
+      // Backend api/meal/safe-foods MUST enforce allergen logic using user_id
+      const url = `${BASE_URL}/api/meal/safe-foods?user_id=${encodeURIComponent(userId)}&q=${encodeURIComponent(query)}&limit=30`;
+      const response = await axios.get(url, { timeout: 15000 });
+      if (response.data?.success) {
+        setSafeFoods(response.data.foods || []);
+      } else {
+        setSafeFoods([]);
+      }
+    } catch (e) {
+      console.error("loadSafeFoods error:", e);
+      setSafeFoods([]);
+    } finally {
+      setSearching(false);
     }
-
-    if (!planId) {
-      Alert.alert("ข้อผิดพลาด", "ไม่พบ plan_id กรุณาสร้างแผนใหม่");
-      return;
-    }
-
-    if (plans.length === 0) {
-      Alert.alert("ยังไม่มีแผน", "กรุณารอให้โหลดแผนอาหารเสร็จก่อน");
-      return;
-    }
-
-    console.log("💾 SAVE PLAN — plan_id:", planId);
-
-    router.replace({
-      pathname: "/(tabs)/plan",
-      params: {
-        refresh: Date.now().toString(),
-        plan_id: planId,
-      },
-    });
   }
 
-  // ====================================================
-  // Loading
-  // ====================================================
+  function onSearchChange(text: string) {
+    setSearchQ(text);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      loadSafeFoods(text.trim());
+    }, 400);
+  }
 
+  function openSwapModal(date: string, idx: number, name: string) {
+    setSelSlot({ date, idx, name });
+    setSearchQ("");
+    setShowSwapModal(true);
+    loadSafeFoods(""); // Load default safe foods
+  }
+
+  async function handleSwapConfirm(newFood: any) {
+    if (!selSlot || !selectedPlan) return;
+    try {
+      await axios.put(
+        `${BASE_URL}/api/meal/plans/${planId}/meal`,
+        { slot_idx: selSlot.idx, new_food_id: newFood._id },
+        { timeout: 15000 }
+      );
+      await loadPlans(); // Reload to get dynamic macros updated
+      setShowSwapModal(false);
+      setShowFoodDetail(false);
+      setSelSlot(null);
+      Alert.alert("สำเร็จ", "เปลี่ยนเมนูอาหารเรียบร้อยแล้ว");
+    } catch (e: any) {
+      Alert.alert("เปลี่ยนเมนูไม่สำเร็จ", e?.message || "เกิดข้อผิดพลาด");
+    }
+  }
+
+  function handleSave() {
+    if (saving || !planId) return;
+    setSaving(true);
+    // Replace to Main Plan Tab
+    router.replace({ pathname: "/(tabs)/plan", params: { refresh: Date.now().toString(), plan_id: planId } });
+  }
+
+  // ─── Calculate Progress ───
+  // Use plan's daily_target_summary if available, otherwise use user profile targets (SSOT)
+  const targetKcal = selectedPlan?.daily_target_summary?.kcal ?? userTargets.kcal ?? 0;
+  // Calculate planned Kcal from slots (since they are not eaten yet)
+  const plannedKcal = selectedPlan?.slots.reduce((sum, slot) => sum + (slot.main_food ? getNutrition(slot.main_food).kcal : 0), 0) ?? 0;
+  const plannedProtein = selectedPlan?.slots.reduce((sum, slot) => sum + (slot.main_food ? getNutrition(slot.main_food).protein : 0), 0) ?? 0;
+  const plannedCarbs = selectedPlan?.slots.reduce((sum, slot) => sum + (slot.main_food ? getNutrition(slot.main_food).carbs : 0), 0) ?? 0;
+  const plannedFat = selectedPlan?.slots.reduce((sum, slot) => sum + (slot.main_food ? getNutrition(slot.main_food).fat : 0), 0) ?? 0;
+
+  // ====================================================
+  // Loading State
+  // ====================================================
   if (loading) {
     return (
-      <SafeAreaView
-        style={styles.container}
-      >
-        <View
-          style={
-            styles.loadingContainer
-          }
-        >
-          <View
-            style={
-              styles.loadingIcon
-            }
-          >
-            <Ionicons
-              name="restaurant-outline"
-              size={34}
-              color="#666"
-            />
-          </View>
-
-          <Text
-            style={
-              styles.loadingText
-            }
-          >
-            กำลังโหลดแผนอาหาร
-          </Text>
-
-          <Text
-            style={
-              styles.loadingSubText
-            }
-          >
-            กำลังเตรียมแผน{" "}
-            {planDays} วัน...
-          </Text>
-
-          <ActivityIndicator
-            size="small"
-            color="#F26522"
-            style={{
-              marginTop: 18,
-            }}
-          />
+      <SafeAreaView style={st.container}>
+        <View style={st.header}>
+          <TouchableOpacity style={st.backBtn} onPress={() => router.back()}><Ionicons name="arrow-back" size={24} color="#fff" /></TouchableOpacity>
+          <Text style={st.headerTitle}>สร้างแผนอาหาร</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <View style={st.center}>
+          <ActivityIndicator size="large" color={ORANGE} />
+          <Text style={{ marginTop: 12, color: "#777" }}>กำลังจัดเตรียมแผนอาหารให้คุณ...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   // ====================================================
-  // UI
+  // Main Render
   // ====================================================
-
   return (
-    <SafeAreaView
-      style={styles.container}
-    >
-      {/* Header */}
-
-      <View
-        style={styles.header}
-      >
-        <TouchableOpacity
-          style={
-            styles.backButton
-          }
-          onPress={() => {
-            // 🔧 FIX: ไม่ใช้ router.back() เพราะอาจไม่มี screen ใน stack
-            if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.replace("/(tabs)/plan");
-            }
-          }}
-          activeOpacity={0.7}
-        >
-          <Ionicons
-            name="arrow-back"
-            size={23}
-            color="#111"
-          />
+    <SafeAreaView style={st.container}>
+      {/* HEADER */}
+      <View style={st.header}>
+        <TouchableOpacity style={st.backBtn} onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/plan")}>
+          <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
-
-        <View
-          style={
-            styles.headerCenter
-          }
-        >
-          <Text
-            style={
-              styles.headerTitle
-            }
-          >
-            สร้างแผนการกิน
-          </Text>
-
-          <Text
-            style={
-              styles.headerStep
-            }
-          >
-            ขั้นตอนที่ 2 จาก 2
-          </Text>
+        <View style={{ alignItems: "center" }}>
+          <Text style={st.headerTitle}>สร้างแผนการกิน</Text>
+          <Text style={st.headerStep}>ขั้นตอนที่ 2 จาก 2</Text>
         </View>
-
-        <View
-          style={
-            styles.headerPlaceholder
-          }
-        />
+        <View style={{ width: 40 }} />
       </View>
 
-      {/* Main Scroll */}
-
-      <ScrollView
-        style={styles.scroll}
-        showsVerticalScrollIndicator={
-          false
-        }
-        contentContainerStyle={
-          styles.scrollContent
-        }
-      >
-        {/* Page Title */}
-
-        <View
-          style={
-            styles.pageTitleSection
-          }
-        >
-          <View
-            style={
-              styles.titleIcon
-            }
-          >
-            <Ionicons
-              name="restaurant-outline"
-              size={25}
-              color="#666"
-            />
-          </View>
-
-          <View
-            style={
-              styles.titleTextContainer
-            }
-          >
-            <Text
-              style={
-                styles.title
-              }
-            >
-              ปรับแต่งมื้ออาหาร
-            </Text>
-
-            <Text
-              style={
-                styles.subtitle
-              }
-            >
-              เลือกดูอาหารในแต่ละวัน
-            </Text>
-          </View>
-        </View>
-
-        {/* Plan Information */}
-
-        <View
-          style={
-            styles.planInfoCard
-          }
-        >
-          <View
-            style={
-              styles.planInfoTop
-            }
-          >
-            <View
-              style={
-                styles.planInfoIcon
-              }
-            >
-              <Ionicons
-                name="calendar-outline"
-                size={22}
-                color="#666"
-              />
-            </View>
-
-            <View
-              style={
-                styles.planInfoText
-              }
-            >
-              <Text
-                style={
-                  styles.planInfoTitle
-                }
-              >
-                แผนการกิน {planDays} วัน
-              </Text>
-
-              <Text
-                style={
-                  styles.planInfoDate
-                }
-              >
-                {startDate} ถึง {endDate}
-              </Text>
-            </View>
-
-            <View
-              style={
-                styles.activeBadge
-              }
-            >
-              <View
-                style={
-                  styles.activeDot
-                }
-              />
-
-              <Text
-                style={
-                  styles.activeBadgeText
-                }
-              >
-                พร้อมใช้งาน
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Date Selector */}
-
-        <View
-          style={
-            styles.sectionHeader
-          }
-        >
-          <Text
-            style={
-              styles.sectionTitle
-            }
-          >
-            เลือกวัน
-          </Text>
-
-          <Text
-            style={
-              styles.sectionHint
-            }
-          >
-            {selectedDay + 1}/{planDays}
-          </Text>
-        </View>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={
-            false
-          }
-          contentContainerStyle={
-            styles.tabsContainer
-          }
-        >
-          {dateTabs.map(
-            (
-              date,
-              index
-            ) => {
-              const active =
-                index ===
-                selectedDay;
-
-              const hasPlan =
-                plans.some(
-                  (plan) =>
-                    plan.date ===
-                    date
-                );
-
-              return (
-                <TouchableOpacity
-                  key={date}
-                  style={[
-                    styles.dayTab,
-                    active &&
-                      styles.activeDayTab,
-                  ]}
-                  onPress={() =>
-                    setSelectedDay(
-                      index
-                    )
-                  }
-                  activeOpacity={0.8}
-                >
-                  <Text
-                    style={[
-                      styles.dayName,
-                      active &&
-                        styles.activeDayText,
-                    ]}
-                  >
-                    {getThaiDay(
-                      date
-                    )}
-                  </Text>
-
-                  <Text
-                    style={[
-                      styles.dateText,
-                      active &&
-                        styles.activeDayText,
-                    ]}
-                  >
-                    {formatShortDate(
-                      date
-                    )}
-                  </Text>
-
-                  {hasPlan && (
-                    <View
-                      style={[
-                        styles.planDot,
-                        active &&
-                          styles.activePlanDot,
-                      ]}
-                    />
-                  )}
-                </TouchableOpacity>
-              );
-            }
-          )}
+      {/* DAY TABS (Scrollable) */}
+      <View style={st.tabBarContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}>
+          {dateTabs.map((date, index) => {
+            const active = index === selectedDay;
+            return (
+              <TouchableOpacity key={date} style={[st.dayTab, active && st.dayTabActive]} onPress={() => setSelectedDay(index)}>
+                <Text style={[st.dayName, active && st.dayTextActive]}>{thaiDay(date)}</Text>
+                <Text style={[st.dateText, active && st.dayTextActive]}>{fmtShort(date)}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
+      </View>
 
-        {/* Selected Date */}
+      {/* CONTENT SCROLL */}
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 30 }} showsVerticalScrollIndicator={false}>
+        
+        {/* SUMMARY CARD */}
+        <View style={st.summaryCard}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Ionicons name="flame-outline" size={22} color={ORANGE} />
+            <Text style={{ fontSize: 18, fontWeight: "bold", color: "#333" }}>{thaiDate(selectedDate)}</Text>
+          </View>
 
-        <View
-          style={
-            styles.selectedDateHeader
-          }
-        >
-          <View>
-            <Text
-              style={
-                styles.selectedDateLabel
-              }
-            >
-              เมนูประจำวัน
-            </Text>
-
-            <Text
-              style={
-                styles.selectedDate
-              }
-            >
-              {selectedDate}
+          <View style={{ marginTop: 16 }}>
+            <View style={st.progressBar}>
+              <View style={[ st.progressFill, { width: targetKcal > 0 ? `${Math.min(100, (plannedKcal / targetKcal) * 100)}%` : "0%", backgroundColor: plannedKcal > targetKcal ? "#FF3B30" : ORANGE } ]} />
+            </View>
+            <Text style={{ marginTop: 6, fontSize: 14, color: plannedKcal > targetKcal ? "#FF3B30" : "#777", textAlign: "right", fontWeight: "600" }}>
+              จัดแล้ว {plannedKcal} / {targetKcal} kcal
             </Text>
           </View>
 
-          {selectedPlan && (
-            <View
-              style={
-                styles.mealCountBadge
-              }
-            >
-              <Ionicons
-                name="restaurant"
-                size={15}
-                color="#666"
-              />
-
-              <Text
-                style={
-                  styles.mealCountText
-                }
-              >
-                {selectedPlan.meals_per_day} มื้อ
-              </Text>
-            </View>
-          )}
+          <View style={{ flexDirection: "row", marginTop: 16 }}>
+            {[
+              { label: "Protein", val: plannedProtein, target: selectedPlan?.daily_target_summary?.protein_g ?? userTargets.protein_g ?? 0, color: "#3B82F6" },
+              { label: "Carbs", val: plannedCarbs, target: selectedPlan?.daily_target_summary?.carb_g ?? userTargets.carb_g ?? 0, color: "#F59E0B" },
+              { label: "Fat", val: plannedFat, target: selectedPlan?.daily_target_summary?.fat_g ?? userTargets.fat_g ?? 0, color: "#EF4444" },
+            ].map((macro) => (
+              <View key={macro.label} style={{ flex: 1, alignItems: "center" }}>
+                <Text style={{ fontSize: 13, color: "#999", fontWeight: "500" }}>{macro.label}</Text>
+                <Text style={{ fontSize: 17, fontWeight: "bold", color: macro.color, marginTop: 4 }}>
+                  {macro.val} <Text style={{ fontSize: 12, color: "#999" }}>/ {macro.target}g</Text>
+                </Text>
+              </View>
+            ))}
+          </View>
         </View>
 
-        {!selectedPlan ? (
-          <View
-            style={
-              styles.emptyContainer
-            }
-          >
-            <View
-              style={
-                styles.emptyIcon
-              }
-            >
-              <Ionicons
-                name="restaurant-outline"
-                size={42}
-                color="#B5B5B5"
-              />
-            </View>
+        <Text style={{ fontSize: 18, fontWeight: "bold", marginBottom: 12, color: "#222" }}>มื้ออาหารประจำวัน</Text>
 
-            <Text
-              style={
-                styles.emptyText
-              }
-            >
-              ไม่พบแผนอาหารวันนี้
-            </Text>
-
-            <Text
-              style={
-                styles.emptySubText
-              }
-            >
-              กรุณาลองเลือกวันอื่น
-            </Text>
+        {/* MEALS LIST */}
+        {!selectedPlan || selectedPlan.slots.length === 0 ? (
+          <View style={st.emptyContainer}>
+            <Ionicons name="alert-circle-outline" size={50} color="#ccc" />
+            <Text style={st.emptyText}>ไม่มีการจัดแผนในวันนี้</Text>
           </View>
         ) : (
-          <>
-            {/* Daily Target */}
+          selectedPlan.slots.map((slot, idx) => {
+            const hasFood = !!slot.main_food;
+            const food: any = slot.main_food;
 
-            {selectedPlan.daily_target_summary && (
-              <View
-                style={
-                  styles.summaryCard
-                }
-              >
-                <View
-                  style={
-                    styles.summaryHeader
-                  }
-                >
-                  <View
-                    style={
-                      styles.summaryIcon
-                    }
-                  >
-                    <Ionicons
-                      name="analytics-outline"
-                      size={20}
-                      color="#22A06B"
-                    />
-                  </View>
-
-                  <View>
-                    <Text
-                      style={
-                        styles.summaryTitle
-                      }
+            return (
+              <View key={idx} style={st.mealCard}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <Ionicons name={mealIcon(slot.meal_type) as any} size={22} color="#444" />
+                  
+                  {/* Food Info Area */}
+                  {hasFood ? (
+                    <TouchableOpacity
+                      onPress={() => { setSelectedFood(food); setShowFoodDetail(true); }}
+                      style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 12 }}
+                      activeOpacity={0.7}
                     >
-                      เป้าหมายประจำวัน
-                    </Text>
-
-                    <Text
-                      style={
-                        styles.summarySubtitle
-                      }
-                    >
-                      ปริมาณสารอาหารที่แนะนำ
-                    </Text>
-                  </View>
-                </View>
-
-                <View
-                  style={
-                    styles.nutritionGrid
-                  }
-                >
-                  <View
-                    style={
-                      styles.nutritionItem
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.nutritionLabel
-                      }
-                    >
-                      พลังงาน
-                    </Text>
-
-                    <Text
-                      style={
-                        styles.nutritionValueOrange
-                      }
-                    >
-                      {
-                        selectedPlan
-                          .daily_target_summary
-                          .kcal ?? "-"
-                      }
-                    </Text>
-
-                    <Text
-                      style={
-                        styles.nutritionUnit
-                      }
-                    >
-                      kcal
-                    </Text>
-                  </View>
-
-                  <View
-                    style={
-                      styles.nutritionDivider
-                    }
-                  />
-
-                  <View
-                    style={
-                      styles.nutritionItem
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.nutritionLabel
-                      }
-                    >
-                      Protein
-                    </Text>
-
-                    <Text
-                      style={
-                        styles.nutritionValue
-                      }
-                    >
-                      {
-                        selectedPlan
-                          .daily_target_summary
-                          .protein_g ?? "-"
-                      }
-                    </Text>
-
-                    <Text
-                      style={
-                        styles.nutritionUnit
-                      }
-                    >
-                      g
-                    </Text>
-                  </View>
-
-                  <View
-                    style={
-                      styles.nutritionDivider
-                    }
-                  />
-
-                  <View
-                    style={
-                      styles.nutritionItem
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.nutritionLabel
-                      }
-                    >
-                      Carbs
-                    </Text>
-
-                    <Text
-                      style={
-                        styles.nutritionValue
-                      }
-                    >
-                      {
-                        selectedPlan
-                          .daily_target_summary
-                          .carb_g ?? "-"
-                      }
-                    </Text>
-
-                    <Text
-                      style={
-                        styles.nutritionUnit
-                      }
-                    >
-                      g
-                    </Text>
-                  </View>
-
-                  <View
-                    style={
-                      styles.nutritionDivider
-                    }
-                  />
-
-                  <View
-                    style={
-                      styles.nutritionItem
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.nutritionLabel
-                      }
-                    >
-                      Fat
-                    </Text>
-
-                    <Text
-                      style={
-                        styles.nutritionValue
-                      }
-                    >
-                      {
-                        selectedPlan
-                          .daily_target_summary
-                          .fat_g ?? "-"
-                      }
-                    </Text>
-
-                    <Text
-                      style={
-                        styles.nutritionUnit
-                      }
-                    >
-                      g
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            )}
-
-            {/* Meals */}
-
-            <View
-              style={
-                styles.mealsSectionHeader
-              }
-            >
-              <View>
-                <Text
-                  style={
-                    styles.mealsSectionTitle
-                  }
-                >
-                  รายการอาหาร
-                </Text>
-
-                <Text
-                  style={
-                    styles.mealsSectionSubtitle
-                  }
-                >
-                  อาหารที่แนะนำสำหรับวันนี้
-                </Text>
-              </View>
-
-              <View
-                style={
-                  styles.mealsCount
-                }
-              >
-                <Text
-                  style={
-                    styles.mealsCountText
-                  }
-                >
-                  {selectedPlan.slots?.length || 0}
-                </Text>
-
-                <Text
-                  style={
-                    styles.mealsCountLabel
-                  }
-                >
-                  มื้อ
-                </Text>
-              </View>
-            </View>
-
-            {selectedPlan.slots?.map(
-              (
-                slot,
-                index
-              ) => {
-                // 🔧 กำหนดสีตามมื้ออาหาร
-                const mealType = (slot.meal_type || slot.slot_name || "").toLowerCase();
-                let mealColorStyle = {};
-                if (mealType.includes("เช้า") || mealType.includes("morning")) {
-                  mealColorStyle = styles.mealCardMorning;
-                } else if (mealType.includes("กลางวัน") || mealType.includes("lunch")) {
-                  mealColorStyle = styles.mealCardLunch;
-                } else if (mealType.includes("เย็น") || mealType.includes("dinner")) {
-                  mealColorStyle = styles.mealCardDinner;
-                } else if (mealType.includes("ว่าง") || mealType.includes("snack")) {
-                  mealColorStyle = styles.mealCardSnack;
-                }
-
-                return (
-                <View
-                  key={`${slot.meal_type}-${index}`}
-                  style={[
-                    styles.mealCard,
-                    mealColorStyle,
-                  ]}
-                >
-                  {/* Meal Header */}
-
-                  <View
-                    style={
-                      styles.mealHeader
-                    }
-                  >
-                    <View
-                      style={
-                        styles.mealNumber
-                      }
-                    >
-                      <Text
-                        style={
-                          styles.mealNumberText
-                        }
-                      >
-                        {index + 1}
-                      </Text>
-                    </View>
-
-                    <View
-                      style={
-                        styles.mealTitleContainer
-                      }
-                    >
-                      <Text
-                        style={
-                          styles.mealTitle
-                        }
-                      >
-                        {
-                          slot.slot_name
-                        }
-                      </Text>
-
-                      <Text
-                        style={
-                          styles.mealTypeText
-                        }
-                      >
-                        {slot.meal_type}
-                      </Text>
-                    </View>
-
-                    {/* 🔧 เพิ่มปุ่ม Swap, Detail + kcal */}
-                    <View style={styles.mealHeaderRight}>
-                      <View
-                        style={
-                          styles.kcalBadge
-                        }
-                      >
-                        <Text
-                          style={
-                            styles.kcalText
-                          }
-                        >
-                          {slot.target_kcal ?? 0}
+                      <FoodImage food={food} size={65} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 13, color: "#888", fontWeight: "600" }}>{slot.slot_name}</Text>
+                        <Text style={{ fontSize: 16, fontWeight: "bold", color: "#222", marginTop: 2 }} numberOfLines={2}>
+                          {getFoodName(food)}
                         </Text>
-                        <Text
-                          style={
-                            styles.kcalUnit
-                          }
-                        >
-                          kcal
+                        <Text style={{ fontSize: 14, color: ORANGE, fontWeight: "bold", marginTop: 4 }}>
+                          {getNutrition(food).kcal} kcal
                         </Text>
                       </View>
-
-                      <TouchableOpacity
-                        style={styles.swapBtn}
-                        activeOpacity={0.7}
-                        onPress={() => {
-                          Alert.alert(
-                            "เปลี่ยนเมนู",
-                            `ต้องการเปลี่ยนเมนู "${slot.main_food?.name || slot.slot_name}" ใช่หรือไม่?`,
-                            [
-                              { text: "ยกเลิก", style: "cancel" },
-                              { text: "เปลี่ยน", onPress: () => console.log("🔄 Swap:", slot.slot_name) },
-                            ]
-                          );
-                        }}
-                      >
-                        <Ionicons name="swap-horizontal" size={16} color="#555" />
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.detailBtn}
-                        activeOpacity={0.7}
-                        onPress={() => {
-                          Alert.alert(
-                            slot.main_food?.name || slot.slot_name || "รายละเอียด",
-                            `แคลอรี: ${slot.target_kcal ?? slot.main_food?.kcal ?? 0} kcal\nโปรตีน: ${slot.target_nutrition?.protein_g ?? "-"} g\nคาร์บ: ${slot.target_nutrition?.carb_g ?? "-"} g\nไขมัน: ${slot.target_nutrition?.fat_g ?? "-"} g`
-                          );
-                        }}
-                      >
-                        <Ionicons name="information-circle-outline" size={16} color="#555" />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  {/* Divider */}
-
-                  <View
-                    style={
-                      styles.cardDivider
-                    }
-                  />
-
-                  {/* Main Food */}
-
-                  {slot.main_food && (
-                    <View
-                      style={
-                        styles.foodRow
-                      }
-                    >
-                      <View
-                        style={
-                          styles.foodImage
-                        }
-                      >
-                        <Ionicons
-                          name="restaurant"
-                          size={27}
-                          color="#666"
-                        />
+                    </TouchableOpacity>
+                  ) : (
+                    // 🚨 EMPTY SLOT DUE TO ALLERGENS OR NO DATA
+                    <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 12 }}>
+                      <View style={{ width: 65, height: 65, borderRadius: 12, backgroundColor: "#FFF0F0", justifyContent: "center", alignItems: "center" }}>
+                        <Ionicons name="warning-outline" size={28} color="#FF3B30" />
                       </View>
-
-                      <View
-                        style={
-                          styles.foodInfo
-                        }
-                      >
-                        <Text
-                          style={
-                            styles.foodLabel
-                          }
-                        >
-                          อาหารหลัก
-                        </Text>
-
-                        <Text
-                          style={
-                            styles.foodName
-                          }
-                          numberOfLines={2}
-                        >
-                          {
-                            slot
-                              .main_food
-                              .name
-                          }
-                        </Text>
-
-                        <Text
-                          style={
-                            styles.foodKcal
-                          }
-                        >
-                          {
-                            slot
-                              .main_food
-                              .kcal ?? 0
-                          }{" "}
-                          kcal
-                        </Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 13, color: "#888", fontWeight: "600" }}>{slot.slot_name}</Text>
+                        <Text style={{ fontSize: 14, fontWeight: "600", color: "#FF3B30", marginTop: 2 }}>ไม่มีเมนูที่เหมาะสม</Text>
+                        <Text style={{ fontSize: 11, color: "#999", marginTop: 2 }}>(ติดเงื่อนไขการแพ้อาหาร หรือข้อมูลไม่พอ)</Text>
                       </View>
                     </View>
                   )}
-
-                  {/* Addons */}
-
-                  {slot.addons &&
-                    slot.addons.length >
-                      0 && (
-                      <View
-                        style={
-                          styles.addonContainer
-                        }
-                      >
-                        <View
-                          style={
-                            styles.addonHeader
-                          }
-                        >
-                          <Ionicons
-                            name="add-circle-outline"
-                            size={17}
-                            color="#777"
-                          />
-
-                          <Text
-                            style={
-                              styles.addonTitle
-                            }
-                          >
-                            อาหารเพิ่มเติม
-                          </Text>
-                        </View>
-
-                        {slot.addons.map(
-                          (
-                            addon
-                          ) => (
-                            <View
-                              key={
-                                addon.food_id
-                              }
-                              style={
-                                styles.addonRow
-                              }
-                            >
-                              <View
-                                style={
-                                  styles.addonBullet
-                                }
-                              />
-
-                              <Text
-                                style={
-                                  styles.addonText
-                                }
-                                numberOfLines={
-                                  1
-                                }
-                              >
-                                {
-                                  addon.name
-                                }
-                              </Text>
-
-                              <Text
-                                style={
-                                  styles.addonKcal
-                                }
-                              >
-                                {
-                                  addon.kcal ??
-                                    0
-                                }{" "}
-                                kcal
-                              </Text>
-                            </View>
-                          )
-                        )}
-                      </View>
-                    )}
-
-                  {/* Status */}
-
-                  <View
-                    style={[
-                      styles.statusContainer,
-                      slot.is_swapped &&
-                        styles.statusSwapped,
-                    ]}
-                  >
-                    <Ionicons
-                      name={
-                        slot.is_swapped
-                          ? "swap-horizontal-outline"
-                          : "checkmark-circle-outline"
-                      }
-                      size={16}
-                      color={
-                        slot.is_swapped
-                          ? "#D97706"
-                          : "#22A06B"
-                      }
-                    />
-
-                    <Text
-                      style={[
-                        styles.statusText,
-                        slot.is_swapped &&
-                          styles.statusSwappedText,
-                      ]}
-                    >
-                      {slot.is_swapped
-                        ? "มีการเปลี่ยนเมนู"
-                        : "เมนูแนะนำ"}
-                    </Text>
-                  </View>
                 </View>
-              )})}
 
+                {/* Macro Pills & Action Row */}
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 14 }}>
+                  {hasFood ? (
+                    <View style={{ flexDirection: "row", gap: 6 }}>
+                      <View style={st.macroPill}><Text style={st.macroPillText}>P {getNutrition(food).protein}g</Text></View>
+                      <View style={st.macroPill}><Text style={st.macroPillText}>C {getNutrition(food).carbs}g</Text></View>
+                      <View style={st.macroPill}><Text style={st.macroPillText}>F {getNutrition(food).fat}g</Text></View>
+                    </View>
+                  ) : <View />}
 
-            {/* 🔧 ปุ่มเพิ่มมื้ออาหาร */}
-            <TouchableOpacity
-              style={styles.addMealBtn}
-              activeOpacity={0.7}
-              onPress={() => {
-                Alert.alert(
-                  "เพิ่มมื้ออาหาร",
-                  "ต้องการเพิ่มมื้ออาหารใหม่ในวันนี้ใช่หรือไม่?",
-                  [
-                    { text: "ยกเลิก", style: "cancel" },
-                    { text: "เพิ่ม", onPress: () => console.log("➕ Add meal to:", selectedDate) },
-                  ]
-                );
-              }}
-            >
-              <Ionicons name="add-circle-outline" size={22} color="#555" />
-              <Text style={styles.addMealBtnText}>เพิ่มมื้ออาหาร</Text>
-            </TouchableOpacity>
-
-            <View
-              style={
-                styles.bottomSpace
-              }
-            />
-          </>
+                  <TouchableOpacity
+                    style={st.actionBtn}
+                    onPress={() => openSwapModal(selectedPlan.date, idx, slot.slot_name)}
+                  >
+                    <Ionicons name="search-outline" size={16} color={ORANGE} />
+                    <Text style={{ fontSize: 13, color: ORANGE, fontWeight: "bold" }}>{hasFood ? "เปลี่ยนเมนู" : "ค้นหาเมนูเอง"}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })
         )}
+
+        <View style={{ height: 20 }} />
       </ScrollView>
 
-      {/* Footer */}
-
-      <View
-        style={
-          styles.footer
-        }
-      >
+      {/* FOOTER - SAVE BUTTON */}
+      <View style={st.footer}>
         <TouchableOpacity
-          style={[
-            styles.saveButton,
-            saving &&
-              styles.saveButtonDisabled,
-          ]}
-          onPress={
-            handleSave
-          }
+          style={[st.saveButton, saving && { opacity: 0.7 }]}
+          onPress={handleSave}
           disabled={saving}
-          activeOpacity={0.85}
+          activeOpacity={0.8}
         >
-          {saving ? (
-            <>
-              <ActivityIndicator
-                color="#fff"
-                size="small"
-              />
-
-              <Text
-                style={
-                  styles.savingText
-                }
-              >
-                กำลังบันทึก...
-              </Text>
-            </>
-          ) : (
-            <>
-              <Ionicons
-                name="checkmark-circle-outline"
-                size={22}
-                color="#fff"
-              />
-
-              <Text
-                style={
-                  styles.saveButtonText
-                }
-              >
-                บันทึกแผน
-              </Text>
-            </>
-          )}
+          {saving ? <ActivityIndicator color="#fff" /> : <Ionicons name="checkmark-circle-outline" size={22} color="#fff" />}
+          <Text style={st.saveButtonText}>{saving ? "กำลังบันทึก..." : "ยืนยันและบันทึกแผน"}</Text>
         </TouchableOpacity>
       </View>
+
+      {/* =====================================================
+          SWAP MODAL (Mirroring plan.tsx but using Safe Foods)
+      ===================================================== */}
+      <Modal visible={showSwapModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowSwapModal(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+          <View style={st.modalHeader}>
+            <TouchableOpacity onPress={() => setShowSwapModal(false)}><Ionicons name="close" size={28} color="#333" /></TouchableOpacity>
+            <Text style={{ fontSize: 18, fontWeight: "bold" }}>เปลี่ยน {selSlot?.name}</Text>
+            <View style={{ width: 28 }} />
+          </View>
+
+          <View style={st.searchBar}>
+            <Ionicons name="search-outline" size={20} color="#999" />
+            <TextInput
+              style={{ flex: 1, fontSize: 15, color: "#333", marginLeft: 8 }}
+              placeholder="ค้นหาเมนูอาหารปลอดภัย..."
+              value={searchQ}
+              onChangeText={onSearchChange}
+              autoFocus
+            />
+            {searchQ.length > 0 && (
+              <TouchableOpacity onPress={() => onSearchChange("")}><Ionicons name="close-circle" size={20} color="#ccc" /></TouchableOpacity>
+            )}
+          </View>
+
+          {searching && <ActivityIndicator size="small" color={ORANGE} style={{ marginTop: 20 }} />}
+
+          <FlatList
+            data={safeFoods}
+            keyExtractor={(item) => String(item._id)}
+            contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+            ListEmptyComponent={
+              !searching ? (
+                <View style={st.emptyContainer}>
+                  <Ionicons name="shield-checkmark-outline" size={50} color="#ccc" />
+                  <Text style={[st.emptyText, { marginTop: 12 }]}>ไม่พบเมนูที่ตรงเงื่อนไข</Text>
+                  <Text style={{ color: "#999", fontSize: 13, marginTop: 4, textAlign: "center" }}>
+                    ระบบกรองเฉพาะเมนูที่ปลอดภัยต่ออาการแพ้ของคุณเท่านั้น
+                  </Text>
+                </View>
+              ) : null
+            }
+            renderItem={({ item }) => {
+              const nutrition = getNutrition(item);
+              return (
+                <TouchableOpacity style={st.foodListItem} onPress={() => { setSelectedFood(item); setShowFoodDetail(true); }}>
+                  <FoodImage food={item} size={60} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 16, fontWeight: "bold", color: "#333" }} numberOfLines={1}>{getFoodName(item)}</Text>
+                    <Text style={{ fontSize: 14, color: ORANGE, fontWeight: "bold", marginTop: 4 }}>{nutrition.kcal} kcal</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color="#ccc" />
+                </TouchableOpacity>
+              );
+            }}
+          />
+        </SafeAreaView>
+      </Modal>
+
+      {/* =====================================================
+          FOOD DETAIL MODAL (Exact from plan.tsx)
+      ===================================================== */}
+      <Modal visible={showFoodDetail} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowFoodDetail(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+          <View style={st.modalHeader}>
+            <TouchableOpacity onPress={() => setShowFoodDetail(false)}><Ionicons name="close" size={28} color="#333" /></TouchableOpacity>
+            <Text style={{ fontSize: 18, fontWeight: "bold" }}>รายละเอียดเมนู</Text>
+            <View style={{ width: 28 }} />
+          </View>
+          <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+            {selectedFood && (
+              <>
+                <View style={{ width: "100%", alignItems: "center", marginBottom: 20 }}>
+                  <FoodImage food={selectedFood} size={220} />
+                </View>
+                <Text style={{ fontSize: 24, fontWeight: "bold", color: "#222" }}>{getFoodName(selectedFood)}</Text>
+                
+                <Text style={st.sectionTitle}>สารอาหารหลัก</Text>
+                <View style={st.nutritionGrid}>
+                  <View style={st.nutritionBox}>
+                    <Text style={st.nutritionLabel}>พลังงาน</Text>
+                    <Text style={[st.nutritionValue, { color: ORANGE }]}>{getNutrition(selectedFood).kcal}</Text>
+                    <Text style={st.nutritionUnit}>kcal</Text>
+                  </View>
+                  <View style={st.nutritionBox}>
+                    <Text style={st.nutritionLabel}>โปรตีน</Text>
+                    <Text style={[st.nutritionValue, { color: "#3B82F6" }]}>{getNutrition(selectedFood).protein}</Text>
+                    <Text style={st.nutritionUnit}>g</Text>
+                  </View>
+                  <View style={st.nutritionBox}>
+                    <Text style={st.nutritionLabel}>คาร์บ</Text>
+                    <Text style={[st.nutritionValue, { color: "#F59E0B" }]}>{getNutrition(selectedFood).carbs}</Text>
+                    <Text style={st.nutritionUnit}>g</Text>
+                  </View>
+                  <View style={st.nutritionBox}>
+                    <Text style={st.nutritionLabel}>ไขมัน</Text>
+                    <Text style={[st.nutritionValue, { color: "#EF4444" }]}>{getNutrition(selectedFood).fat}</Text>
+                    <Text style={st.nutritionUnit}>g</Text>
+                  </View>
+                </View>
+
+                <TouchableOpacity style={st.replaceDetailBtn} onPress={() => handleSwapConfirm(selectedFood)}>
+                  <Ionicons name="checkmark-circle" size={22} color="#fff" />
+                  <Text style={{ color: "#fff", fontSize: 16, fontWeight: "bold", marginLeft: 8 }}>เลือกเมนูนี้</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
     </SafeAreaView>
   );
 }
 
 // ======================================================
-// Styles
+// Styles (Merged from plan.tsx)
 // ======================================================
-
-const styles =
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: "#F7F7F7",
-    },
-
-    // ==================================================
-    // Header
-    // ==================================================
-
-    header: {
-      height: 68,
-      backgroundColor: "#F26522",
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      paddingHorizontal: 18,
-    },
-
-    backButton: {
-      width: 40,
-      height: 40,
-      borderRadius: 12,
-      backgroundColor:
-        "rgba(255,255,255,0.65)",
-      justifyContent: "center",
-      alignItems: "center",
-    },
-
-    headerCenter: {
-      alignItems: "center",
-      justifyContent: "center",
-    },
-
-    headerTitle: {
-      fontSize: 20,
-      fontWeight: "800",
-      color: "#111",
-    },
-
-    headerStep: {
-      marginTop: 2,
-      fontSize: 11,
-      color: "#D4550E",
-      fontWeight: "600",
-    },
-
-    headerPlaceholder: {
-      width: 40,
-    },
-
-    // ==================================================
-    // Scroll
-    // ==================================================
-
-    scroll: {
-      flex: 1,
-    },
-
-    scrollContent: {
-      paddingHorizontal: 18,
-      paddingTop: 20,
-      paddingBottom: 20,
-    },
-
-    // ==================================================
-    // Page Title
-    // ==================================================
-
-    pageTitleSection: {
-      flexDirection: "row",
-      alignItems: "center",
-      marginBottom: 18,
-    },
-
-    titleIcon: {
-      width: 48,
-      height: 48,
-      borderRadius: 15,
-      backgroundColor: "#FFF3EB",
-      justifyContent: "center",
-      alignItems: "center",
-    },
-
-    titleTextContainer: {
-      flex: 1,
-      marginLeft: 13,
-    },
-
-    title: {
-      fontSize: 24,
-      fontWeight: "800",
-      color: "#161616",
-    },
-
-    subtitle: {
-      marginTop: 3,
-      fontSize: 13,
-      color: "#777",
-    },
-
-    // ==================================================
-    // Plan Info
-    // ==================================================
-
-    planInfoCard: {
-      backgroundColor: "#fff",
-      borderRadius: 17,
-      padding: 16,
-      marginBottom: 24,
-      borderWidth: 1,
-      borderColor: "#FFF3EB",
-    },
-
-    planInfoTop: {
-      flexDirection: "row",
-      alignItems: "center",
-    },
-
-    planInfoIcon: {
-      width: 44,
-      height: 44,
-      borderRadius: 13,
-      backgroundColor: "#FFF3EB",
-      justifyContent: "center",
-      alignItems: "center",
-    },
-
-    planInfoText: {
-      flex: 1,
-      marginLeft: 12,
-    },
-
-    planInfoTitle: {
-      fontSize: 16,
-      fontWeight: "800",
-      color: "#222",
-    },
-
-    planInfoDate: {
-      marginTop: 4,
-      fontSize: 13,
-      color: "#777",
-    },
-
-    activeBadge: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: "#ECFDF5",
-      paddingHorizontal: 9,
-      paddingVertical: 6,
-      borderRadius: 20,
-    },
-
-    activeDot: {
-      width: 7,
-      height: 7,
-      borderRadius: 7,
-      backgroundColor: "#22A06B",
-      marginRight: 5,
-    },
-
-    activeBadgeText: {
-      fontSize: 10,
-      color: "#168052",
-      fontWeight: "700",
-    },
-
-    // ==================================================
-    // Section Header
-    // ==================================================
-
-    sectionHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      marginBottom: 10,
-    },
-
-    sectionTitle: {
-      fontSize: 18,
-      fontWeight: "800",
-      color: "#D4550E",
-    },
-
-    sectionHint: {
-      fontSize: 12,
-      color: "#999",
-      fontWeight: "600",
-    },
-
-    // ==================================================
-    // Date Tabs
-    // ==================================================
-
-    tabsContainer: {
-      paddingBottom: 20,
-      gap: 9,
-    },
-
-    dayTab: {
-      width: 64,
-      height: 68,
-      borderRadius: 15,
-      borderWidth: 1,
-      borderColor: "#E2E2E2",
-      justifyContent: "center",
-      alignItems: "center",
-      backgroundColor: "#fff",
-    },
-
-    activeDayTab: {
-      backgroundColor: "#F26522",
-      borderColor: "#F26522",
-      transform: [
-        {
-          scale: 1.02,
-        },
-      ],
-    },
-
-    dayName: {
-      fontSize: 14,
-      fontWeight: "800",
-      color: "#333",
-    },
-
-    dateText: {
-      fontSize: 12,
-      marginTop: 3,
-      color: "#888",
-      fontWeight: "500",
-    },
-
-    activeDayText: {
-      color: "#fff",
-    },
-
-    planDot: {
-      width: 5,
-      height: 5,
-      borderRadius: 5,
-      backgroundColor: "#22A06B",
-      marginTop: 4,
-    },
-
-    activePlanDot: {
-      backgroundColor: "#fff",
-    },
-
-    // ==================================================
-    // Selected Date
-    // ==================================================
-
-    selectedDateHeader: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "flex-end",
-      marginBottom: 14,
-    },
-
-    selectedDateLabel: {
-      fontSize: 12,
-      color: "#999",
-      marginBottom: 2,
-    },
-
-    selectedDate: {
-      fontSize: 19,
-      fontWeight: "800",
-      color: "#222",
-    },
-
-    mealCountBadge: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: "#F0F0F0",
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-      borderRadius: 20,
-      gap: 5,
-    },
-
-    mealCountText: {
-      color: "#555",
-      fontSize: 11,
-      fontWeight: "700",
-    },
-
-    // ==================================================
-    // Summary
-    // ==================================================
-
-    summaryCard: {
-      backgroundColor: "#fff",
-      borderRadius: 17,
-      padding: 16,
-      marginBottom: 22,
-      borderWidth: 1,
-      borderColor: "#EEEEEE",
-    },
-
-    summaryHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      marginBottom: 17,
-    },
-
-    summaryIcon: {
-      width: 40,
-      height: 40,
-      borderRadius: 12,
-      backgroundColor: "#F0F0F0",
-      justifyContent: "center",
-      alignItems: "center",
-    },
-
-    summaryTitle: {
-      marginLeft: 11,
-      fontSize: 16,
-      fontWeight: "800",
-      color: "#222",
-      fontFamily: "NotoSansThaiBold",
-    },
-
-    summarySubtitle: {
-      marginLeft: 11,
-      marginTop: 2,
-      fontSize: 11,
-      color: "#999",
-      fontFamily: "NotoSansThai",
-    },
-
-    nutritionGrid: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: "#FAFAFA",
-      borderRadius: 13,
-      paddingVertical: 13,
-    },
-
-    nutritionItem: {
-      flex: 1,
-      alignItems: "center",
-    },
-
-    nutritionLabel: {
-      fontSize: 10,
-      color: "#888",
-      marginBottom: 4,
-      fontFamily: "NotoSansThai",
-    },
-
-    nutritionValueOrange: {
-      fontSize: 17,
-      fontWeight: "800",
-      color: "#333",
-      fontFamily: "NotoSansThaiBold",
-    },
-
-    nutritionValue: {
-      fontSize: 17,
-      fontWeight: "800",
-      color: "#333",
-      fontFamily: "NotoSansThaiBold",
-    },
-
-    nutritionUnit: {
-      fontSize: 9,
-      color: "#999",
-      marginTop: 1,
-      fontFamily: "NotoSansThai",
-    },
-
-    nutritionDivider: {
-      width: 1,
-      height: 35,
-      backgroundColor: "#E5E5E5",
-    },
-
-    // ==================================================
-    // Meals Section
-    // ==================================================
-
-    mealsSectionHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      marginBottom: 12,
-    },
-
-    mealsSectionTitle: {
-      fontSize: 18,
-      fontWeight: "800",
-      color: "#222",
-      fontFamily: "NotoSansThaiBold",
-    },
-
-    mealsSectionSubtitle: {
-      marginTop: 3,
-      fontSize: 11,
-      color: "#999",
-      fontFamily: "NotoSansThai",
-    },
-
-    mealsCount: {
-      minWidth: 40,
-      height: 40,
-      borderRadius: 12,
-      backgroundColor: "#F0F0F0",
-      justifyContent: "center",
-      alignItems: "center",
-      paddingHorizontal: 7,
-    },
-
-    mealsCountText: {
-      fontSize: 16,
-      fontWeight: "800",
-      color: "#333",
-      fontFamily: "NotoSansThaiBold",
-    },
-
-    mealsCountLabel: {
-      fontSize: 8,
-      color: "#999",
-      marginTop: -1,
-      fontFamily: "NotoSansThai",
-    },
-
-    // ==================================================
-    // Meal Card
-    // ==================================================
-
-    mealCard: {
-      backgroundColor: "#fff",
-      borderRadius: 17,
-      padding: 16,
-      marginBottom: 13,
-      borderWidth: 1,
-      borderColor: "#EEEEEE",
-    },
-
-    mealCardMorning: {
-      borderLeftWidth: 4,
-      borderLeftColor: "#F26522",
-    },
-
-    mealCardLunch: {
-      borderLeftWidth: 4,
-      borderLeftColor: "#22A06B",
-    },
-
-    mealCardDinner: {
-      borderLeftWidth: 4,
-      borderLeftColor: "#3B82F6",
-    },
-
-    mealCardSnack: {
-      borderLeftWidth: 4,
-      borderLeftColor: "#8B5CF6",
-    },
-
-    mealHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-    },
-
-    mealNumber: {
-      width: 34,
-      height: 34,
-      borderRadius: 11,
-      backgroundColor: "#F0F0F0",
-      justifyContent: "center",
-      alignItems: "center",
-    },
-
-    mealNumberText: {
-      fontSize: 14,
-      fontWeight: "800",
-      color: "#555",
-    },
-
-    mealHeaderRight: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-    },
-
-    swapBtn: {
-      width: 32,
-      height: 32,
-      borderRadius: 10,
-      backgroundColor: "#F0F0F0",
-      justifyContent: "center",
-      alignItems: "center",
-    },
-
-    detailBtn: {
-      width: 32,
-      height: 32,
-      borderRadius: 10,
-      backgroundColor: "#F0F0F0",
-      justifyContent: "center",
-      alignItems: "center",
-    },
-
-    mealTitleContainer: {
-      flex: 1,
-      marginLeft: 11,
-    },
-
-    mealTitle: {
-      fontSize: 16,
-      fontWeight: "800",
-      color: "#222",
-    },
-
-    mealTypeText: {
-      marginTop: 2,
-      fontSize: 10,
-      color: "#999",
-    },
-
-    kcalBadge: {
-      alignItems: "flex-end",
-      marginLeft: 8,
-    },
-
-    kcalText: {
-      color: "#333",
-      fontSize: 15,
-      fontWeight: "800",
-    },
-
-    kcalUnit: {
-      fontSize: 9,
-      color: "#999",
-      marginTop: 1,
-    },
-
-    cardDivider: {
-      height: 1,
-      backgroundColor: "#F0F0F0",
-      marginVertical: 14,
-    },
-
-    // ==================================================
-    // Food
-    // ==================================================
-
-    foodRow: {
-      flexDirection: "row",
-      alignItems: "center",
-    },
-
-    foodImage: {
-      width: 64,
-      height: 64,
-      borderRadius: 15,
-      backgroundColor: "#F0F0F0",
-      justifyContent: "center",
-      alignItems: "center",
-    },
-
-    foodInfo: {
-      flex: 1,
-      marginLeft: 12,
-    },
-
-    foodLabel: {
-      fontSize: 10,
-      color: "#999",
-      marginBottom: 3,
-    },
-
-    foodName: {
-      fontSize: 15,
-      fontWeight: "700",
-      color: "#222",
-      lineHeight: 20,
-    },
-
-    foodKcal: {
-      marginTop: 4,
-      fontSize: 11,
-      color: "#888",
-    },
-
-    // ==================================================
-    // Addons
-    // ==================================================
-
-    addonContainer: {
-      marginTop: 14,
-      paddingTop: 13,
-      borderTopWidth: 1,
-      borderTopColor: "#F0F0F0",
-    },
-
-    addonHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      marginBottom: 7,
-    },
-
-    addonTitle: {
-      marginLeft: 6,
-      fontSize: 12,
-      color: "#666",
-      fontWeight: "700",
-    },
-
-    addonRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingVertical: 4,
-    },
-
-    addonBullet: {
-      width: 5,
-      height: 5,
-      borderRadius: 5,
-      backgroundColor: "#F26522",
-      marginRight: 8,
-    },
-
-    addonText: {
-      flex: 1,
-      color: "#666",
-      fontSize: 12,
-    },
-
-    addonKcal: {
-      marginLeft: 8,
-      color: "#999",
-      fontSize: 10,
-    },
-
-    // ==================================================
-    // Status
-    // ==================================================
-
-    statusContainer: {
-      marginTop: 13,
-      flexDirection: "row",
-      alignItems: "center",
-      alignSelf: "flex-start",
-      backgroundColor: "#ECFDF5",
-      borderRadius: 20,
-      paddingHorizontal: 9,
-      paddingVertical: 5,
-    },
-
-    statusSwapped: {
-      backgroundColor: "#FFF7E6",
-    },
-
-    statusText: {
-      marginLeft: 5,
-      fontSize: 10,
-      color: "#168052",
-      fontWeight: "700",
-      fontFamily: "NotoSansThaiBold",
-    },
-
-    statusSwappedText: {
-      color: "#B76B00",
-      fontFamily: "NotoSansThaiBold",
-    },
-
-    // ==================================================
-    // Empty
-    // ==================================================
-
-    emptyContainer: {
-      backgroundColor: "#fff",
-      borderRadius: 17,
-      alignItems: "center",
-      justifyContent: "center",
-      paddingVertical: 55,
-      borderWidth: 1,
-      borderColor: "#EEEEEE",
-    },
-
-    emptyIcon: {
-      width: 75,
-      height: 75,
-      borderRadius: 25,
-      backgroundColor: "#F3F3F3",
-      justifyContent: "center",
-      alignItems: "center",
-    },
-
-    emptyText: {
-      marginTop: 15,
-      color: "#555",
-      fontSize: 15,
-      fontWeight: "700",
-      fontFamily: "NotoSansThaiBold",
-    },
-
-    emptySubText: {
-      marginTop: 5,
-      color: "#999",
-      fontSize: 12,
-      fontFamily: "NotoSansThai",
-    },
-
-    // ==================================================
-    // Loading
-    // ==================================================
-
-    loadingContainer: {
-      flex: 1,
-      justifyContent: "center",
-      alignItems: "center",
-      paddingHorizontal: 30,
-    },
-
-    loadingIcon: {
-      width: 75,
-      height: 75,
-      borderRadius: 25,
-      backgroundColor: "#F0F0F0",
-      justifyContent: "center",
-      alignItems: "center",
-    },
-
-    loadingText: {
-      marginTop: 18,
-      fontSize: 18,
-      fontWeight: "800",
-      color: "#222",
-      fontFamily: "NotoSansThaiBold",
-    },
-
-    loadingSubText: {
-      marginTop: 6,
-      color: "#888",
-      fontSize: 13,
-      fontFamily: "NotoSansThai",
-    },
-
-    // ==================================================
-    // Footer
-    // ==================================================
-
-    footer: {
-      paddingHorizontal: 18,
-      paddingTop: 10,
-      paddingBottom: 16,
-      backgroundColor: "#fff",
-      borderTopWidth: 1,
-      borderTopColor: "#EEEEEE",
-    },
-
-    saveButton: {
-      height: 55,
-      borderRadius: 15,
-      backgroundColor: "#F26522",
-      flexDirection: "row",
-      justifyContent: "center",
-      alignItems: "center",
-      gap: 8,
-      shadowColor: "#F26522",
-      shadowOffset: {
-        width: 0,
-        height: 3,
-      },
-      shadowOpacity: 0.15,
-      shadowRadius: 5,
-      elevation: 3,
-    },
-
-    saveButtonDisabled: {
-      opacity: 0.6,
-    },
-
-    saveButtonText: {
-      color: "#fff",
-      fontSize: 17,
-      fontWeight: "800",
-      fontFamily: "NotoSansThaiBold",
-    },
-
-    savingText: {
-      color: "#fff",
-      fontSize: 15,
-      fontWeight: "700",
-      marginLeft: 8,
-      fontFamily: "NotoSansThaiBold",
-    },
-
-    addMealBtn: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: "#fff",
-      borderRadius: 14,
-      borderWidth: 1.5,
-      borderColor: "#E0E0E0",
-      borderStyle: "dashed",
-      paddingVertical: 14,
-      marginTop: 8,
-      gap: 8,
-    },
-
-    addMealBtnText: {
-      fontSize: 14,
-      fontWeight: "700",
-      color: "#555",
-      fontFamily: "NotoSansThaiBold",
-    },
-
-    bottomSpace: {
-      height: 10,
-    },
-  });
+const st = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#F7F7F9" },
+  center: { flex: 1, justifyContent: "center", alignItems: "center" },
+  
+  // Header
+  header: { height: 60, backgroundColor: ORANGE, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16 },
+  backBtn: { width: 40, height: 40, justifyContent: "center", alignItems: "flex-start" },
+  headerTitle: { fontSize: 18, fontWeight: "bold", color: "#fff" },
+  headerStep: { fontSize: 12, color: "rgba(255,255,255,0.8)", marginTop: 2, textAlign: "center" },
+  
+  // Tab Bar
+  tabBarContainer: { backgroundColor: "#fff", paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#eee" },
+  dayTab: { width: 62, height: 66, borderRadius: 14, borderWidth: 1, borderColor: "#E2E2E2", justifyContent: "center", alignItems: "center", backgroundColor: "#fff" },
+  dayTabActive: { backgroundColor: ORANGE, borderColor: ORANGE },
+  dayName: { fontSize: 15, fontWeight: "bold", color: "#333" },
+  dateText: { fontSize: 12, color: "#888", marginTop: 2 },
+  dayTextActive: { color: "#fff" },
+  
+  // Summary Card
+  summaryCard: { backgroundColor: "#fff", borderRadius: 16, padding: 18, marginBottom: 16, borderWidth: 1.5, borderColor: ORANGE },
+  progressBar: { height: 10, backgroundColor: "#eee", borderRadius: 5, overflow: "hidden" },
+  progressFill: { height: "100%", borderRadius: 5 },
+  
+  // Meal Card
+  mealCard: { backgroundColor: "#fff", borderRadius: 16, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: "#E8E8E8", shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 2 },
+  macroPill: { backgroundColor: "#F5F5F5", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
+  macroPillText: { fontSize: 11, fontWeight: "700", color: "#666" },
+  actionBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#FFF8ED", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
+  
+  // Empty
+  emptyContainer: { alignItems: "center", justifyContent: "center", paddingVertical: 50, backgroundColor: "#fff", borderRadius: 16, borderWidth: 1, borderColor: "#eee" },
+  emptyText: { fontSize: 16, fontWeight: "bold", color: "#666", marginTop: 12 },
+  
+  // Modals
+  modalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: "#eee" },
+  searchBar: { flexDirection: "row", alignItems: "center", margin: 16, paddingHorizontal: 14, backgroundColor: "#f5f5f5", borderRadius: 12, height: 46 },
+  foodListItem: { flexDirection: "row", alignItems: "center", paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "#f0f0f0", gap: 14 },
+  
+  // Detail
+  sectionTitle: { fontSize: 18, fontWeight: "bold", color: "#333", marginTop: 24, marginBottom: 12 },
+  nutritionGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  nutritionBox: { width: "48%", backgroundColor: "#FFF8E8", borderRadius: 12, padding: 16, alignItems: "center" },
+  nutritionLabel: { fontSize: 13, color: "#777", marginBottom: 4 },
+  nutritionValue: { fontSize: 24, fontWeight: "bold" },
+  nutritionUnit: { fontSize: 12, color: "#999", marginTop: 2 },
+  replaceDetailBtn: { marginTop: 30, backgroundColor: ORANGE, borderRadius: 14, paddingVertical: 16, flexDirection: "row", alignItems: "center", justifyContent: "center" },
+  
+  // Footer
+  footer: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: Platform.OS === "ios" ? 30 : 16, backgroundColor: "#fff", borderTopWidth: 1, borderTopColor: "#eee" },
+  saveButton: { height: 56, borderRadius: 16, backgroundColor: ORANGE, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 8 },
+  saveButtonText: { color: "#fff", fontSize: 18, fontWeight: "bold" }
+});

@@ -27,18 +27,6 @@ const getDashboardData = async (req, res) => {
     const db = mongoose.connection.db;
     console.log(`${LP} DB name:`, db.databaseName);
 
-    // 🔧 FIX: ไม่ใช้ $in กับ listCollections เพราะ MongoDB driver บางเวอร์ชันไม่รองรับ
-    // ให้ list ทั้งหมดแล้ว filter ด้วย JavaScript แทน
-    const allCollections = await db.listCollections().toArray();
-    const allColNames = allCollections.map(c => c.name);
-    console.log(`${LP} All collections:`, allColNames);
-
-    const usersColName = allColNames.includes("Users") ? "Users" : (allColNames.includes("users") ? "users" : "Users");
-    console.log(`${LP} Using Users col:`, usersColName);
-
-    const userFilter = { $or: [{ username: userId }, { user_id: userId }, { email: userId }] };
-    console.log(`${LP} User filter:`, JSON.stringify(userFilter));
-
     const user = await User.findOne({
       $or: [{ username: userId }, { user_id: userId }, { email: userId }],
     }).lean();
@@ -149,21 +137,33 @@ const getDashboardData = async (req, res) => {
       console.error(`${LP} ⚠️ DailyPlans nutrition error:`, e.message);
     }
 
-    // คำนวณเป้าหมายสารอาหาร — v2: ใช้ daily_target จาก DailyPlan ถ้ามี, fallback เป็น TDEE formula
+    // คำนวณเป้าหมายสารอาหาร — v2: Single Source of Truth
+    // 1. ใช้ user.health_goals.target_calories เป็นหลัก (stored targets)
+    // 2. Fallback: daily_target จาก DailyPlan
+    // 3. Last resort: health_goals.tdee_target_kcal (raw TDEE, ไม่ adjust)
     let targetKcal = 0;
     let proteinTarget = 0;
     let carbTarget = 0;
     let fatTarget = 0;
 
-    // ลองหา daily_target จาก DailyPlan ล่าสุดของวันนี้
-    const latestPlan = await DailyPlan.findOne({ user_id: currentUserId, date: todayStr, plan_status: "active" }).lean();
-    if (latestPlan && latestPlan.daily_target) {
-      targetKcal = num(latestPlan.daily_target.target_kcal);
-      proteinTarget = num(latestPlan.daily_target.target_protein_g);
-      carbTarget = num(latestPlan.daily_target.target_carb_g);
-      fatTarget = num(latestPlan.daily_target.target_fat_g);
+    // Source 1: Stored targets in user profile (Single Source of Truth)
+    if (num(user?.health_goals?.target_calories) > 0) {
+      targetKcal = num(user.health_goals.target_calories);
+      proteinTarget = num(user?.health_goals?.protein_target_g);
+      carbTarget = num(user?.health_goals?.target_carb_g);
+      fatTarget = num(user?.health_goals?.target_fat_g);
     }
-    // Fallback: คำนวณจาก health_goals
+    // Source 2: Fallback to DailyPlan daily_target (legacy)
+    if (targetKcal === 0) {
+      const latestPlan = await DailyPlan.findOne({ user_id: currentUserId, date: todayStr, plan_status: "active" }).lean();
+      if (latestPlan && latestPlan.daily_target) {
+        targetKcal = num(latestPlan.daily_target.target_kcal);
+        proteinTarget = num(latestPlan.daily_target.target_protein_g);
+        carbTarget = num(latestPlan.daily_target.target_carb_g);
+        fatTarget = num(latestPlan.daily_target.target_fat_g);
+      }
+    }
+    // Source 3: Last resort — raw TDEE with formula
     if (targetKcal === 0) {
       targetKcal = num(user?.health_goals?.tdee_target_kcal);
       proteinTarget = num(user?.health_goals?.protein_target_g);

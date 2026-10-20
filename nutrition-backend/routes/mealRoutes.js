@@ -10,10 +10,12 @@ const {
   replaceMealInPlan,
   deleteMealFromPlan,
   searchFoods,
+  getSafeFoods,
   getFoodById,
 } = require("../controllers/mealController");
 
 router.get("/search-foods", searchFoods);
+router.get("/safe-foods", getSafeFoods);
 router.get("/foods/:food_id", getFoodById);
 
 router.post("/plans", createMealPlans);

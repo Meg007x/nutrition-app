@@ -227,7 +227,22 @@ exports.analyzeFood = async (req, res) => {
       sodium_mg: food.nutrition_per_portion?.sodium_mg || 0,
     };
 
-    // 6) ส่งข้อมูลกลับ
+    // 6) Allergen warning check
+    let allergen_warning = null;
+    const { user_id } = req.query;
+    if (user_id) {
+      const { checkFoodAllergens } = require("../utils/allergenChecker");
+      const User = require("../models/User");
+      const userDoc = await User.findOne({ $or: [{ user_id }, { username: user_id }, { email: user_id }] }).lean();
+      if (userDoc) {
+        // Build ingredient cache from hydrated ingredients
+        const ingDocMap = {};
+        hydratedIngredients.forEach(function(ing) { if (ing.ingredient_id) ingDocMap[ing.ingredient_id] = ing; });
+        allergen_warning = await checkFoodAllergens(food, userDoc, ingDocMap);
+      }
+    }
+
+    // 7) ส่งข้อมูลกลับ
     return res.json({
       success: true,
       source: "database",
@@ -253,6 +268,7 @@ exports.analyzeFood = async (req, res) => {
         ingredients: hydratedIngredients,
         allergens: food.allergens || [],
         allergens_summary: food.allergens_summary || [],
+        allergen_warning: allergen_warning,
       },
     });
   } catch (error) {

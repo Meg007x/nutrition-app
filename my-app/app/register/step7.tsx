@@ -95,28 +95,36 @@ export default function RegisterStep7Screen() {
                       const isL2 = expandedL2.has(l2Key);
                       const s2 = l2State(sub); const c2 = l2Count(sub);
                       return (
-                        <View key={sub.id}>
-                          <TouchableOpacity style={[styles.subItemRow, si < cat.subCategories.length - 1 && styles.subItemRowBorder, { paddingLeft: 20 }]} onPress={() => toggleL2(l2Key)} activeOpacity={0.7}>
-                            <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
-                              <TouchableOpacity onPress={() => toggleL2All(sub)} style={{ marginRight: 8 }} activeOpacity={0.7}>
-                                <Ionicons name={checkIcon(s2) as any} size={20} color={s2 === "none" ? "#CCC" : ORANGE} />
+                        <View key={sub.id} style={styles.subCategoryCard}>
+                          <TouchableOpacity style={styles.subCategoryHeader} onPress={() => toggleL2(l2Key)} activeOpacity={0.7}>
+                            <View style={{ flexDirection: "row", alignItems: "center", flex: 1, gap: 8 }}>
+                              <TouchableOpacity onPress={() => toggleL2All(sub)} activeOpacity={0.7}>
+                                <Ionicons name={checkIcon(s2) as any} size={18} color={s2 === "none" ? "#CCC" : ORANGE} />
                               </TouchableOpacity>
-                              <Text style={[styles.subItemText, { fontFamily: "NotoSansThaiBold", fontSize: 15 }]}>{sub.name}</Text>
-                              {c2 > 0 && <View style={[styles.badge, { marginLeft: 8 }]}><Text style={styles.badgeText}>{c2}</Text></View>}
+                              <Text style={styles.subCategoryTitle}>{sub.name}</Text>
+                              {c2 > 0 && <View style={styles.badge}><Text style={styles.badgeText}>{c2}</Text></View>}
                             </View>
-                            <Ionicons name={isL2 ? "chevron-up" : "chevron-down"} size={18} color="#999" />
+                            <Ionicons name={isL2 ? "chevron-up" : "chevron-down"} size={16} color="#999" />
                           </TouchableOpacity>
-                          {isL2 && sub.items.map((food, fi) => {
-                            const sel = selectedFoods.has(food.name);
-                            return (
-                              <TouchableOpacity key={food.id} style={[styles.subItemRow, fi < sub.items.length - 1 && styles.subItemRowBorder, { paddingLeft: 52 }]} onPress={() => toggleFood(food.name)} activeOpacity={0.7}>
-                                <Text style={styles.subItemText}>{food.name}</Text>
-                                <View style={[styles.badge, { backgroundColor: sel ? ORANGE : "#F0F0F0", borderColor: sel ? ORANGE : "#E5E5E5", borderWidth: 1 }]}>
-                                  <Ionicons name={sel ? "checkmark" : "add"} size={16} color={sel ? "#FFF" : "#999"} />
-                                </View>
-                              </TouchableOpacity>
-                            );
-                          })}
+                          {isL2 && (
+                            <View style={styles.chipContainer}>
+                              {sub.items.map((food) => {
+                                const sel = selectedFoods.has(food.name);
+                                return (
+                                  <TouchableOpacity
+                                    key={food.id}
+                                    style={[styles.chip, sel ? styles.chipSelected : styles.chipUnselected]}
+                                    onPress={() => toggleFood(food.name)}
+                                    activeOpacity={0.7}
+                                  >
+                                    <Text style={[styles.chipText, sel ? styles.chipTextSelected : styles.chipTextUnselected]}>
+                                      {food.name}
+                                    </Text>
+                                  </TouchableOpacity>
+                                );
+                              })}
+                            </View>
+                          )}
                         </View>
                       );
                     })}

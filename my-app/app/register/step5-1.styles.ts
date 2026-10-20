@@ -70,6 +70,70 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     fontFamily: FONT_REGULAR,
   },
+
+  // --- Help Button (mirrors step5) ---
+  helpButtonWrap: {
+    marginTop: 12,
+    alignItems: "flex-end",
+  },
+  helperButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
+  },
+  helperButtonText: {
+    fontSize: 14,
+    color: "#666",
+    fontFamily: FONT_BOLD,
+  },
+
+  // --- Info Modal (mirrors step5) ---
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    padding: 24,
+  },
+  modalCard: {
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    padding: 22,
+  },
+  modalTitle: {
+    fontSize: 22,
+    textAlign: "center",
+    color: "#111",
+    marginBottom: 14,
+    fontFamily: FONT_BOLD,
+  },
+  modalItem: {
+    marginBottom: 14,
+  },
+  modalItemTitle: {
+    fontSize: 16,
+    color: "#111",
+    fontFamily: FONT_BOLD,
+  },
+  modalItemDesc: {
+    marginTop: 4,
+    fontSize: 14,
+    color: "#555",
+    lineHeight: 21,
+    fontFamily: FONT_REGULAR,
+  },
+  modalCloseButton: {
+    marginTop: 16,
+    backgroundColor: ORANGE,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  modalCloseText: {
+    color: "#fff",
+    fontSize: 16,
+    fontFamily: FONT_BOLD,
+  },
   
   modeRow: {
     flexDirection: "row",

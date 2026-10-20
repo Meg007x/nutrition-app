@@ -112,9 +112,56 @@ async function getNutritionWithFallback(food) {
 }
 
 // ======================================================
+// Calculate goal-adjusted targets (Single Source of Truth)
+// Same formula as frontend step1.calculateAdjustedKcal
+// ======================================================
+function buildAdjustedTargets(user) {
+  var tdee = num(user?.health_goals?.tdee_target_kcal);
+  var protein = num(user?.health_goals?.protein_target_g);
+  var goal = String(user?.health_goals?.primary_goal || '').trim().toLowerCase();
+
+  // Apply goal-based calorie adjustment (mirrors frontend step1)
+  var targetCalories = tdee;
+  if (goal === 'ลดน้ำหนัก' || goal === 'lose_weight' || goal === 'ลดน้ำหนัก/ลดไขมัน') {
+    targetCalories = Math.max(1000, Math.round(tdee - 300));
+  } else if (goal === 'เพิ่มน้ำหนัก' || goal === 'gain_weight') {
+    targetCalories = Math.round(tdee + 300);
+  } else if (goal === 'เพิ่มกล้ามเนื้อ' || goal === 'build_muscle') {
+    targetCalories = Math.round(tdee + 200);
+  }
+
+  var carb_g = targetCalories > 0 ? Math.round((targetCalories * 0.5) / 4) : 0;
+  var fat_g  = targetCalories > 0 ? Math.round((targetCalories * 0.25) / 9) : 0;
+
+  return {
+    target_calories: targetCalories,
+    target_protein_g: protein,
+    target_carb_g: carb_g,
+    target_fat_g: fat_g,
+  };
+}
+
+// ======================================================
 // Build Daily Target (v2 schema format)
+// Uses stored targets first, then falls back to formula
 // ======================================================
 function buildDailyTarget(user) {
+  // Source 1: Stored targets (Single Source of Truth)
+  var storedKcal = num(user?.health_goals?.target_calories);
+  var storedProtein = num(user?.health_goals?.protein_target_g);
+  var storedCarb = num(user?.health_goals?.target_carb_g);
+  var storedFat = num(user?.health_goals?.target_fat_g);
+
+  if (storedKcal > 0) {
+    return {
+      target_kcal: storedKcal,
+      target_protein_g: storedProtein,
+      target_carb_g: storedCarb,
+      target_fat_g: storedFat,
+    };
+  }
+
+  // Source 2: Fallback to formula
   var tdee = num(user?.health_goals?.tdee_target_kcal);
   var protein = num(user?.health_goals?.protein_target_g);
   var carb = tdee > 0 ? Math.round((tdee * 0.5) / 4) : 0;
@@ -164,6 +211,7 @@ function buildDailySummary(slots, dailyTarget) {
 module.exports = {
   calculateFromIngredients: calculateFromIngredients,
   getNutritionWithFallback: getNutritionWithFallback,
+  buildAdjustedTargets: buildAdjustedTargets,
   buildDailyTarget: buildDailyTarget,
   buildDailySummary: buildDailySummary,
   zeroNutrition: zeroNutrition,

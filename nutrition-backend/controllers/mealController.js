@@ -5,9 +5,36 @@ const { getNutritionWithFallback, buildDailyTarget, buildDailySummary, num } = r
 
 // ======================================================
 // Shared: Calculate Daily Nutrition Target from User
+// Uses stored targets (Single Source of Truth) first,
+// then falls back to formula-based calculation
 // ======================================================
 
 function calculateDailyNutritionTarget(user) {
+  // Source 1: Stored targets (primary)
+  const storedKcal = user?.health_goals?.target_calories || 0;
+  const storedProtein = user?.health_goals?.protein_target_g || 0;
+  const storedCarb = user?.health_goals?.target_carb_g || 0;
+  const storedFat = user?.health_goals?.target_fat_g || 0;
+
+  if (storedKcal > 0) {
+    return {
+      kcal: storedKcal,
+      protein_g: storedProtein,
+      carb_g: storedCarb,
+      fat_g: storedFat,
+      fiber_g: 0,
+      sodium_mg: 0,
+      // v2: daily_target for DailyPlan schema
+      daily_target: {
+        target_kcal: storedKcal,
+        target_protein_g: storedProtein,
+        target_carb_g: storedCarb,
+        target_fat_g: storedFat,
+      },
+    };
+  }
+
+  // Source 2: Fallback to raw TDEE + formula (legacy)
   const targetKcal = user?.health_goals?.tdee_target_kcal || 0;
   const protein_g = user?.health_goals?.protein_target_g || 0;
   const carb_g = targetKcal > 0 ? Math.round((targetKcal * 0.5) / 4) : 0;
@@ -154,6 +181,33 @@ async function createMealPlans(req, res) {
     const planDays = Math.min(Math.max(Number(days) || 7, 1), 7);
     const planId = generatePlanId();
 
+    // ─── Build meal slots from user's meal_settings.schedules ───
+    const mealSchedules = user?.meal_settings?.schedules || [];
+    const mealsPerDay = user?.meal_settings?.meals_per_day || mealSchedules.length || 3;
+
+    // Default slot definitions if user has no schedules
+    const defaultSlots = [
+      { slot_name: "มื้อเช้า", meal_type: "breakfast", ratio: 0.3 },
+      { slot_name: "มื้อกลางวัน", meal_type: "lunch", ratio: 0.4 },
+      { slot_name: "มื้อเย็น", meal_type: "dinner", ratio: 0.3 },
+    ];
+
+    // Build slots from user schedules or defaults
+    let mealSlots;
+    if (mealSchedules.length > 0) {
+      const ratioEach = 1 / mealSchedules.length;
+      mealSlots = mealSchedules.map((s, idx) => ({
+        slot_name: s.name || `มื้อที่ ${idx + 1}`,
+        meal_type: s.name ? s.name.toLowerCase().replace(/\s/g, "_") : `meal_${idx + 1}`,
+        ratio: ratioEach,
+      }));
+    } else {
+      mealSlots = defaultSlots.slice(0, mealsPerDay);
+      // Re-normalize ratios
+      const totalRatio = mealSlots.reduce((sum, s) => sum + s.ratio, 0);
+      mealSlots = mealSlots.map(s => ({ ...s, ratio: s.ratio / totalRatio }));
+    }
+
     // Build exclude filter — v1 (legacy string matching)
     const allergyList = Array.isArray(allergies) ? allergies : flattenValues(allergies);
     const dislikedList = Array.isArray(disliked_foods) ? disliked_foods : flattenValues(disliked_foods);
@@ -187,7 +241,7 @@ async function createMealPlans(req, res) {
     // ─── Ingredient-level filtering (v2) ─────────────────
     // Check each food's ingredients[] against user's specific allergies & dislikes
     let filteredFoods = allFoods;
-    if (allergyV2Codes.length > 0 || (userDoc && userDoc.disliked_foods)) {
+    if (allergyV2Codes.length > 0 || (userDoc && (userDoc.disliked_foods || (userDoc.disliked_ingredients_v2 && userDoc.disliked_ingredients_v2.length > 0)))) {
       // Build set of blocked ingredient _ids from user's allergies_v2
       const allV2Codes = [...allergyV2Codes];
 
@@ -196,6 +250,13 @@ async function createMealPlans(req, res) {
       if (userDoc && Array.isArray(userDoc.allergies_v2)) {
         userDoc.allergies_v2.forEach(function(a) {
           if (a.ingredient_id) v2IngredientIds.add(a.ingredient_id);
+        });
+      }
+
+      // Also collect ingredient_ids from disliked_ingredients_v2
+      if (userDoc && Array.isArray(userDoc.disliked_ingredients_v2)) {
+        userDoc.disliked_ingredients_v2.forEach(function(d) {
+          if (d.ingredient_id) v2IngredientIds.add(d.ingredient_id);
         });
       }
 
@@ -217,6 +278,12 @@ async function createMealPlans(req, res) {
       if (userDoc && userDoc.disliked_foods) {
         Object.values(userDoc.disliked_foods).forEach(function(arr) {
           if (Array.isArray(arr)) arr.forEach(function(n) { dislikedNames.add(String(n).toLowerCase()); });
+        });
+      }
+      // Also add names from disliked_ingredients_v2
+      if (userDoc && Array.isArray(userDoc.disliked_ingredients_v2)) {
+        userDoc.disliked_ingredients_v2.forEach(function(d) {
+          if (d.name) dislikedNames.add(d.name.toLowerCase());
         });
       }
 
@@ -246,13 +313,18 @@ async function createMealPlans(req, res) {
       }
     }
 
-    if (filteredFoods.length === 0) return res.status(400).json({ success: false, message: "ไม่พบอาหารที่เหมาะสม" });
+    // ─── Layer 3: Final allergen sweep (catches hierarchy-level matches) ───
+    if (userDoc && Array.isArray(userDoc.allergies_v2) && userDoc.allergies_v2.length > 0) {
+      const { checkFoodAllergensSync } = require("../utils/allergenChecker");
+      const beforeCount = filteredFoods.length;
+      filteredFoods = filteredFoods.filter(function(food) {
+        const w = checkFoodAllergensSync(food, userDoc);
+        return !w.has_allergen_warning;
+      });
+      console.log("After Layer 3 allergen sweep:", filteredFoods.length, "(was", beforeCount + ")");
+    }
 
-    const mealSlots = [
-      { slot_name: "มื้อเช้า", meal_type: "breakfast", ratio: 0.3 },
-      { slot_name: "มื้อกลางวัน", meal_type: "lunch", ratio: 0.4 },
-      { slot_name: "มื้อเย็น", meal_type: "dinner", ratio: 0.3 },
-    ];
+    if (filteredFoods.length === 0) return res.status(400).json({ success: false, message: "ไม่พบอาหารที่เหมาะสม" });
 
     const createdPlans = [];
 
@@ -286,13 +358,8 @@ async function createMealPlans(req, res) {
         // Calculate actual sum so far to adjust last slot
         const prevSlotsKcal = mealSlots
           .slice(0, idx)
-          .reduce((sum, s, j) => {
-            const prevFood = shuffled.find((f) => {
-              const fKcal = number(f?.nutrition_per_portion?.kcal);
-              const prevTarget = Math.round(target_kcal * s.ratio);
-              return Math.abs(fKcal - prevTarget) < Infinity;
-            });
-            return sum + number(bestFood?.nutrition_per_portion?.kcal || 0);
+          .reduce((sum, s) => {
+            return sum + number(s.main_food?.nutrition_per_portion?.kcal ?? s.target_kcal ?? 0);
           }, 0);
 
         return {
@@ -326,27 +393,22 @@ async function createMealPlans(req, res) {
       // should be within ±5% of target_kcal
       // ==================================================
 
-      const actualKcalSum = slots.reduce((sum, s) => sum + number(s.main_food?.kcal || s.target_kcal), 0);
+      const actualKcalSum = slots.reduce((sum, s) => sum + number(s.main_food?.nutrition_per_portion?.kcal ?? s.target_kcal ?? 0), 0);
       const fulfillmentPct = target_kcal > 0 ? (actualKcalSum / target_kcal) * 100 : 100;
 
       console.log(`📅 Day ${date}: target=${target_kcal} actual=${actualKcalSum} (${fulfillmentPct.toFixed(1)}%)`);
 
-      // If under-allocated (< 95%), adjust the daily_target_summary
-      // to match actual food calories so progress bar fills correctly
-      const adjustedTarget = fulfillmentPct < 95
-        ? actualKcalSum  // Use actual sum as target so bar = 100%
-        : target_kcal;
+      // FIX: daily_target_summary ต้องใช้ค่าจาก user.health_goals (Single Source of Truth)
+      // ห้ามใช้ adjustedTarget หรือ slots.reduce - ต้องตรงกับ Dashboard 100%
 
       const dailyPlan = await DailyPlan.create({
         plan_id: planId, plan_status: "active", user_id, date, plan_type: "daily",
         generated_by: "user", goal, meals_per_day: mealSlots.length, slots,
         daily_target_summary: {
-          kcal: adjustedTarget,
-          protein_g: slots.reduce((s, sl) => s + num(sl.target_nutrition.protein_g), 0),
-          carb_g: slots.reduce((s, sl) => s + num(sl.target_nutrition.carb_g), 0),
-          fat_g: slots.reduce((s, sl) => s + num(sl.target_nutrition.fat_g), 0),
-          fiber_g: slots.reduce((s, sl) => s + num(sl.target_nutrition.fiber_g), 0),
-          sodium_mg: slots.reduce((s, sl) => s + num(sl.target_nutrition.sodium_mg), 0),
+          kcal: dailyTarget.kcal,
+          protein_g: dailyTarget.protein_g,
+          carb_g: dailyTarget.carb_g,
+          fat_g: dailyTarget.fat_g,
         },
         // v2 fields
         daily_target: dailyTarget.daily_target,
@@ -373,7 +435,22 @@ async function getPlansByPlanId(req, res) {
     if (!plan_id) return res.status(400).json({ success: false, message: "กรุณาระบุ plan_id" });
     const plans = await DailyPlan.find({ plan_id }).sort({ date: 1 }).lean();
     if (!plans.length) return res.status(404).json({ success: false, message: "ไม่พบแผนอาหาร", plan_id });
-    return res.json({ success: true, plan_id, total_days: plans.length, plans });
+
+    // FIX: Override daily_target_summary ด้วย user targets ปัจจุบัน (Single Source of Truth)
+    const userId = plans[0].user_id;
+    const userDoc = await User.findOne({ user_id: userId }).lean();
+    const liveTarget = calculateDailyNutritionTarget(userDoc);
+    const overriddenPlans = plans.map((p) => ({
+      ...p,
+      daily_target_summary: {
+        kcal: liveTarget.kcal,
+        protein_g: liveTarget.protein_g,
+        carb_g: liveTarget.carb_g,
+        fat_g: liveTarget.fat_g,
+      },
+    }));
+
+    return res.json({ success: true, plan_id, total_days: overriddenPlans.length, plans: overriddenPlans });
   } catch (error) {
     return res.status(500).json({ success: false, message: "ไม่สามารถโหลดแผนอาหารได้", error: error.message });
   }
@@ -394,7 +471,20 @@ async function getPlansByUserId(req, res) {
       return res.status(200).json({ success: true, hasPlan: false, plan: null, plans: [] });
     }
 
-    return res.json({ success: true, hasPlan: true, plan_id: plans[0].plan_id, total_days: plans.length, plans });
+    // FIX: Override daily_target_summary ด้วย user targets ปัจจุบัน (Single Source of Truth)
+    const userDoc = await User.findOne({ user_id }).lean();
+    const liveTarget = calculateDailyNutritionTarget(userDoc);
+    const overriddenPlans = plans.map((p) => ({
+      ...p,
+      daily_target_summary: {
+        kcal: liveTarget.kcal,
+        protein_g: liveTarget.protein_g,
+        carb_g: liveTarget.carb_g,
+        fat_g: liveTarget.fat_g,
+      },
+    }));
+
+    return res.json({ success: true, hasPlan: true, plan_id: overriddenPlans[0].plan_id, total_days: overriddenPlans.length, plans: overriddenPlans });
   } catch (error) {
     return res.status(500).json({ success: false, message: "ไม่สามารถโหลดแผนอาหารได้", error: error.message });
   }
@@ -537,25 +627,178 @@ async function deleteMealFromPlan(req, res) {
 }
 
 // ======================================================
+// GET /api/meal/safe-foods - Allergen-safe foods for swap modal
+// ======================================================
+
+async function getSafeFoods(req, res) {
+  try {
+    const { user_id, exclude_food_id, limit = 20 } = req.query;
+    const limitNum = Math.min(Math.max(Number(limit) || 20, 1), 50);
+
+    if (!user_id) {
+      return res.status(400).json({ success: false, message: "กรุณาระบุ user_id" });
+    }
+
+    const userDoc = await User.findOne({ $or: [{ user_id }, { username: user_id }, { email: user_id }] }).lean();
+    if (!userDoc) {
+      return res.status(404).json({ success: false, message: "ไม่พบผู้ใช้" });
+    }
+
+    const { checkFoodAllergensSync } = require("../utils/allergenChecker");
+    const Ingredient = require("../models/Ingredient");
+
+    // Build blacklist from allergies_v2
+    const allergyV2Codes = [];
+    const v2IngredientIds = new Set();
+    if (Array.isArray(userDoc.allergies_v2)) {
+      userDoc.allergies_v2.forEach(function(a) {
+        if (a.code) allergyV2Codes.push(a.code);
+        if (a.ingredient_id) v2IngredientIds.add(a.ingredient_id);
+      });
+    }
+
+    // Also block disliked ingredients by ID
+    if (Array.isArray(userDoc.disliked_ingredients_v2)) {
+      userDoc.disliked_ingredients_v2.forEach(function(d) {
+        if (d.ingredient_id) v2IngredientIds.add(d.ingredient_id);
+      });
+    }
+
+    // Find ingredient IDs that match allergen codes
+    if (allergyV2Codes.length > 0) {
+      try {
+        const matchingIngs = await Ingredient.find({
+          "allergens_hierarchy.specific_type": { $in: allergyV2Codes },
+        }).select("_id").lean();
+        matchingIngs.forEach(function(ing) { v2IngredientIds.add(ing._id); });
+      } catch (e) { /* skip */ }
+    }
+
+    // Query: exclude foods with matching allergens_summary codes
+    let query = {};
+    const conditions = [];
+    if (allergyV2Codes.length > 0) {
+      conditions.push({ allergens_summary: { $nin: allergyV2Codes } });
+    }
+    if (conditions.length > 0) {
+      query = { $and: conditions };
+    }
+
+    let foods = await MasterFood.find(query).sort({ name: 1 }).limit(limitNum * 2).lean();
+
+    // Build set of disliked ingredient names for name matching
+    const dislikedNames = new Set();
+    if (Array.isArray(userDoc.disliked_ingredients_v2)) {
+      userDoc.disliked_ingredients_v2.forEach(function(d) {
+        if (d.name) dislikedNames.add(d.name.toLowerCase());
+      });
+    }
+    if (userDoc.disliked_foods) {
+      Object.values(userDoc.disliked_foods).forEach(function(arr) {
+        if (Array.isArray(arr)) arr.forEach(function(n) { dislikedNames.add(String(n).toLowerCase()); });
+      });
+    }
+
+    // Ingredient-level filter (allergen IDs + disliked IDs + disliked names)
+    if (v2IngredientIds.size > 0 || dislikedNames.size > 0) {
+      foods = foods.filter(function(food) {
+        const ings = food.ingredients || [];
+        return !ings.some(function(ing) {
+          if (ing.ingredient_id && v2IngredientIds.has(ing.ingredient_id)) return true;
+          if (ing.name && dislikedNames.has(ing.name.toLowerCase())) return true;
+          return false;
+        });
+      });
+    }
+
+    // Exclude the current food
+    if (exclude_food_id) {
+      foods = foods.filter(function(f) { return String(f._id) !== String(exclude_food_id); });
+    }
+
+    // Final check with full allergen checker
+    const safeFoods = [];
+    for (let i = 0; i < foods.length && safeFoods.length < limitNum; i++) {
+      const warning = checkFoodAllergensSync(foods[i], userDoc);
+      if (!warning.has_allergen_warning) {
+        safeFoods.push(mapFoodForResponse(foods[i]));
+      }
+    }
+
+    return res.json({ success: true, count: safeFoods.length, foods: safeFoods });
+  } catch (error) {
+    console.error("Get Safe Foods Error:", error);
+    return res.status(500).json({ success: false, message: "ไม่สามารถดึงอาหารปลอดภัยได้", error: error.message });
+  }
+}
+
+// ======================================================
 // GET /api/meal/search-foods - Fuzzy Search (FIXED)
 // ======================================================
 
 async function searchFoods(req, res) {
   try {
-    const { q = "", limit = 20 } = req.query;
+    const { q = "", limit = 20, user_id } = req.query;
     const searchParam = q ? String(q).trim() : "";
     const limitNum = Math.min(Math.max(Number(limit) || 20, 1), 50);
 
-    // Empty query → return top foods
-    if (!searchParam) {
-      const allFoods = await MasterFood.find({}).sort({ _id: 1 }).limit(limitNum).lean();
-      return res.json({ success: true, query: "", count: allFoods.length, foods: allFoods.map(mapFoodForResponse) });
+    // Load user for allergen checking (if user_id provided)
+    let userDoc = null;
+    if (user_id) {
+      userDoc = await User.findOne({ $or: [{ user_id }, { username: user_id }, { email: user_id }] }).lean();
     }
 
-    // Use $regex/$options syntax directly (avoids RegExp constructor issues)
-    const regexQuery = { $regex: searchParam, $options: "i" };
+    const { checkFoodAllergensSync } = require("../utils/allergenChecker");
 
-    const foods = await MasterFood.find({
+    // Build disliked ingredient names set for filtering
+    const dislikedIngredientNames = new Set();
+    if (userDoc) {
+      if (Array.isArray(userDoc.disliked_ingredients_v2)) {
+        userDoc.disliked_ingredients_v2.forEach(function(d) {
+          if (d.name) dislikedIngredientNames.add(d.name.toLowerCase());
+        });
+      }
+      if (userDoc.disliked_foods) {
+        Object.values(userDoc.disliked_foods).forEach(function(arr) {
+          if (Array.isArray(arr)) arr.forEach(function(n) { dislikedIngredientNames.add(String(n).toLowerCase()); });
+        });
+      }
+    }
+
+    // Helper: check if food contains any disliked ingredient
+    function hasDislikedIngredient(food) {
+      if (dislikedIngredientNames.size === 0) return false;
+      const ings = food.ingredients || [];
+      return ings.some(function(ing) {
+        return ing.name && dislikedIngredientNames.has(ing.name.toLowerCase());
+      });
+    }
+
+    // Empty query → return top foods
+    if (!searchParam) {
+      let allFoods = await MasterFood.find({}).sort({ _id: 1 }).limit(limitNum).lean();
+
+      // If hide_allergen_meals, filter out allergen foods
+      if (userDoc && userDoc.meal_settings && userDoc.meal_settings.hide_allergen_meals) {
+        allFoods = allFoods.filter(function(f) {
+          const w = checkFoodAllergensSync(f, userDoc);
+          return !w.has_allergen_warning;
+        });
+      }
+
+      // Filter out foods with disliked ingredients
+      allFoods = allFoods.filter(function(f) { return !hasDislikedIngredient(f); });
+
+      const results = allFoods.map(function(f) {
+        const mapped = mapFoodForResponse(f);
+        if (userDoc) mapped.allergen_warning = checkFoodAllergensSync(f, userDoc);
+        return mapped;
+      });
+      return res.json({ success: true, query: "", count: results.length, foods: results });
+    }
+
+    const regexQuery = { $regex: searchParam, $options: "i" };
+    let foods = await MasterFood.find({
       $or: [
         { name: regexQuery },
         { name_en: regexQuery },
@@ -565,7 +808,23 @@ async function searchFoods(req, res) {
       ],
     }).sort({ name: 1 }).limit(limitNum).lean();
 
-    return res.json({ success: true, query: searchParam, count: foods.length, foods: foods.map(mapFoodForResponse) });
+    // If hide_allergen_meals, filter out allergen foods
+    if (userDoc && userDoc.meal_settings && userDoc.meal_settings.hide_allergen_meals) {
+      foods = foods.filter(function(f) {
+        const w = checkFoodAllergensSync(f, userDoc);
+        return !w.has_allergen_warning;
+      });
+    }
+
+    // Filter out foods with disliked ingredients
+    foods = foods.filter(function(f) { return !hasDislikedIngredient(f); });
+
+    const results = foods.map(function(f) {
+      const mapped = mapFoodForResponse(f);
+      if (userDoc) mapped.allergen_warning = checkFoodAllergensSync(f, userDoc);
+      return mapped;
+    });
+    return res.json({ success: true, query: searchParam, count: results.length, foods: results });
   } catch (error) {
     console.error("Search Foods Error:", error);
     return res.status(500).json({ success: false, message: "cannot search foods", error: error.message });
@@ -622,52 +881,45 @@ async function deletePlanDay(req, res) {
 async function getFoodById(req, res) {
   try {
     const mongoose = require("mongoose");
+    const { checkFoodAllergens } = require("../utils/allergenChecker");
     const food = await MasterFood.findById(req.params.food_id).lean();
 
     if (!food) {
-      return res.status(404).json({
-        success: false,
-        message: "ไม่พบอาหาร",
-      });
+      return res.status(404).json({ success: false, message: "ไม่พบอาหาร" });
     }
 
-    // Populate ingredient names from Ingredients collection
+    // Populate ingredient names + build cache for allergen check
+    const ingDocMap = {};
     if (food.ingredients && food.ingredients.length > 0) {
-      const ingredientIds = food.ingredients
-        .map((ing) => ing.ingredient_id)
-        .filter(Boolean);
-
+      const ingredientIds = food.ingredients.map((ing) => ing.ingredient_id).filter(Boolean);
       if (ingredientIds.length > 0) {
         const db = mongoose.connection.db;
-        const ingredientDocs = await db
-          .collection("Ingredients")
-          .find({ _id: { $in: ingredientIds } })
-          .toArray();
-
-        const nameMap = {};
-        ingredientDocs.forEach((doc) => {
-          nameMap[String(doc._id)] = doc.name;
-        });
+        const ingredientDocs = await db.collection("Ingredients").find({ _id: { $in: ingredientIds } }).toArray();
+        ingredientDocs.forEach((doc) => { ingDocMap[String(doc._id)] = doc; });
 
         food.ingredients = food.ingredients.map((ing) => ({
           ingredient_id: ing.ingredient_id,
-          name: nameMap[String(ing.ingredient_id)] || ing.ingredient_id || "-",
+          name: ingDocMap[ing.ingredient_id]?.name || ing.name_snap || ing.ingredient_id || "-",
           qty: ing.qty,
           unit: ing.unit,
+          weight_g: ing.weight_g,
         }));
       }
     }
 
-    res.json({
-      success: true,
-      food,
-    });
+    // Calculate allergen warning if user_id provided
+    let allergen_warning = null;
+    const { user_id } = req.query;
+    if (user_id) {
+      const userDoc = await User.findOne({ $or: [{ user_id }, { username: user_id }, { email: user_id }] }).lean();
+      if (userDoc) {
+        allergen_warning = await checkFoodAllergens(food, userDoc, ingDocMap);
+      }
+    }
+
+    res.json({ success: true, food, allergen_warning });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "ไม่สามารถโหลดรายละเอียดอาหารได้",
-      error: error.message,
-    });
+    res.status(500).json({ success: false, message: "ไม่สามารถโหลดรายละเอียดอาหารได้", error: error.message });
   }
 }
 
@@ -680,5 +932,6 @@ module.exports = {
   replaceMealInPlan,
   deleteMealFromPlan,
   searchFoods,
+  getSafeFoods,
   getFoodById,
 };

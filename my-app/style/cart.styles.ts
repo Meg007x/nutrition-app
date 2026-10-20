@@ -119,32 +119,32 @@ export const styles = StyleSheet.create({
   textBlack: {
     color: "#000000",
     opacity: 1,
-    fontFamily: Platform.select({ ios: "Noto Sans Thai", android: "NotoSansThai-Regular" }),
+    fontFamily: "NotoSansThai",
   },
   textBlackBold: {
     color: "#000000",
     opacity: 1,
     fontWeight: "bold",
-    fontFamily: Platform.select({ ios: "Noto Sans Thai", android: "NotoSansThai-Bold" }),
+    fontFamily: "NotoSansThaiBold",
   },
   textWhite: {
     color: "#ffffff",
     opacity: 1,
     fontWeight: "bold",
-    fontFamily: Platform.select({ ios: "Noto Sans Thai", android: "NotoSansThai-Bold" }),
+    fontFamily: "NotoSansThaiBold",
   },
   textWhiteSmall: {
     color: "#ffffff",
     opacity: 1,
     fontSize: 12,
     fontWeight: "bold",
-    fontFamily: Platform.select({ ios: "Noto Sans Thai", android: "NotoSansThai-Bold" }),
+    fontFamily: "NotoSansThaiBold",
   },
   calNumberText: {
     fontSize: 38, 
     fontWeight: "900", 
     color: ORANGE, 
     marginTop: 4,
-    fontFamily: Platform.select({ ios: "Noto Sans Thai", android: "NotoSansThai-Bold" }),
+    fontFamily: "NotoSansThaiBold",
   }
 });
