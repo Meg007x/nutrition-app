@@ -29,17 +29,19 @@ import { Ionicons } from "@expo/vector-icons";
 import {
   router,
   useFocusEffect,
+  useLocalSearchParams,
 } from "expo-router";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import {
   getUserPlan,
+  getPlanById,
+  getFood,
   deletePlan as apiDeletePlan,
   deletePlanDay,
   replaceMeal,
   deleteMeal,
-  searchFoods,
   toggleMealStatus,
   getTodayDate,
   getTodayPlan,
@@ -48,11 +50,13 @@ import {
   getEatenCount,
   getEatenNutrition,
   logPlannedMeal,
+  searchSafeFoods,
   type DailyPlan,
   type SearchResult,
 } from "../../services/mealPlanService";
 
-const ORANGE = "#F26522";
+const ORANGE = "#DF9226";
+type FoodCategoryOption = { field: "category" | "category_type"; value: string; label: string };
 
 /* =========================================================
    DATE HELPERS
@@ -267,6 +271,21 @@ function getNutrition(food: any) {
   };
 }
 
+function getSlotNutrition(slot: any) {
+  const foods = [slot?.main_food, ...(Array.isArray(slot?.addons) ? slot.addons : [])].filter(Boolean);
+  return foods.reduce((total, food) => {
+    const nutrition = getNutrition(food);
+    return {
+      kcal: total.kcal + nutrition.kcal,
+      protein: total.protein + nutrition.protein,
+      carbs: total.carbs + nutrition.carbs,
+      fat: total.fat + nutrition.fat,
+      fiber: total.fiber + nutrition.fiber,
+      sodium: total.sodium + nutrition.sodium,
+    };
+  }, { kcal: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sodium: 0 });
+}
+
 function getIngredients(food: any): any[] {
   if (!food) return [];
 
@@ -325,6 +344,11 @@ function formatIngredient(
 ========================================================= */
 
 export default function PlanScreen() {
+  const params = useLocalSearchParams<{ plan_id?: string | string[] }>();
+  const requestedPlanId = Array.isArray(params.plan_id)
+    ? params.plan_id[0] || ""
+    : params.plan_id || "";
+
   const [plans, setPlans] =
     useState<DailyPlan[]>([]);
 
@@ -372,13 +396,30 @@ export default function PlanScreen() {
       date: string;
       idx: number;
       name: string;
+      mode: "replace" | "add";
     } | null>(null);
 
   const [searchQ, setSearchQ] =
     useState("");
 
+  const [kcalFilter, setKcalFilter] =
+    useState("");
+
+  const [calorieFilterInfo, setCalorieFilterInfo] =
+    useState<{
+      target_kcal: number;
+      tolerance: number;
+      has_matches: boolean;
+    } | null>(null);
+
+  const [searchError, setSearchError] =
+    useState("");
+
   const [searchRes, setSearchRes] =
     useState<SearchResult[]>([]);
+
+  const [foodCategories, setFoodCategories] = useState<FoodCategoryOption[]>([]);
+  const [selectedFoodCategory, setSelectedFoodCategory] = useState<FoodCategoryOption | null>(null);
 
   const [searching, setSearching] =
     useState(false);
@@ -401,6 +442,11 @@ export default function PlanScreen() {
     selectedFood,
     setSelectedFood,
   ] = useState<any>(null);
+
+  const [foodDetailTab, setFoodDetailTab] = useState<"nutrition" | "ingredients">("nutrition");
+  const [foodDetailLoading, setFoodDetailLoading] = useState(false);
+  const [savingFoodSelection, setSavingFoodSelection] = useState(false);
+  const [mealStatusError, setMealStatusError] = useState("");
 
   /* =====================================================
      GET USER ID
@@ -460,29 +506,29 @@ export default function PlanScreen() {
      LOAD PLAN
   ===================================================== */
 
-  async function loadPlan() {
+  const loadPlan = useCallback(async () => {
     try {
       setLoading(true);
 
-      const uid =
-        await getUid();
+      const data = requestedPlanId
+        ? await getPlanById(requestedPlanId)
+        : await (async () => {
+            const uid = await getUid();
+            return uid ? getUserPlan(uid) : null;
+          })();
 
-      if (!uid) {
+      if (!data) {
         setPlans([]);
         setHasPlan(false);
         return;
       }
 
-      const data =
-        await getUserPlan(uid);
-
       const p =
         Array.isArray(data?.plans)
           ? data.plans.filter(
             (plan: DailyPlan) =>
-              !justDeletedPlanIds.current.has(
-                plan.plan_id
-              )
+              (!requestedPlanId || plan.plan_id === requestedPlanId) &&
+              !justDeletedPlanIds.current.has(plan.plan_id)
           )
           : [];
 
@@ -490,6 +536,9 @@ export default function PlanScreen() {
       setHasPlan(
         p.length > 0
       );
+      if (requestedPlanId) {
+        setActiveTab("today");
+      }
 
       const today =
         getTodayDate();
@@ -531,12 +580,12 @@ export default function PlanScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }
+  }, [requestedPlanId]);
 
   useFocusEffect(
     useCallback(() => {
-      loadPlan();
-    }, [])
+      void loadPlan();
+    }, [loadPlan])
   );
 
   /* =====================================================
@@ -585,6 +634,15 @@ export default function PlanScreen() {
         ),
       [todayPlan]
     );
+
+  const remainingTodayMeals = useMemo(
+    () => todayPlan?.slots.filter((slot) => slot.status === "pending").length || 0,
+    [todayPlan]
+  );
+  const skippedTodayMeals = useMemo(
+    () => todayPlan?.slots.filter((slot) => slot.status === "skipped").length || 0,
+    [todayPlan]
+  );
 
   const selDay =
     plans[dayIdx] || null;
@@ -1004,6 +1062,11 @@ export default function PlanScreen() {
     currentStatus: string
   ) {
     try {
+      if (currentStatus === "skipped") {
+        setMealStatusError("มื้อนี้ถูกข้ามอยู่ กรุณากดยกเลิกข้ามก่อนจึงจะบันทึกว่ากินแล้วได้");
+        return;
+      }
+
       // Only allow toggling for today's date
       const today = getTodayDate();
       if (date !== today) {
@@ -1074,6 +1137,39 @@ export default function PlanScreen() {
       );
     }
   }
+
+  function handleSkipMeal(planId: string, date: string, slotIndex: number, currentStatus: string) {
+    const today = getTodayDate();
+    if (date !== today) {
+      setMealStatusError("สามารถปรับสถานะมื้ออาหารได้เฉพาะวันนี้");
+      return;
+    }
+
+    const nextStatus = currentStatus === "skipped" ? "pending" : "skipped";
+    setMealStatusError("");
+    void (async () => {
+      try {
+        const result = await toggleMealStatus(planId, date, slotIndex, nextStatus);
+        if (!result?.success) throw new Error(result?.message || "เซิร์ฟเวอร์ไม่ได้บันทึกสถานะมื้อ");
+        const updatedPlan = result.updated_plan;
+        setPlans((current) => current.map((plan) => {
+          if (plan.plan_id !== planId || plan.date !== date) return plan;
+          if (updatedPlan) return updatedPlan;
+          const slots = [...plan.slots];
+          if (slots[slotIndex]) slots[slotIndex] = { ...slots[slotIndex], status: nextStatus };
+          return { ...plan, slots };
+        }));
+      } catch (error: any) {
+        const rawMessage = error?.message || "ไม่สามารถปรับสถานะมื้ออาหารได้";
+        const message = rawMessage.includes("status ต้องเป็น")
+          ? "เซิร์ฟเวอร์ยังไม่รองรับสถานะข้ามมื้อ กรุณารีสตาร์ต nutrition-backend แล้วลองอีกครั้ง"
+          : rawMessage;
+        setMealStatusError(message);
+        if (Platform.OS !== "web") Alert.alert("อัปเดตไม่สำเร็จ", message);
+      }
+    })();
+  }
+
   /* =========================================================
      LOG PLANNED MEAL → MealLog
   ========================================================= */
@@ -1084,6 +1180,11 @@ export default function PlanScreen() {
     slot: any
   ) {
     try {
+      if (slot.status === "skipped") {
+        setMealStatusError("มื้อนี้ถูกข้ามอยู่ กรุณากดยกเลิกข้ามก่อนจึงจะบันทึกแผนมื้ออาหารได้");
+        return;
+      }
+
       const today = getTodayDate();
       if (date !== today) {
         Alert.alert(
@@ -1093,19 +1194,23 @@ export default function PlanScreen() {
         return;
       }
 
-      if (slot.status === "eaten") {
-        Alert.alert("บันทึกแล้ว", "มื้อนี้ถูกบันทึกไปแล้ว");
+      if (slot.status !== "eaten") {
+        Alert.alert(
+          "ยังไม่ได้ทำเครื่องหมาย",
+          "กรุณาติ๊กวงกลมว่ากินแล้วก่อนบันทึกแผน"
+        );
         return;
       }
 
+      const userId = await getUid();
       if (!userId) {
         Alert.alert("ไม่พบผู้ใช้", "กรุณาเข้าสู่ระบบใหม่");
         return;
       }
 
       Alert.alert(
-        "บันทึกการกิน",
-        `ต้องการบันทึก "${mealType}" เป็นมื้อที่กินแล้วหรือไม่?`,
+        "บันทึกแผนมื้ออาหาร",
+        `ต้องการบันทึกแผนมื้อ "${mealType}" หรือไม่?`,
         [
           { text: "ยกเลิก", style: "cancel" },
           {
@@ -1113,14 +1218,8 @@ export default function PlanScreen() {
             onPress: async () => {
               try {
                 await logPlannedMeal(userId, date, mealType, slot);
-                await toggleMealStatus(
-                  slot._id || slot.meal_id || "",
-                  date,
-                  0,
-                  "eaten"
-                );
-                await loadPlans();
-                Alert.alert("สำเร็จ", "บันทึกการกินเรียบร้อยแล้ว");
+                await loadPlan();
+                Alert.alert("สำเร็จ", "บันทึกแผนมื้ออาหารเรียบร้อยแล้ว");
               } catch (err: any) {
                 Alert.alert("บันทึกไม่สำเร็จ", err?.message || "เกิดข้อผิดพลาด");
               }
@@ -1133,6 +1232,59 @@ export default function PlanScreen() {
     }
   }
 
+  async function handleDeleteAddon(planId: string, date: string, slotIndex: number, addon: any) {
+    const foodId = String(addon?.food_id || addon?._id || "");
+    if (!foodId) return;
+    Alert.alert("ลบเมนูเสริม", `ต้องการลบ ${getFoodName(addon)} ออกจากมื้อนี้หรือไม่?`, [
+      { text: "ยกเลิก", style: "cancel" },
+      {
+        text: "ลบ",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            const response = await fetch(`${BASE_URL}/api/meal/plans/${encodeURIComponent(planId)}/addon`, {
+              method: "DELETE",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ date, slot_index: slotIndex, food_id: foodId }),
+            });
+            const result = await response.json();
+            if (!response.ok || !result?.success) throw new Error(result?.message || "ลบเมนูเสริมไม่สำเร็จ");
+            if (result.updated_plan) {
+              setPlans((current) => current.map((plan) => plan.date === date ? result.updated_plan : plan));
+            } else {
+              await loadPlan();
+            }
+          } catch (error: any) {
+            Alert.alert("ลบเมนูไม่สำเร็จ", error?.message || "เกิดข้อผิดพลาด");
+          }
+        },
+      },
+    ]);
+  }
+
+  function renderAddonFoods(planId: string, date: string, slotIndex: number, addons: any[] = []) {
+    if (!addons.length) return null;
+    return (
+      <View style={{ marginTop: 10, gap: 8 }}>
+        <Text style={{ marginLeft: 30, fontSize: 12, color: "#888", fontWeight: "700" }}>เมนูเสริม</Text>
+        {addons.map((addon, addonIndex) => (
+          <View key={`${addon.food_id || addon._id || addon.name}-${addonIndex}`} style={{ flexDirection: "row", alignItems: "center", gap: 9, marginLeft: 28, padding: 9, backgroundColor: "#FFF8EB", borderRadius: 10 }}>
+            <TouchableOpacity onPress={() => openFoodDetail(addon)} style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 9 }}>
+              <FoodImage food={addon} size={46} />
+              <View style={{ flex: 1 }}>
+                <Text numberOfLines={2} style={{ color: "#333", fontWeight: "700" }}>{getFoodName(addon)}</Text>
+                <Text style={{ color: ORANGE, fontWeight: "700", marginTop: 3 }}>{getNutrition(addon).kcal} kcal</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => handleDeleteAddon(planId, date, slotIndex, addon)} accessibilityLabel={`ลบ${getFoodName(addon)}ออกจากมื้อนี้`} style={{ padding: 6 }}>
+              <Ionicons name="trash-outline" size={19} color="#D64545" />
+            </TouchableOpacity>
+          </View>
+        ))}
+      </View>
+    );
+  }
+
   /* =========================================================
      OPEN CHANGE FOOD
   ========================================================= */
@@ -1141,48 +1293,110 @@ export default function PlanScreen() {
     planId: string,
     date: string,
     slotIndex: number,
-    slotName: string
+    slotName: string,
+    mode: "replace" | "add" = "replace"
   ) {
     setSelSlot({
       planId,
       date,
       idx: slotIndex,
       name: slotName,
+      mode,
     });
 
     setSearchQ("");
+    setKcalFilter("");
+    setSelectedFoodCategory(null);
+    setCalorieFilterInfo(null);
+    setSearchError("");
     setShowModal(true);
 
+    void loadFoodCategories();
     loadDefaultFoods();
   }
 
-  async function loadDefaultFoods() {
+  async function loadFoodCategories() {
+    try {
+      const response = await fetch(`${BASE_URL}/api/meal/food-categories`);
+      const data = await response.json();
+      if (response.ok && data?.success && Array.isArray(data.categories)) {
+        setFoodCategories(data.categories);
+      }
+    } catch (error) {
+      console.warn("Could not load food categories:", error);
+    }
+  }
+
+  function shortFoodCategoryLabel(category: FoodCategoryOption) {
+    const raw = `${category.value} ${category.label}`.toLowerCase();
+    if (/ทอด|ผัด|fried|stir/.test(raw)) return "ผัดทอด";
+    if (/ขนม|ของหวาน|dessert|snack|bakery/.test(raw)) return "ของทานเล่น";
+    if (/ต้ม|แกง|ซุป|soup|curry/.test(raw)) return "ต้มแกง";
+    if (/นึ่ง|ย่าง|steam|grill/.test(raw)) return "นึ่งและย่าง";
+    if (/ข้าว|เส้น|พาสต้า|rice|noodle|pasta/.test(raw)) return "ข้าวเส้น";
+    if (/ยำ|สลัด|ผัก|salad|vegetable/.test(raw)) return "ยำสลัด";
+    if (/เครื่องดื่ม|drink|juice|กาแฟ/.test(raw)) return "เครื่องดื่ม";
+    if (/เนื้อ|ไก่|หมู|ปลา|meat|chicken|fish/.test(raw)) return "เนื้อสัตว์";
+    if (/อาหารจานเดียว|จานเดียว|single/.test(raw)) return "จานเดียว";
+    if (/อาหารหลัก|จานหลัก|main/.test(raw)) return "จานหลัก";
+    if (/เครื่องเคียง|side/.test(raw)) return "เครื่องเคียง";
+    if (/อื่น|other/.test(raw)) return "อื่นๆ";
+    return /[a-z]/i.test(category.label) ? "อื่นๆ" : category.label.trim();
+  }
+
+  function foodCategorySticker(category: FoodCategoryOption, used: Set<string>) {
+    const raw = `${category.value} ${category.label}`.toLowerCase();
+    const preferred = /ทอด|ผัด|fried|stir/.test(raw) ? "🍳"
+      : /ขนม|ของหวาน|dessert|snack|bakery/.test(raw) ? "🍰"
+      : /ต้ม|แกง|ซุป|soup|curry/.test(raw) ? "🍲"
+      : /ข้าว|เส้น|พาสต้า|rice|noodle|pasta/.test(raw) ? "🍜"
+      : /ยำ|สลัด|ผัก|salad|vegetable/.test(raw) ? "🥗"
+      : /เครื่องดื่ม|drink|juice|กาแฟ/.test(raw) ? "🥤"
+      : /เนื้อ|ไก่|หมู|ปลา|meat|chicken|fish/.test(raw) ? "🍖"
+      : /จานเดียว|single/.test(raw) ? "🍱" : "🍽️";
+    const fallbacks = ["🥟", "🥪", "🧆", "🥘", "🍛", "🧁", "🍙", "🥗", "🍢", "🥐"];
+    const icon = !used.has(preferred) ? preferred : fallbacks.find((item) => !used.has(item)) || "🍴";
+    used.add(icon);
+    return icon;
+  }
+
+  async function loadFoodResults(query: string, targetKcal?: number, category: FoodCategoryOption | null = selectedFoodCategory) {
     try {
       setSearching(true);
+      setSearchError("");
 
-      const data =
-        await searchFoods(
-          "",
-          20
-        );
+      const userId = await getUid();
+      if (!userId) {
+        throw new Error("ไม่พบข้อมูลผู้ใช้ กรุณาเข้าสู่ระบบใหม่");
+      }
 
+      const data = await searchSafeFoods(userId, query, targetKcal, "all", category);
       setSearchRes(
-        Array.isArray(
-          data?.foods
-        )
-          ? data.foods
-          : []
+        Array.isArray(data?.foods) ? data.foods : []
       );
-    } catch (e) {
-      console.warn(
-        "loadDefaultFoods error:",
-        e
-      );
-
+      setCalorieFilterInfo(data?.calorie_filter || null);
+    } catch (e: any) {
+      console.error("load food results error:", e);
       setSearchRes([]);
+      setCalorieFilterInfo(null);
+      setSearchError(e?.message || "ไม่สามารถค้นหาเมนูอาหารได้");
     } finally {
       setSearching(false);
     }
+  }
+
+  async function loadDefaultFoods() {
+    await loadFoodResults("", undefined, null);
+  }
+
+  function onFoodCategorySelect(category: FoodCategoryOption | null) {
+    setSelectedFoodCategory(category);
+    const typedCalories = Number(kcalFilter);
+    const targetKcal = kcalFilter.trim() && Number.isFinite(typedCalories) && typedCalories >= 0
+      ? typedCalories
+      : undefined;
+    const query = /^\d+$/.test(searchQ.trim()) ? "" : searchQ.trim();
+    void loadFoodResults(query, targetKcal, category);
   }
 
   /* =========================================================
@@ -1193,6 +1407,11 @@ export default function PlanScreen() {
     text: string
   ) {
     setSearchQ(text);
+    const trimmed = text.trim();
+    const isCalorieSearch = /^\d+$/.test(trimmed);
+    if (isCalorieSearch) {
+      setKcalFilter(trimmed);
+    }
 
     if (
       timerRef.current
@@ -1202,54 +1421,56 @@ export default function PlanScreen() {
       );
     }
 
-    if (!text.trim()) {
-      loadDefaultFoods();
-      return;
-    }
-
-    setSearching(true);
-
     timerRef.current =
       setTimeout(
-        async () => {
-          try {
-            const data =
-              await searchFoods(
-                text.trim(),
-                15
-              );
-
-            setSearchRes(
-              Array.isArray(
-                data?.foods
-              )
-                ? data.foods
-                : []
-            );
-          } catch (e) {
-            console.error(
-              "searchFoods error:",
-              e
-            );
-
-            setSearchRes([]);
-          } finally {
-            setSearching(
-              false
-            );
-          }
+        () => {
+          const targetKcal = Number(kcalFilter);
+          void loadFoodResults(
+            isCalorieSearch ? "" : trimmed,
+            isCalorieSearch
+              ? Number(trimmed)
+              : kcalFilter.trim() &&
+                  Number.isFinite(targetKcal) &&
+                  targetKcal >= 0
+                ? targetKcal
+                : undefined
+          );
         },
         400
       );
+  }
+
+  function onKcalFilterChange(text: string) {
+    const numericText = text.replace(/[^\d]/g, "");
+    setKcalFilter(numericText);
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+    }
+
+    timerRef.current = setTimeout(() => {
+      const targetKcal = Number(numericText);
+      const query = /^\d+$/.test(searchQ.trim())
+        ? ""
+        : searchQ.trim();
+      void loadFoodResults(
+        query,
+        numericText &&
+          Number.isFinite(targetKcal) &&
+          targetKcal >= 0
+          ? targetKcal
+          : undefined
+      );
+    }, 400);
   }
 
   /* =========================================================
      FOOD DETAIL
   ========================================================= */
 
-  function openFoodDetail(
+  async function openFoodDetail(
     food: any
   ) {
+    setFoodDetailTab("nutrition");
     setSelectedFood(
       food
     );
@@ -1257,6 +1478,19 @@ export default function PlanScreen() {
     setShowFoodDetail(
       true
     );
+
+    const foodId = String(food?._id || food?.food_id || "");
+    if (!foodId || (Array.isArray(food?.ingredients) && food.ingredients.length > 0)) return;
+
+    try {
+      setFoodDetailLoading(true);
+      const details = await getFood(foodId);
+      if (details) setSelectedFood({ ...food, ...details });
+    } catch (error) {
+      console.warn("Could not load menu ingredients:", error);
+    } finally {
+      setFoodDetailLoading(false);
+    }
   }
 
   function closeFoodDetail() {
@@ -1322,6 +1556,48 @@ export default function PlanScreen() {
         e?.message ||
         "ไม่สามารถแทนที่มื้ออาหารได้"
       );
+    }
+  }
+
+  async function handleFoodSelection(food: any) {
+    if (!selSlot) return;
+    if (selSlot.mode !== "add") {
+      await doReplace(String(food?._id || food?.food_id || ""));
+      return;
+    }
+
+    const foodId = String(food?._id || food?.food_id || "");
+    if (!foodId || savingFoodSelection) {
+      if (!foodId) Alert.alert("เพิ่มเมนูไม่สำเร็จ", "ไม่พบรหัสเมนูอาหาร");
+      return;
+    }
+
+    setSavingFoodSelection(true);
+    try {
+      const response = await fetch(`${BASE_URL}/api/meal/plans/${encodeURIComponent(selSlot.planId)}/addon`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: selSlot.date, slot_index: selSlot.idx, food_id: foodId }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result?.success) {
+        throw new Error(result?.message || "เพิ่มเมนูไม่สำเร็จ");
+      }
+
+      if (result.updated_plan) {
+        setPlans((current) => current.map((plan) => plan.date === result.updated_plan.date ? result.updated_plan : plan));
+      } else {
+        await loadPlan();
+      }
+      setShowFoodDetail(false);
+      setSelectedFood(null);
+      setShowModal(false);
+      setSelSlot(null);
+      Alert.alert("เพิ่มเมนูแล้ว", `เพิ่ม ${getFoodName(food)} ในมื้อนี้แล้ว`);
+    } catch (error: any) {
+      Alert.alert("เพิ่มเมนูไม่สำเร็จ", error?.message || "เกิดข้อผิดพลาด");
+    } finally {
+      setSavingFoodSelection(false);
     }
   }
 
@@ -1879,6 +2155,9 @@ export default function PlanScreen() {
                   targetKcal &&
                   ` (+${eatenKcal - targetKcal})`}
               </Text>
+              <Text style={{ marginTop: 4, fontSize: 12, color: "#888", textAlign: "right" }}>
+                กินแล้ว / เป้าหมาย
+              </Text>
             </View>
 
             <View
@@ -1961,13 +2240,9 @@ export default function PlanScreen() {
                         marginTop: 2,
                       }}
                     >
-                      {
-                        macro.eaten
-                      }{" "}
+                      {Math.round(macro.eaten)}{" "}
                       /{" "}
-                      {
-                        macro.target
-                      }g
+                      {Math.round(macro.target)}g
                     </Text>
                   </View>
                 )
@@ -2009,10 +2284,30 @@ export default function PlanScreen() {
                   ?.slots
                   ?.length ||
                   0}{" "}
-                มื้อ
+                มื้อ{skippedTodayMeals > 0 ? ` · ข้าม ${skippedTodayMeals} มื้อ` : ""}
               </Text>
             </View>
           </View>
+
+          {todayPlan && (
+            <View style={{ marginTop: 12, marginBottom: 16, padding: 12, borderRadius: 12, backgroundColor: eatenKcal > targetKcal && targetKcal > 0 ? "#FFF4EF" : "#FFF8E8" }}>
+              <Text style={{ fontSize: 13, lineHeight: 19, color: "#684A27" }}>
+                {eatenKcal > targetKcal && targetKcal > 0
+                  ? `วันนี้เกินเป้าหมาย ${eatenKcal - targetKcal} kcal แล้ว ไม่ต้องอดหรือชดเชย มื้อถัดไปกินตามปกติและบันทึกตามที่กินจริงได้`
+                  : remainingTodayMeals > 0
+                    ? `วันนี้ยังเหลือ ${remainingTodayMeals} มื้อตามแผน เลือกอาหารตามแผนหรือเพิ่มเมนูในมื้อที่ต้องการได้`
+                    : skippedTodayMeals > 0
+                      ? `วันนี้บันทึกข้ามมื้อแล้ว ${skippedTodayMeals} มื้อ ยอดกินแล้วคำนวณจากมื้อที่ทำเครื่องหมายว่ากิน`
+                    : `บันทึกมื้อของวันนี้ครบแล้ว หากกินต่างจากแผน สามารถเปลี่ยนหรือเพิ่มเมนูแล้วบันทึกตามจริงได้`}
+              </Text>
+            </View>
+          )}
+
+          {!!mealStatusError && (
+            <Text style={{ color: "#B42318", fontSize: 13, marginBottom: 12 }}>
+              {mealStatusError}
+            </Text>
+          )}
 
           <Text
             style={{
@@ -2149,6 +2444,10 @@ export default function PlanScreen() {
 
                     {hasF && (
                       <TouchableOpacity
+                        disabled={slot.status === "skipped"}
+                        accessibilityRole="button"
+                        accessibilityState={{ disabled: slot.status === "skipped", checked: isE }}
+                        accessibilityLabel={slot.status === "skipped" ? "มื้อนี้ถูกข้าม กรุณายกเลิกข้ามก่อนบันทึกว่ากินแล้ว" : isE ? "ยกเลิกบันทึกว่ากินแล้ว" : "บันทึกว่ากินแล้ว"}
                         onPress={() =>
                           handleToggle(
                             todayPlan.plan_id,
@@ -2190,18 +2489,26 @@ export default function PlanScreen() {
                       }}
                     >
                       {
-                        getNutrition(
-                          food
-                        ).kcal
+                        getSlotNutrition(slot).kcal
                       }{" "}
                       kcal
                     </Text>
+                  )}
+
+                  {renderAddonFoods(todayPlan.plan_id, todayPlan.date, idx, slot.addons || [])}
+                  {hasF && (slot.addons || []).length > 0 && (
+                    <View style={{ flexDirection: "row", gap: 6, marginTop: 7, marginLeft: 30 }}>
+                      <Text style={st.slotMacroText}>โปรตีน {Math.round(getSlotNutrition(slot).protein)}g</Text>
+                      <Text style={st.slotMacroText}>คาร์บ {Math.round(getSlotNutrition(slot).carbs)}g</Text>
+                      <Text style={st.slotMacroText}>ไขมัน {Math.round(getSlotNutrition(slot).fat)}g</Text>
+                    </View>
                   )}
 
                   <View
                     style={{
                       flexDirection:
                         "row",
+                      flexWrap: "wrap",
                       gap: 10,
                       marginTop: 10,
                     }}
@@ -2240,6 +2547,24 @@ export default function PlanScreen() {
                       </Text>
                     </TouchableOpacity>
 
+                    <TouchableOpacity
+                      style={st.actionBtn}
+                      onPress={() => openModal(todayPlan.plan_id, todayPlan.date, idx, slot.slot_name, "add")}
+                    >
+                      <Ionicons name="add-outline" size={18} color={ORANGE} />
+                      <Text style={{ fontSize: 13, color: ORANGE, fontWeight: "600" }}>เพิ่มเมนู</Text>
+                    </TouchableOpacity>
+
+                    {slot.status !== "eaten" && (
+                      <TouchableOpacity
+                        style={st.actionBtn}
+                        onPress={() => handleSkipMeal(todayPlan.plan_id, todayPlan.date, idx, slot.status || "pending")}
+                      >
+                        <Ionicons name={slot.status === "skipped" ? "return-up-back-outline" : "play-skip-forward-outline"} size={16} color="#777" />
+                        <Text style={{ fontSize: 13, color: "#777", fontWeight: "600" }}>{slot.status === "skipped" ? "ยกเลิกข้าม" : "ข้ามมื้อ"}</Text>
+                      </TouchableOpacity>
+                    )}
+
                     {hasF && (
                       <TouchableOpacity
                         style={st.actionBtn}
@@ -2271,7 +2596,7 @@ export default function PlanScreen() {
                       </TouchableOpacity>
                     )}
 
-                    {hasF && !isE && (
+                    {hasF && isE && (
                       <TouchableOpacity
                         style={{
                           flexDirection: "row",
@@ -2645,6 +2970,10 @@ export default function PlanScreen() {
 
                         {hasF && (
                           <TouchableOpacity
+                            disabled={slot.status === "skipped"}
+                            accessibilityRole="button"
+                            accessibilityState={{ disabled: slot.status === "skipped", checked: isE }}
+                            accessibilityLabel={slot.status === "skipped" ? "มื้อนี้ถูกข้าม กรุณายกเลิกข้ามก่อนบันทึกว่ากินแล้ว" : isE ? "ยกเลิกบันทึกว่ากินแล้ว" : "บันทึกว่ากินแล้ว"}
                             onPress={() =>
                               handleToggle(
                                 selDay.plan_id,
@@ -2686,18 +3015,26 @@ export default function PlanScreen() {
                           }}
                         >
                           {
-                            getNutrition(
-                              food
-                            ).kcal
+                            getSlotNutrition(slot).kcal
                           }{" "}
                           kcal
                         </Text>
+                      )}
+
+                      {renderAddonFoods(selDay.plan_id, selDay.date, idx, slot.addons || [])}
+                      {hasF && (slot.addons || []).length > 0 && (
+                        <View style={{ flexDirection: "row", gap: 6, marginTop: 7, marginLeft: 30 }}>
+                          <Text style={st.slotMacroText}>โปรตีน {Math.round(getSlotNutrition(slot).protein)}g</Text>
+                          <Text style={st.slotMacroText}>คาร์บ {Math.round(getSlotNutrition(slot).carbs)}g</Text>
+                          <Text style={st.slotMacroText}>ไขมัน {Math.round(getSlotNutrition(slot).fat)}g</Text>
+                        </View>
                       )}
 
                       <View
                         style={{
                           flexDirection:
                             "row",
+                          flexWrap: "wrap",
                           gap: 10,
                           marginTop: 10,
                         }}
@@ -2736,6 +3073,24 @@ export default function PlanScreen() {
                           </Text>
                         </TouchableOpacity>
 
+                        <TouchableOpacity
+                          style={st.actionBtn}
+                          onPress={() => openModal(selDay.plan_id, selDay.date, idx, slot.slot_name, "add")}
+                        >
+                          <Ionicons name="add-outline" size={18} color={ORANGE} />
+                          <Text style={{ fontSize: 13, color: ORANGE, fontWeight: "600" }}>เพิ่มเมนู</Text>
+                        </TouchableOpacity>
+
+                        {selDay.date === getTodayDate() && slot.status !== "eaten" && (
+                          <TouchableOpacity
+                            style={st.actionBtn}
+                            onPress={() => handleSkipMeal(selDay.plan_id, selDay.date, idx, slot.status || "pending")}
+                          >
+                            <Ionicons name={slot.status === "skipped" ? "return-up-back-outline" : "play-skip-forward-outline"} size={16} color="#777" />
+                            <Text style={{ fontSize: 13, color: "#777", fontWeight: "600" }}>{slot.status === "skipped" ? "ยกเลิกข้าม" : "ข้ามมื้อ"}</Text>
+                          </TouchableOpacity>
+                        )}
+
                         {hasF && (
                           <TouchableOpacity
                             style={st.actionBtn}
@@ -2752,7 +3107,7 @@ export default function PlanScreen() {
                           </TouchableOpacity>
                         )}
 
-                        {hasF && !isE && (
+                        {hasF && isE && (
                           <TouchableOpacity
                             style={{
                               flexDirection: "row",
@@ -2764,7 +3119,11 @@ export default function PlanScreen() {
                               borderRadius: 8,
                             }}
                             onPress={() =>
-                              handleLogMeal(selDay.date, slot.slot_name, slot)
+                              handleLogMeal(
+                                selDay.date,
+                                slot.slot_name,
+                                slot
+                              )
                             }
                           >
                             <Ionicons name="checkmark-done-outline" size={16} color="#fff" />
@@ -2924,7 +3283,7 @@ export default function PlanScreen() {
                   "bold",
               }}
             >
-              เปลี่ยน{" "}
+              {selSlot?.mode === "add" ? "เพิ่มเมนูใน" : "เปลี่ยน"}{" "}
               {selSlot?.name ||
                 "มื้ออาหาร"}
             </Text>
@@ -2963,7 +3322,7 @@ export default function PlanScreen() {
                 fontSize: 15,
                 color: "#333",
               }}
-              placeholder="ค้นหาอาหาร เช่น อกไก่..."
+              placeholder="ค้นหาเมนู หรือพิมพ์แคลอรี่ เช่น 100"
               placeholderTextColor="#aaa"
               value={searchQ}
               onChangeText={
@@ -2987,6 +3346,119 @@ export default function PlanScreen() {
                 </TouchableOpacity>
               )}
           </View>
+
+          <View
+            style={{
+              marginHorizontal: 16,
+              marginTop: -6,
+              marginBottom: 12,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+              }}
+            >
+              <Text style={{ color: "#666", fontSize: 13, fontWeight: "600" }}>
+                กรองแคลอรี่
+              </Text>
+              <TextInput
+                style={{
+                  width: 100,
+                  height: 40,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: "#e5e5e5",
+                  paddingHorizontal: 10,
+                  color: "#333",
+                  backgroundColor: "#fff",
+                }}
+                placeholder="เช่น 100"
+                value={kcalFilter}
+                onChangeText={onKcalFilterChange}
+                keyboardType="number-pad"
+                accessibilityLabel="กรองเมนูตามแคลอรี่"
+              />
+              <Text style={{ color: "#888", fontSize: 12 }}>kcal</Text>
+            </View>
+            <Text style={{ color: "#888", fontSize: 12, marginTop: 5 }}>
+              {kcalFilter
+                ? `แสดงเมนูใกล้เคียง ±50 kcal จาก ${kcalFilter} kcal`
+                : "ระบุแคลอรี่เพื่อค้นหาเมนูที่ใกล้เคียง"}
+            </Text>
+          </View>
+
+          <View style={{ zIndex: 5, elevation: 5, backgroundColor: "#fff", borderTopWidth: 1, borderBottomWidth: 1, borderColor: "#eee", paddingTop: 9, paddingBottom: 5, marginBottom: 8 }}>
+            <Text style={{ marginHorizontal: 16, marginBottom: 7, color: "#777", fontSize: 12, fontWeight: "700" }}>เลือกหมวดอาหาร</Text>
+            <ScrollView
+              horizontal
+              nestedScrollEnabled
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 6, gap: 10, alignItems: "center" }}
+            >
+              {(() => {
+                const usedIcons = new Set<string>(["🍽️"]);
+                return [null, ...foodCategories].map((category) => {
+                  const key = category ? `${category.field}:${category.value}` : "";
+                  const activeKey = selectedFoodCategory ? `${selectedFoodCategory.field}:${selectedFoodCategory.value}` : "";
+                  const active = activeKey === key;
+                  const label = category ? shortFoodCategoryLabel(category) : "ทั้งหมด";
+                  const icon = category ? foodCategorySticker(category, usedIcons) : "🍽️";
+                  return (
+                    <TouchableOpacity
+                      key={key || "all-categories"}
+                      onPress={() => onFoodCategorySelect(category)}
+                      accessibilityRole="button"
+                      accessibilityLabel={label}
+                      style={{ width: 76, minHeight: 68, flexShrink: 0, alignItems: "center", justifyContent: "center", paddingVertical: 5, paddingHorizontal: 3, borderRadius: 12, backgroundColor: active ? "#FFF1D6" : "#F7F7F7", borderWidth: active ? 1.5 : 1, borderColor: active ? ORANGE : "#eee" }}
+                    >
+                      <Text style={{ fontSize: 20 }}>{icon}</Text>
+                      <Text numberOfLines={2} style={{ width: "100%", textAlign: "center", fontSize: 9, fontWeight: active ? "800" : "600", color: active ? "#9A5B00" : "#666", marginTop: 2 }}>
+                        {label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                });
+              })()}
+            </ScrollView>
+          </View>
+
+          {calorieFilterInfo &&
+            !calorieFilterInfo.has_matches &&
+            searchRes.length > 0 && (
+              <Text
+                style={{
+                  color: "#8a5a00",
+                  fontSize: 13,
+                  marginHorizontal: 16,
+                  marginBottom: 8,
+                }}
+              >
+                ไม่พบเมนูในช่วง{" "}
+                {calorieFilterInfo.target_kcal -
+                  calorieFilterInfo.tolerance}
+                –
+                {calorieFilterInfo.target_kcal +
+                  calorieFilterInfo.tolerance}{" "}
+                kcal จึงแสดงเมนูที่ใกล้เคียงที่สุด
+              </Text>
+            )}
+
+          {!!searchError && !searching && (
+            <Text
+              style={{
+                color: "#B42318",
+                fontSize: 13,
+                textAlign: "center",
+                marginHorizontal: 16,
+                marginBottom: 8,
+              }}
+            >
+              {searchError}
+            </Text>
+          )}
 
           {/* SCAN + DELETE */}
 
@@ -3112,9 +3584,10 @@ export default function PlanScreen() {
               paddingBottom: 30,
             }}
             ListEmptyComponent={
-              searchQ.length >
-                0 &&
-                !searching ? (
+              !searching &&
+                (searchQ.trim().length > 0 ||
+                  kcalFilter.trim().length > 0 ||
+                  selectedFoodCategory !== null) ? (
                 <View
                   style={{
                     alignItems:
@@ -3135,7 +3608,12 @@ export default function PlanScreen() {
                         "#ccc",
                     }}
                   >
-                    ไม่พบอาหาร
+                    {calorieFilterInfo &&
+                    !calorieFilterInfo.has_matches
+                      ? "ไม่พบเมนูที่ใกล้เคียงกับแคลอรี่ที่เลือก"
+                      : searchError
+                        ? "ค้นหาเมนูไม่สำเร็จ"
+                        : "ไม่พบอาหาร"}
                   </Text>
                 </View>
               ) : searchQ.length ===
@@ -3179,15 +3657,12 @@ export default function PlanScreen() {
               return (
                 <TouchableOpacity
                   style={{
-                    flexDirection:
-                      "row",
-                    alignItems:
-                      "center",
-                    paddingVertical: 12,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingVertical: 14,
                     borderBottomWidth: 1,
-                    borderBottomColor:
-                      "#f0f0f0",
-                    gap: 12,
+                    borderBottomColor: "#f0f0f0",
+                    gap: 14,
                   }}
                   onPress={() =>
                     openFoodDetail(
@@ -3200,7 +3675,7 @@ export default function PlanScreen() {
                 >
                   <FoodImage
                     food={food}
-                    size={58}
+                    size={60}
                   />
 
                   <View
@@ -3210,11 +3685,9 @@ export default function PlanScreen() {
                   >
                     <Text
                       style={{
-                        fontSize: 15,
-                        fontWeight:
-                          "600",
-                        color:
-                          "#333",
+                        fontSize: 16,
+                        fontWeight: "bold",
+                        color: "#333",
                       }}
                       numberOfLines={
                         1
@@ -3225,36 +3698,12 @@ export default function PlanScreen() {
                       )}
                     </Text>
 
-                    {getFoodEnglishName(
-                      food
-                    ) ? (
-                      <Text
-                        style={{
-                          fontSize: 12,
-                          color:
-                            "#999",
-                          marginTop:
-                            1,
-                        }}
-                        numberOfLines={
-                          1
-                        }
-                      >
-                        {getFoodEnglishName(
-                          food
-                        )}
-                      </Text>
-                    ) : null}
-
                     <Text
                       style={{
-                        fontSize: 13,
-                        color:
-                          ORANGE,
-                        fontWeight:
-                          "600",
-                        marginTop:
-                          2,
+                        fontSize: 14,
+                        color: ORANGE,
+                        fontWeight: "bold",
+                        marginTop: 4,
                       }}
                     >
                       {
@@ -3337,452 +3786,94 @@ export default function PlanScreen() {
           >
             {selectedFood && (
               <>
-                <View
-                  style={
-                    st.detailImageWrapper
-                  }
-                >
+                <View style={st.detailImageWrapper}>
                   <FoodImage
-                    food={
-                      selectedFood
-                    }
-                    size={220}
+                    food={selectedFood}
+                    size={250}
                   />
                 </View>
 
-                <View
-                  style={{
-                    marginTop: 16,
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: 23,
-                      fontWeight:
-                        "bold",
-                      color:
-                        "#222",
-                    }}
-                  >
-                    {getFoodName(
-                      selectedFood
-                    )}
+                <Text style={{ fontSize: 24, fontWeight: "900", color: "#222" }}>
+                  {getFoodName(selectedFood)}
+                </Text>
+                {!!getFoodEnglishName(selectedFood) && (
+                  <Text style={{ color: "#888", marginTop: 4 }}>
+                    {getFoodEnglishName(selectedFood)}
                   </Text>
+                )}
 
-                  {getFoodEnglishName(
-                    selectedFood
-                  ) && (
-                      <Text
-                        style={{
-                          fontSize: 14,
-                          color:
-                            "#999",
-                          marginTop: 4,
-                        }}
-                      >
-                        {getFoodEnglishName(
-                          selectedFood
-                        )}
-                      </Text>
-                    )}
+                <View style={{ flexDirection: "row", marginTop: 16, borderWidth: 1, borderColor: "#222", borderRadius: 10, overflow: "hidden" }}>
+                  {([{ key: "nutrition", label: "โภชนาการ" }, { key: "ingredients", label: "ส่วนผสม" }] as const).map((tab) => (
+                    <TouchableOpacity
+                      key={tab.key}
+                      onPress={() => setFoodDetailTab(tab.key)}
+                      style={{ flex: 1, paddingVertical: 13, alignItems: "center", backgroundColor: foodDetailTab === tab.key ? ORANGE : "#fff" }}
+                    >
+                      <Text style={{ fontSize: 16, fontWeight: "800", color: foodDetailTab === tab.key ? "#fff" : "#333" }}>{tab.label}</Text>
+                    </TouchableOpacity>
+                  ))}
                 </View>
 
-                <Text
-                  style={
-                    st.sectionTitle
-                  }
-                >
-                  สารอาหาร
-                </Text>
-
-                <View
-                  style={
-                    st.nutritionGrid
-                  }
-                >
-                  <View
-                    style={
-                      st.nutritionBox
-                    }
-                  >
-                    <Text
-                      style={
-                        st.nutritionLabel
-                      }
-                    >
-                      พลังงาน
-                    </Text>
-
-                    <Text
-                      style={
-                        st.nutritionValueOrange
-                      }
-                    >
-                      {
-                        getNutrition(
-                          selectedFood
-                        ).kcal
-                      }
-                    </Text>
-
-                    <Text
-                      style={
-                        st.nutritionUnit
-                      }
-                    >
-                      kcal
-                    </Text>
-                  </View>
-
-                  <View
-                    style={
-                      st.nutritionBox
-                    }
-                  >
-                    <Text
-                      style={
-                        st.nutritionLabel
-                      }
-                    >
-                      โปรตีน
-                    </Text>
-
-                    <Text
-                      style={[
-                        st.nutritionValue,
-                        {
-                          color:
-                            "#3B82F6",
-                        },
-                      ]}
-                    >
-                      {
-                        getNutrition(
-                          selectedFood
-                        ).protein
-                      }
-                    </Text>
-
-                    <Text
-                      style={
-                        st.nutritionUnit
-                      }
-                    >
-                      g
-                    </Text>
-                  </View>
-
-                  <View
-                    style={
-                      st.nutritionBox
-                    }
-                  >
-                    <Text
-                      style={
-                        st.nutritionLabel
-                      }
-                    >
-                      คาร์บ
-                    </Text>
-
-                    <Text
-                      style={[
-                        st.nutritionValue,
-                        {
-                          color:
-                            "#F59E0B",
-                        },
-                      ]}
-                    >
-                      {
-                        getNutrition(
-                          selectedFood
-                        ).carbs
-                      }
-                    </Text>
-
-                    <Text
-                      style={
-                        st.nutritionUnit
-                      }
-                    >
-                      g
-                    </Text>
-                  </View>
-
-                  <View
-                    style={
-                      st.nutritionBox
-                    }
-                  >
-                    <Text
-                      style={
-                        st.nutritionLabel
-                      }
-                    >
-                      ไขมัน
-                    </Text>
-
-                    <Text
-                      style={[
-                        st.nutritionValue,
-                        {
-                          color:
-                            "#EF4444",
-                        },
-                      ]}
-                    >
-                      {
-                        getNutrition(
-                          selectedFood
-                        ).fat
-                      }
-                    </Text>
-
-                    <Text
-                      style={
-                        st.nutritionUnit
-                      }
-                    >
-                      g
-                    </Text>
-                  </View>
-
-                  {getNutrition(
-                    selectedFood
-                  ).fiber >
-                    0 && (
-                      <View
-                        style={
-                          st.nutritionBox
-                        }
-                      >
-                        <Text
-                          style={
-                            st.nutritionLabel
-                          }
-                        >
-                          ใยอาหาร
-                        </Text>
-
-                        <Text
-                          style={[
-                            st.nutritionValue,
-                            {
-                              color:
-                                "#22A06B",
-                            },
-                          ]}
-                        >
-                          {
-                            getNutrition(
-                              selectedFood
-                            ).fiber
-                          }
-                        </Text>
-
-                        <Text
-                          style={
-                            st.nutritionUnit
-                          }
-                        >
-                          g
-                        </Text>
-                      </View>
-                    )}
-
-                  {getNutrition(
-                    selectedFood
-                  ).sodium >
-                    0 && (
-                      <View
-                        style={
-                          st.nutritionBox
-                        }
-                      >
-                        <Text
-                          style={
-                            st.nutritionLabel
-                          }
-                        >
-                          โซเดียม
-                        </Text>
-
-                        <Text
-                          style={[
-                            st.nutritionValue,
-                            {
-                              color:
-                                "#8B5CF6",
-                            },
-                          ]}
-                        >
-                          {
-                            getNutrition(
-                              selectedFood
-                            ).sodium
-                          }
-                        </Text>
-
-                        <Text
-                          style={
-                            st.nutritionUnit
-                          }
-                        >
-                          mg
-                        </Text>
-                      </View>
-                    )}
-                </View>
-
-                {selectedFood
-                  ?.portion && (
-                    <>
-                      <Text
-                        style={
-                          st.sectionTitle
-                        }
-                      >
-                        ปริมาณต่อหนึ่งหน่วย
+                {foodDetailTab === "nutrition" ? (
+                  <View style={{ marginTop: 16 }}>
+                    <View style={{ backgroundColor: "#FFF8EA", borderRadius: 14, padding: 16, alignItems: "center" }}>
+                      <Text style={{ fontSize: 15, color: "#777", fontWeight: "700" }}>พลังงานต่อหนึ่งหน่วยบริโภค (100 กรัม)</Text>
+                      <Text style={{ fontSize: 32, color: ORANGE, fontWeight: "900", marginTop: 4 }}>{Math.round(getNutrition(selectedFood).kcal)} kcal</Text>
+                      <Text style={{ color: "#777", marginTop: 2 }}>
+                        {selectedFood.portion_reference?.unit_label || `${selectedFood.portion_reference?.total_weight_g || selectedFood.portion?.gram || 100} กรัม`}
                       </Text>
-
-                      <View
-                        style={
-                          st.portionBox
-                        }
-                      >
-                        <Ionicons
-                          name="scale-outline"
-                          size={22}
-                          color={
-                            ORANGE
-                          }
-                        />
-
-                        <Text
-                          style={
-                            st.portionText
-                          }
-                        >
-                          {selectedFood
-                            ?.portion
-                            ?.gram
-                            ? `${selectedFood.portion.gram} กรัม`
-                            : ""}
-
-                          {selectedFood
-                            ?.portion
-                            ?.unit
-                            ? ` / ${selectedFood.portion.unit}`
-                            : ""}
-                        </Text>
-                      </View>
-                    </>
-                  )}
-
-                <Text
-                  style={
-                    st.sectionTitle
-                  }
-                >
-                  ส่วนผสม
-                </Text>
-
-                {getIngredients(
-                  selectedFood
-                ).length >
-                  0 ? (
-                  <View
-                    style={
-                      st.ingredientsBox
-                    }
-                  >
-                    {getIngredients(
-                      selectedFood
-                    ).map(
-                      (
-                        ingredient,
-                        index
-                      ) => {
-                        const text =
-                          formatIngredient(
-                            ingredient
-                          );
-
-                        if (
-                          !text
-                        ) {
-                          return null;
-                        }
-
-                        return (
-                          <View
-                            key={`${ingredient?.ingredient_id || "ingredient"}-${index}`}
-                            style={
-                              st.ingredientRow
-                            }
-                          >
-                            <View
-                              style={
-                                st.ingredientDot
-                              }
-                            />
-
-                            <Text
-                              style={
-                                st.ingredientText
-                              }
-                            >
-                              {text}
-                            </Text>
+                    </View>
+                    <Text style={st.sectionTitle}>สารอาหารหลัก</Text>
+                    {([
+                      { label: "โปรตีน", value: getNutrition(selectedFood).protein, icon: "fitness-outline", color: "#E53935", unit: "g" },
+                      { label: "คาร์บ", value: getNutrition(selectedFood).carbs, icon: "water-outline", color: "#1E88E5", unit: "g" },
+                      { label: "ไขมัน", value: getNutrition(selectedFood).fat, icon: "nutrition-outline", color: "#FBC02D", unit: "g" },
+                      { label: "ใยอาหาร", value: getNutrition(selectedFood).fiber, icon: "leaf-outline", color: "#22A06B", unit: "g" },
+                      { label: "โซเดียม", value: getNutrition(selectedFood).sodium, icon: "flask-outline", color: "#8B5CF6", unit: "mg" },
+                    ] as const).map((item) => (
+                      <View key={item.label} style={{ minHeight: 56, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: "#eee" }}>
+                        <View style={{ flexDirection: "row", alignItems: "center" }}>
+                          <View style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: "#FFF7E6", alignItems: "center", justifyContent: "center", marginRight: 12 }}>
+                            <Ionicons name={item.icon as any} size={20} color={item.color} />
                           </View>
-                        );
-                      }
-                    )}
+                          <Text style={{ fontSize: 15, color: "#444", fontWeight: "600" }}>{item.label}</Text>
+                        </View>
+                        <Text style={{ fontSize: 15, color: "#333", fontWeight: "700" }}>{Math.round(item.value)} {item.unit}</Text>
+                      </View>
+                    ))}
                   </View>
                 ) : (
-                  <View
-                    style={
-                      st.emptyIngredientBox
-                    }
-                  >
-                    <Ionicons
-                      name="restaurant-outline"
-                      size={28}
-                      color="#ccc"
-                    />
-
-                    <Text
-                      style={{
-                        marginTop: 8,
-                        color:
-                          "#999",
-                      }}
-                    >
-                      ไม่มีข้อมูลส่วนผสม
-                    </Text>
+                  <View style={{ marginTop: 16 }}>
+                    <Text style={st.sectionTitle}>ส่วนผสม</Text>
+                    {foodDetailLoading ? (
+                      <ActivityIndicator size="small" color={ORANGE} style={{ marginTop: 24 }} />
+                    ) : getIngredients(selectedFood).length > 0 ? getIngredients(selectedFood).map((ingredient: any, index: number) => (
+                      <View key={`${ingredient.ingredient_id || ingredient.name || "ingredient"}-${index}`} style={{ minHeight: 54, flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: "#eee" }}>
+                        <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: ORANGE, marginRight: 12 }} />
+                        <Text style={{ flex: 1, fontSize: 15, color: "#333" }}>{ingredient.name || ingredient.name_snap || "วัตถุดิบ"}</Text>
+                        {(ingredient.qty || ingredient.weight_g) ? <Text style={{ color: "#777" }}>{ingredient.qty || ingredient.weight_g} {ingredient.unit || (ingredient.weight_g ? "g" : "")}</Text> : null}
+                      </View>
+                    )) : (
+                      <View style={{ paddingVertical: 32, alignItems: "center", backgroundColor: "#fafafa", borderRadius: 14 }}>
+                        <Ionicons name="restaurant-outline" size={40} color="#bbb" />
+                        <Text style={{ color: "#999", marginTop: 8 }}>ไม่พบข้อมูลส่วนผสม</Text>
+                      </View>
+                    )}
                   </View>
                 )}
 
                 {selSlot &&
                   selectedFood?._id && (
                     <TouchableOpacity
-                      style={
-                        st.replaceDetailBtn
-                      }
-                      onPress={() =>
-                        doReplace(
-                          String(
-                            selectedFood._id
-                          )
-                        )
-                      }
+                      style={[st.replaceDetailBtn, savingFoodSelection && { opacity: 0.65 }]}
+                      onPress={() => handleFoodSelection(selectedFood)}
+                      disabled={savingFoodSelection}
                       activeOpacity={
                         0.8
                       }
                     >
                       <Ionicons
-                        name="swap-horizontal-outline"
+                        name={selSlot.mode === "add" ? "add-circle-outline" : "swap-horizontal-outline"}
                         size={22}
                         color="#fff"
                       />
@@ -3792,7 +3883,7 @@ export default function PlanScreen() {
                           st.replaceDetailText
                         }
                       >
-                        เปลี่ยนเป็นเมนูนี้
+                        {savingFoodSelection ? "กำลังบันทึก..." : selSlot.mode === "add" ? "เพิ่มเมนูนี้" : "เปลี่ยนเป็นเมนูนี้"}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -3831,11 +3922,15 @@ const st =
     },
 
     headerTitle: {
+      position: "absolute",
+      left: 0,
+      right: 0,
       fontSize: 20,
       fontWeight:
         "bold",
       color: "#fff",
-      fontFamily: "System",
+      fontFamily: "NotoSansThaiBold",
+      textAlign: "center",
     },
 
     center: {
@@ -3967,6 +4062,15 @@ const st =
       borderRadius: 8,
       backgroundColor:
         "#f8f8f8",
+    },
+
+    slotMacroText: {
+      fontSize: 11,
+      color: "#777",
+      backgroundColor: "#f3f3f3",
+      paddingHorizontal: 7,
+      paddingVertical: 4,
+      borderRadius: 10,
     },
 
     outlineBtn: {

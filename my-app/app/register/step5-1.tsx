@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -10,11 +10,15 @@ import {
   TouchableWithoutFeedback,
   Platform,
   Alert,
+  Modal,
+  Pressable,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useRegister } from "../../context/register-context";
+import type { ProteinInputMode, ProteinLevel } from "../../types/register-types";
+import { getRecommendedProteinLevel } from "../../utils/proteinTargets";
 import styles, { 
   ORANGE, 
   BG, 
@@ -25,9 +29,6 @@ import styles, {
   WARN_COLOR, 
   ERROR_COLOR 
 } from "./step5-1.styles";
-
-type ProteinLevel = "low" | "medium" | "high";
-type ProteinMode = "auto" | "custom";
 
 const proteinOptions: { label: string; value: ProteinLevel; desc: string; hint: string; detail: string; }[] = [
   {
@@ -48,7 +49,7 @@ const proteinOptions: { label: string; value: ProteinLevel; desc: string; hint: 
     label: "สูง",
     value: "high",
     desc: "เน้นสร้างกล้ามเนื้อแบบที่คุณต้องการ",
-    hint: "ประมาณ 2.0-2.4 กรัม / กก.",
+    hint: "2.0 กรัม / กก.",
     detail: "ระดับนี้ออกแบบมาสำหรับคนที่เล่นเวทเทรนนิ่งเป็นประจำ หรือต้องการเพิ่มมวลกล้ามเนื้ออย่างจริงจัง ช่วยให้ร่างกายสร้างและซ่อมแซมกล้ามเนื้อได้เร็วขึ้น",
   },
 ];
@@ -58,40 +59,34 @@ export default function RegisterStep5_1Screen() {
   
   const currentWeight = form.weightKg ? Number(form.weightKg) : 60; // ดึงน้ำหนักมาใช้ประเมิน
   const currentActivity = form.activityLevel || "medium";
-
-  // ฟังก์ชันแนะนำโปรตีนคร่าวๆ ตามกิจกรรม (ปรับให้ตรงกับ Type ของ Context)
-  const getRecommendedLevel = (): ProteinLevel => {
-    if (currentActivity === "sedentary" || currentActivity === "light") return "low";
-    if (currentActivity === "active" || currentActivity === "very_active") return "high";
-    return "medium"; // สำหรับ "moderate" หรือ "medium"
-  };
-
-  const recommendedLevel = getRecommendedLevel();
+  const recommendedLevel = getRecommendedProteinLevel(currentActivity);
 
   const [selectedProtein, setSelectedProtein] = useState<ProteinLevel>(
     (form.proteinLevel as ProteinLevel) || recommendedLevel
   );
   
-  const [proteinMode, setProteinMode] = useState<ProteinMode>(
-    form.recommendedProteinG ? "custom" : "auto"
+  const [proteinMode, setProteinMode] = useState<ProteinInputMode>(
+    form.proteinInputMode
   );
 
   // คำนวณค่าโปรตีนออโต้ตั้งต้น
   const autoRecommendedProtein = useMemo(() => {
-    const result = calculateRecommendedProtein(String(currentWeight), selectedProtein as any);
+    const result = calculateRecommendedProtein(String(currentWeight), selectedProtein);
     return result ?? (currentWeight * 1.6); // Fallback
   }, [calculateRecommendedProtein, currentWeight, selectedProtein]);
 
   const [customProtein, setCustomProtein] = useState(
-    form.recommendedProteinG ? String(form.recommendedProteinG) : String(autoRecommendedProtein)
+    form.recommendedProteinG !== null
+      ? String(form.recommendedProteinG)
+      : String(autoRecommendedProtein)
   );
+  const displayedProteinTarget =
+    proteinMode === "custom"
+      ? Number(customProtein) || 0
+      : autoRecommendedProtein;
 
-  // อัปเดตค่า Custom เมื่อสลับโหมด หรือเปลี่ยน Level (เพื่อให้ผู้ใช้เห็นค่าที่แนะนำทันที)
-  useEffect(() => {
-    if (proteinMode === "auto") {
-      setCustomProtein(String(autoRecommendedProtein));
-    }
-  }, [autoRecommendedProtein, proteinMode]);
+  // Info modal toggle
+  const [showProteinInfo, setShowProteinInfo] = useState(false);
 
   // --- 💡 ระบบวิเคราะห์และดักจับความเหมาะสมของโปรตีน ---
   const validationStatus = useMemo(() => {
@@ -119,7 +114,8 @@ export default function RegisterStep5_1Screen() {
     const finalVal = proteinMode === "custom" ? Number(customProtein) : autoRecommendedProtein;
 
     updateForm({
-      proteinLevel: selectedProtein as any,
+      proteinLevel: selectedProtein,
+      proteinInputMode: proteinMode,
       recommendedProteinG: finalVal,
     });
 
@@ -149,14 +145,22 @@ export default function RegisterStep5_1Screen() {
           ระดับโปรตีนคือปริมาณโปรตีนที่ร่างกายควรได้รับต่อวันตามน้ำหนักและกิจกรรมของคุณ โปรตีนเป็นสารอาหารสำคัญที่ช่วยซ่อมแซมกล้ามเนื้อ เสริมสร้างภูมิคุ้มกัน และรักษาสมดุลของร่างกาย การได้รับโปรตีนในปริมาณที่เหมาะสมจะช่วยให้ร่างกายแข็งแรงและทำงานได้อย่างมีประสิทธิภาพ
         </Text>
 
+        {/* Why Protein Matters — helper button (mirrors step5) */}
+        <View style={styles.helpButtonWrap}>
+          <TouchableOpacity style={styles.helperButton} onPress={() => setShowProteinInfo(true)}>
+            <Ionicons name="information-circle-outline" size={18} color="#666" />
+            <Text style={styles.helperButtonText}>ทำไมโปรตีนถึงสำคัญ?</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* แสดงค่าโปรตีนที่ได้รับจริง */}
         <View style={styles.proteinValueCard}>
-          <Text style={styles.proteinValueLabel}>ระดับโปรตีนที่ได้รับจริง</Text>
+          <Text style={styles.proteinValueLabel}>เป้าหมายโปรตีนต่อวัน</Text>
           <Text style={styles.proteinValueNumber}>
-            {autoRecommendedProtein} กรัม / วัน
+            {displayedProteinTarget} กรัม / วัน
           </Text>
           <Text style={styles.proteinValueHint}>
-            คิดเป็นประมาณ {currentWeight > 0 ? (autoRecommendedProtein / currentWeight).toFixed(1) : "1.6"} กรัม ต่อน้ำหนักตัว 1 กก.
+            คิดเป็น {currentWeight > 0 ? (displayedProteinTarget / currentWeight).toFixed(1) : "1.6"} กรัม ต่อน้ำหนักตัว 1 กก.
           </Text>
         </View>
 
@@ -211,7 +215,6 @@ export default function RegisterStep5_1Screen() {
                   </View>
                   <Text style={[styles.optionDesc, active && styles.optionDescActive]}>{item.desc}</Text>
                   <Text style={[styles.optionHint, active && styles.optionHintActive]}>{item.hint}</Text>
-                  <Text style={[styles.optionDetail, active && styles.optionDetailActive]}>{item.detail}</Text>
                 </TouchableOpacity>
               );
             })}
@@ -271,6 +274,43 @@ export default function RegisterStep5_1Screen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Modal คำอธิบายระดับโปรตีนแต่ละประเภท */}
+      <Modal visible={showProteinInfo} transparent animationType="fade">
+        <Pressable style={styles.modalOverlay} onPress={() => setShowProteinInfo(false)}>
+          <Pressable style={styles.modalCard} onPress={() => {}}>
+            <Text style={styles.modalTitle}>ความสำคัญของแต่ละระดับโปรตีน</Text>
+
+            <View style={styles.modalItem}>
+              <Text style={styles.modalItemTitle}>1. ระดับพื้นฐาน (1.2 กรัม / น้ำหนักตัว 1 กก.)</Text>
+              <Text style={styles.modalItemDesc}>
+                • <Text style={{ fontWeight: "bold" }}>เหมาะสำหรับ:</Text> ผู้เริ่มต้นดูแลสุขภาพ พนักงานออฟฟิศ หรือผู้ที่ออกกำลังกายเบาๆ (1-2 วัน/สัปดาห์){"\n"}
+                • <Text style={{ fontWeight: "bold" }}>ผลต่อร่างกาย:</Text> เพียงพอต่อการรักษามวลกล้ามเนื้อเดิมไม่ให้สูญหาย รักษาสมดุลฮอร์โมน และซ่อมแซมเนื้อเยื่อในชีวิตประจำวันทั่วไป
+              </Text>
+            </View>
+
+            <View style={styles.modalItem}>
+              <Text style={styles.modalItemTitle}>2. ระดับสมดุล (1.6 กรัม / น้ำหนักตัว 1 กก.)</Text>
+              <Text style={styles.modalItemDesc}>
+                • <Text style={{ fontWeight: "bold" }}>เหมาะสำหรับ:</Text> ผู้ที่ออกกำลังกายปานกลาง (3-4 วัน/สัปดาห์) หรือผู้ที่ต้องการคุมน้ำหนักอย่างมีประสิทธิภาพ{"\n"}
+                • <Text style={{ fontWeight: "bold" }}>ผลต่อร่างกาย:</Text> ช่วยให้อิ่มนาน ลดความอยากอาหารจุกจิก กระตุ้นอัตราการเผาผลาญ และช่วยฟื้นฟูกล้ามเนื้อหลังออกกำลังกายได้อย่างเหมาะสม
+              </Text>
+            </View>
+
+            <View style={styles.modalItem}>
+              <Text style={styles.modalItemTitle}>3. ระดับสูง (2.0 กรัม / น้ำหนักตัว 1 กก.)</Text>
+              <Text style={styles.modalItemDesc}>
+                • <Text style={{ fontWeight: "bold" }}>เหมาะสำหรับ:</Text> ผู้ที่เล่นเวทเทรนนิ่ง ออกกำลังกายหนัก (5-6 วัน/สัปดาห์) หรือผู้ที่ตั้งเป้าหมายสร้างกล้ามเนื้อ{"\n"}
+                • <Text style={{ fontWeight: "bold" }}>ผลต่อร่างกาย:</Text> เร่งการซ่อมแซมเส้นใยกล้ามเนื้อที่ฉีกขาดจากการออกกำลังกาย ช่วยสร้างมวลกล้ามเนื้อใหม่ และป้องกันการสลายตัวของกล้ามเนื้อขณะลดไขมัน
+              </Text>
+            </View>
+
+            <TouchableOpacity style={styles.modalCloseButton} onPress={() => setShowProteinInfo(false)}>
+              <Text style={styles.modalCloseText}>เข้าใจแล้ว</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 

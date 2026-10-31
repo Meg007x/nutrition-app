@@ -175,6 +175,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
 
+  forgotLink: {
+    alignSelf: "flex-end",
+    marginTop: 8,
+  },
+
+  forgotLinkText: {
+    color: ORANGE,
+    fontSize: 13,
+    fontFamily: FONT_REGULAR,
+  },
+
   loginButton: {
     marginTop: 20,
     backgroundColor: ORANGE,

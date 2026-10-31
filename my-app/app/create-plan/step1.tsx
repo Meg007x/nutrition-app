@@ -18,12 +18,16 @@ import {
 
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import DateTimePicker from "@react-native-community/datetimepicker";
-import axios from "axios";
+import DateTimePicker, {
+  type DateTimePickerEvent,
+} from "@react-native-community/datetimepicker";
+import axios, { isAxiosError } from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { BASE_URL } from "../../constants/config";
 import { Brand } from "../../constants/theme";
+
+const PLAN_ACTION_COLOR = "#F9A800";
 
 // ======================================================
 // Helpers
@@ -55,6 +59,15 @@ function formatDisplayDate(date: Date): string {
   const year = date.getFullYear();
 
   return `${day} / ${month} / ${year}`;
+}
+
+function parseInputDate(value: string): Date | undefined {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) {
+    return undefined;
+  }
+
+  return new Date(year, month - 1, day);
 }
 
 function getDayDifference(
@@ -129,103 +142,6 @@ function flattenObjectValues(
   }
 
   return result;
-}
-
-// ======================================================
-// Calculate Target Calories
-// ======================================================
-
-function calculateAdjustedKcal(
-  tdee: number,
-  primaryGoal: string
-): number {
-  const goal = String(
-    primaryGoal || ""
-  )
-    .trim()
-    .toLowerCase();
-
-  // ลดน้ำหนัก
-  if (
-    goal === "ลดน้ำหนัก" ||
-    goal === "lose_weight" ||
-    goal === "ลดน้ำหนัก/ลดไขมัน"
-  ) {
-    return Math.max(
-      1000,
-      Math.round(tdee - 300)
-    );
-  }
-
-  // เพิ่มน้ำหนัก
-  if (
-    goal === "เพิ่มน้ำหนัก" ||
-    goal === "gain_weight"
-  ) {
-    return Math.round(
-      tdee + 300
-    );
-  }
-
-  // เพิ่มกล้ามเนื้อ
-  if (
-    goal === "เพิ่มกล้ามเนื้อ" ||
-    goal === "gain_muscle"
-  ) {
-    return Math.round(
-      tdee + 200
-    );
-  }
-
-  // รักษาน้ำหนัก
-  return Math.round(tdee);
-}
-
-// ======================================================
-// Calculate Macros
-// ======================================================
-
-function calculateMacros(
-  targetKcal: number,
-  proteinTarget: number
-) {
-  const proteinG =
-    proteinTarget > 0
-      ? Math.round(proteinTarget)
-      : Math.round(
-          (targetKcal * 0.25) / 4
-        );
-
-  // Fat ประมาณ 27% ของพลังงาน
-  const fatG = Math.round(
-    (targetKcal * 0.27) / 9
-  );
-
-  const proteinCalories =
-    proteinG * 4;
-
-  const fatCalories =
-    fatG * 9;
-
-  const carbCalories =
-    Math.max(
-      0,
-      targetKcal -
-        proteinCalories -
-        fatCalories
-    );
-
-  const carbG = Math.round(
-    carbCalories / 4
-  );
-
-  return {
-    protein_g: proteinG,
-    carb_g: carbG,
-    fat_g: fatG,
-    fiber_g: 25,
-    sodium_mg: 2000,
-  };
 }
 
 // ======================================================
@@ -320,23 +236,10 @@ export default function Step1Screen() {
     try {
       setLoadingUser(true);
 
-      console.log(
-        "================================"
-      );
-
-      console.log(
-        "👤 LOAD USER PROFILE"
-      );
-
       const raw =
         await AsyncStorage.getItem(
           "currentUser"
         );
-
-      console.log(
-        "📦 currentUser:",
-        raw
-      );
 
       if (!raw) {
         Alert.alert(
@@ -373,11 +276,6 @@ export default function Step1Screen() {
         storedUser?.id ||
         storedUser?.email;
 
-      console.log(
-        "👤 USER ID:",
-        userId
-      );
-
       if (!userId) {
         throw new Error(
           "ไม่พบ user_id ในข้อมูลผู้ใช้"
@@ -389,15 +287,6 @@ export default function Step1Screen() {
       // ==================================================
 
       try {
-        console.log(
-          "📡 GET USER PROFILE"
-        );
-
-        console.log(
-          "URL:",
-          `${BASE_URL}/api/users/profile`
-        );
-
         const response =
           await axios.get(
             `${BASE_URL}/api/users/profile`,
@@ -409,11 +298,6 @@ export default function Step1Screen() {
               timeout: 15000,
             }
           );
-
-        console.log(
-          "📥 PROFILE RESPONSE:",
-          response.data
-        );
 
         const profile =
           response.data?.data ||
@@ -437,37 +321,17 @@ export default function Step1Screen() {
             mergedProfile
           );
 
-          console.log(
-            "✅ ใช้ข้อมูล User จาก Backend"
-          );
-
-          console.log(
-            "PROFILE:",
-            mergedProfile
-          );
-
           return;
         }
       } catch (profileError) {
-        console.warn(
-          "⚠️ โหลด Profile จาก Backend ไม่สำเร็จ"
-        );
-
-        if (
-          axios.isAxiosError(
-            profileError
-          )
-        ) {
+        if (isAxiosError(profileError)) {
           console.warn(
-            "STATUS:",
-            profileError.response
-              ?.status
+            "Unable to load user profile from backend; using cached profile.",
+            profileError.response?.status
           );
-
+        } else {
           console.warn(
-            "DATA:",
-            profileError.response
-              ?.data
+            "Unable to load user profile from backend; using cached profile."
           );
         }
       }
@@ -476,19 +340,12 @@ export default function Step1Screen() {
       // Fallback AsyncStorage
       // ==================================================
 
-      console.log(
-        "⚠️ ใช้ข้อมูล currentUser จาก AsyncStorage"
-      );
-
       setUserProfile({
         ...storedUser,
         user_id: userId,
       });
     } catch (error) {
-      console.error(
-        "❌ Load user profile error:",
-        error
-      );
+      console.error("Unable to load user profile.", error);
 
       Alert.alert(
         "เกิดข้อผิดพลาด",
@@ -497,9 +354,6 @@ export default function Step1Screen() {
     } finally {
       setLoadingUser(false);
 
-      console.log(
-        "================================"
-      );
     }
   }
 
@@ -524,12 +378,7 @@ export default function Step1Screen() {
   // Start Date
   // ====================================================
 
-  const handleStartDateChange = (
-    event: any,
-    selected?: Date
-  ) => {
-    setShowStartPicker(false);
-
+  const updateStartDate = (selected?: Date) => {
     if (!selected) {
       return;
     }
@@ -563,16 +412,22 @@ export default function Step1Screen() {
     }
   };
 
+  const handleStartDateChange = (
+    _event: DateTimePickerEvent,
+    selected?: Date
+  ) => {
+    if (Platform.OS !== "ios") {
+      setShowStartPicker(false);
+    }
+
+    updateStartDate(selected);
+  };
+
   // ====================================================
   // End Date
   // ====================================================
 
-  const handleEndDateChange = (
-    event: any,
-    selected?: Date
-  ) => {
-    setShowEndPicker(false);
-
+  const updateEndDate = (selected?: Date) => {
     if (!selected) {
       return;
     }
@@ -606,39 +461,22 @@ export default function Step1Screen() {
     setEndDate(newEnd);
   };
 
+  const handleEndDateChange = (
+    _event: DateTimePickerEvent,
+    selected?: Date
+  ) => {
+    if (Platform.OS !== "ios") {
+      setShowEndPicker(false);
+    }
+
+    updateEndDate(selected);
+  };
+
   // ====================================================
   // Create Meal Plan
   // ====================================================
 
   const handleNext = async () => {
-    console.log(
-      "================================"
-    );
-
-    console.log(
-      "🚀 STEP 1 NEXT"
-    );
-
-    console.log(
-      "📅 START:",
-      formatDate(startDate)
-    );
-
-    console.log(
-      "📅 END:",
-      formatDate(endDate)
-    );
-
-    console.log(
-      "📅 DAYS:",
-      days
-    );
-
-    console.log(
-      "👤 PROFILE:",
-      userProfile
-    );
-
     // ==================================================
     // Validate
     // ==================================================
@@ -702,68 +540,6 @@ export default function Step1Screen() {
         healthGoals.primary_goal ||
         "maintain_weight";
 
-      console.log(
-        "🎯 PRIMARY GOAL:",
-        primaryGoal
-      );
-
-      // ==================================================
-      // TDEE
-      // ==================================================
-
-      const tdee = Number(
-        healthGoals.tdee_target_kcal
-      );
-
-      console.log(
-        "🔥 TDEE:",
-        tdee
-      );
-
-      if (
-        !Number.isFinite(tdee) ||
-        tdee <= 0
-      ) {
-        throw new Error(
-          "ไม่พบค่า TDEE ของผู้ใช้ กรุณาตั้งค่าเป้าหมายสุขภาพก่อน"
-        );
-      }
-
-      // ==================================================
-      // Target Calories
-      // ==================================================
-
-      const targetKcal =
-        calculateAdjustedKcal(
-          tdee,
-          primaryGoal
-        );
-
-      console.log(
-        "🔥 TARGET KCAL:",
-        targetKcal
-      );
-
-      // ==================================================
-      // Protein
-      // ==================================================
-
-      const proteinTarget =
-        Number(
-          healthGoals.protein_target_g
-        );
-
-      const macros =
-        calculateMacros(
-          targetKcal,
-          proteinTarget
-        );
-
-      console.log(
-        "🥩 MACROS:",
-        macros
-      );
-
       // ==================================================
       // Allergies
       // ==================================================
@@ -773,11 +549,6 @@ export default function Step1Screen() {
           userProfile.allergies
         );
 
-      console.log(
-        "🚫 ALLERGIES:",
-        allergies
-      );
-
       // ==================================================
       // Disliked Foods
       // ==================================================
@@ -786,11 +557,6 @@ export default function Step1Screen() {
         flattenObjectValues(
           userProfile.disliked_foods
         );
-
-      console.log(
-        "👎 DISLIKED FOODS:",
-        dislikedFoods
-      );
 
       // ==================================================
       // Request Payload
@@ -804,24 +570,6 @@ export default function Step1Screen() {
 
         days,
 
-        target_kcal:
-          targetKcal,
-
-        protein_g:
-          macros.protein_g,
-
-        carb_g:
-          macros.carb_g,
-
-        fat_g:
-          macros.fat_g,
-
-        fiber_g:
-          macros.fiber_g,
-
-        sodium_mg:
-          macros.sodium_mg,
-
         goal:
           primaryGoal,
 
@@ -830,32 +578,6 @@ export default function Step1Screen() {
         disliked_foods:
           dislikedFoods,
       };
-
-      console.log(
-        "================================"
-      );
-
-      console.log(
-        "📤 POST CREATE MEAL PLAN"
-      );
-
-      console.log(
-        "URL:",
-        `${BASE_URL}/api/meal/plans`
-      );
-
-      console.log(
-        "PAYLOAD:",
-        JSON.stringify(
-          payload,
-          null,
-          2
-        )
-      );
-
-      console.log(
-        "================================"
-      );
 
       // ==================================================
       // POST Backend
@@ -874,22 +596,6 @@ export default function Step1Screen() {
             },
           }
         );
-
-      console.log(
-        "================================"
-      );
-
-      console.log(
-        "📥 BACKEND RESPONSE"
-      );
-
-      console.log(
-        response.data
-      );
-
-      console.log(
-        "================================"
-      );
 
       // ==================================================
       // Validate Backend Response
@@ -912,32 +618,6 @@ export default function Step1Screen() {
           "Backend ไม่ได้ส่ง plan_id กลับมา"
         );
       }
-
-      console.log(
-        "================================"
-      );
-
-      console.log(
-        "✅ PLAN CREATED"
-      );
-
-      console.log(
-        "PLAN ID:",
-        planId
-      );
-
-      console.log(
-        "TOTAL DAYS:",
-        response.data?.total_days
-      );
-
-      console.log(
-        "➡️ GO TO STEP 2"
-      );
-
-      console.log(
-        "================================"
-      );
 
       // ==================================================
       // Save Current Plan
@@ -971,50 +651,15 @@ export default function Step1Screen() {
       });
     } catch (error: any) {
       console.error(
-        "================================"
-      );
-
-      console.error(
-        "❌ CREATE PLAN ERROR"
-      );
-
-      console.error(
-        error
-      );
-
-      if (
-        axios.isAxiosError(error)
-      ) {
-        console.error(
-          "❌ STATUS:",
-          error.response?.status
-        );
-
-        console.error(
-          "❌ RESPONSE:",
-          error.response?.data
-        );
-
-        console.error(
-          "❌ URL:",
-          error.config?.url
-        );
-
-        console.error(
-          "❌ REQUEST DATA:",
-          error.config?.data
-        );
-      }
-
-      console.error(
-        "================================"
+        "Meal plan creation failed.",
+        isAxiosError(error) ? error.response?.status : undefined
       );
 
       let message =
         "ไม่สามารถสร้างแผนอาหารได้";
 
       if (
-        axios.isAxiosError(error)
+        isAxiosError(error)
       ) {
         if (
           error.code ===
@@ -1066,8 +711,8 @@ export default function Step1Screen() {
         style={styles.container}
       >
         <StatusBar
-          barStyle="dark-content"
-          backgroundColor="Brand.primary"
+          barStyle="light-content"
+          backgroundColor={PLAN_ACTION_COLOR}
         />
 
         <View
@@ -1077,7 +722,7 @@ export default function Step1Screen() {
         >
           <ActivityIndicator
             size="large"
-            color="Brand.primary"
+            color={Brand.primary}
           />
 
           <Text
@@ -1101,8 +746,8 @@ export default function Step1Screen() {
       style={styles.container}
     >
       <StatusBar
-        barStyle="dark-content"
-        backgroundColor="Brand.primary"
+        barStyle="light-content"
+        backgroundColor={PLAN_ACTION_COLOR}
       />
 
       {/* Header */}
@@ -1126,7 +771,7 @@ export default function Step1Screen() {
           <Ionicons
             name="arrow-back"
             size={28}
-            color="#000"
+            color="#fff"
           />
         </TouchableOpacity>
 
@@ -1171,45 +816,65 @@ export default function Step1Screen() {
           วันที่เริ่มต้น
         </Text>
 
-        <TouchableOpacity
-          style={
-            styles.dateButton
-          }
-          onPress={() =>
-            setShowStartPicker(
-              true
-            )
-          }
-        >
-          <Text
-            style={styles.dateText}
+        {Platform.OS === "web" ? (
+          React.createElement("input", {
+            type: "date",
+            value: formatDate(startDate),
+            "aria-label": "วันที่เริ่มต้น",
+            onChange: (event: React.ChangeEvent<HTMLInputElement>) =>
+              updateStartDate(parseInputDate(event.currentTarget.value)),
+            style: {
+              boxSizing: "border-box",
+              width: "100%",
+              height: 54,
+              border: "1px solid #222",
+              borderRadius: 10,
+              padding: "0 16px",
+              backgroundColor: "#fff",
+              color: "#222",
+              fontFamily: "inherit",
+              fontSize: 16,
+            },
+          })
+        ) : (
+          <TouchableOpacity
+            style={styles.dateButton}
+            onPress={() => setShowStartPicker(true)}
           >
-            {formatDisplayDate(
-              startDate
+            <Text style={styles.dateText}>
+              {formatDisplayDate(startDate)}
+            </Text>
+            <Ionicons
+              name="calendar-outline"
+              size={24}
+              color="#EF4444"
+            />
+          </TouchableOpacity>
+        )}
+
+        {showStartPicker && Platform.OS !== "web" && (
+          <>
+            <DateTimePicker
+              value={startDate}
+              mode="date"
+              display={
+                Platform.OS === "ios"
+                  ? "spinner"
+                  : "default"
+              }
+              onChange={handleStartDateChange}
+            />
+            {Platform.OS === "ios" && (
+              <View style={styles.datePickerActions}>
+                <TouchableOpacity
+                  style={styles.datePickerDoneButton}
+                  onPress={() => setShowStartPicker(false)}
+                >
+                  <Text style={styles.datePickerDoneText}>เสร็จสิ้น</Text>
+                </TouchableOpacity>
+              </View>
             )}
-          </Text>
-
-          <Ionicons
-            name="calendar-outline"
-            size={24}
-            color="#EF4444"
-          />
-        </TouchableOpacity>
-
-        {showStartPicker && (
-          <DateTimePicker
-            value={startDate}
-            mode="date"
-            display={
-              Platform.OS ===
-              "ios"
-                ? "spinner"
-                : "default"
-            }
-            onChange={
-              handleStartDateChange
-            }
-          />
+          </>
         )}
 
         {/* End Date */}
@@ -1225,56 +890,81 @@ export default function Step1Screen() {
           วันที่สิ้นสุด
         </Text>
 
-        <TouchableOpacity
-          style={
-            styles.dateButton
-          }
-          onPress={() =>
-            setShowEndPicker(
-              true
-            )
-          }
-        >
-          <Text
-            style={styles.dateText}
-          >
-            {formatDisplayDate(
-              endDate
-            )}
-          </Text>
-
-          <Ionicons
-            name="calendar-outline"
-            size={24}
-            color="#EF4444"
-          />
-        </TouchableOpacity>
-
-        {showEndPicker && (
-          <DateTimePicker
-            value={endDate}
-            mode="date"
-            minimumDate={
-              startDate
-            }
-            maximumDate={
+        {Platform.OS === "web" ? (
+          React.createElement("input", {
+            type: "date",
+            value: formatDate(endDate),
+            min: formatDate(startDate),
+            max: formatDate(
               new Date(
                 startDate.getFullYear(),
                 startDate.getMonth(),
-                startDate.getDate() +
-                  6
+                startDate.getDate() + 6
               )
-            }
-            display={
-              Platform.OS ===
-              "ios"
-                ? "spinner"
-                : "default"
-            }
-            onChange={
-              handleEndDateChange
-            }
-          />
+            ),
+            "aria-label": "วันที่สิ้นสุด",
+            onChange: (event: React.ChangeEvent<HTMLInputElement>) =>
+              updateEndDate(parseInputDate(event.currentTarget.value)),
+            style: {
+              boxSizing: "border-box",
+              width: "100%",
+              height: 54,
+              border: "1px solid #222",
+              borderRadius: 10,
+              padding: "0 16px",
+              backgroundColor: "#fff",
+              color: "#222",
+              fontFamily: "inherit",
+              fontSize: 16,
+            },
+          })
+        ) : (
+          <TouchableOpacity
+            style={styles.dateButton}
+            onPress={() => setShowEndPicker(true)}
+          >
+            <Text style={styles.dateText}>
+              {formatDisplayDate(endDate)}
+            </Text>
+            <Ionicons
+              name="calendar-outline"
+              size={24}
+              color="#EF4444"
+            />
+          </TouchableOpacity>
+        )}
+
+        {showEndPicker && Platform.OS !== "web" && (
+          <>
+            <DateTimePicker
+              value={endDate}
+              mode="date"
+              minimumDate={startDate}
+              maximumDate={
+                new Date(
+                  startDate.getFullYear(),
+                  startDate.getMonth(),
+                  startDate.getDate() + 6
+                )
+              }
+              display={
+                Platform.OS === "ios"
+                  ? "spinner"
+                  : "default"
+              }
+              onChange={handleEndDateChange}
+            />
+            {Platform.OS === "ios" && (
+              <View style={styles.datePickerActions}>
+                <TouchableOpacity
+                  style={styles.datePickerDoneButton}
+                  onPress={() => setShowEndPicker(false)}
+                >
+                  <Text style={styles.datePickerDoneText}>เสร็จสิ้น</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </>
         )}
 
         {/* Days */}
@@ -1398,7 +1088,7 @@ const styles =
 
     header: {
       height: 60,
-      backgroundColor: "Brand.primary",
+      backgroundColor: PLAN_ACTION_COLOR,
       flexDirection: "row",
       alignItems: "center",
       justifyContent:
@@ -1417,6 +1107,7 @@ const styles =
     headerTitle: {
       fontSize: 23,
       fontWeight: "bold",
+      color: "#fff",
       fontFamily: "NotoSansThaiBold",
     },
 
@@ -1465,6 +1156,22 @@ const styles =
       fontFamily: "NotoSansThai",
     },
 
+    datePickerActions: {
+      alignItems: "flex-end",
+      marginTop: 4,
+    },
+
+    datePickerDoneButton: {
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+    },
+
+    datePickerDoneText: {
+      color: Brand.primary,
+      fontSize: 15,
+      fontFamily: "NotoSansThaiBold",
+    },
+
     daysCard: {
       marginTop: 30,
       padding: 18,
@@ -1493,7 +1200,7 @@ const styles =
     daysNumber: {
       fontSize: 22,
       fontWeight: "bold",
-      color: "Brand.primary",
+      color: Brand.primary,
       fontFamily: "NotoSansThaiBold",
     },
 
@@ -1512,8 +1219,7 @@ const styles =
     nextButton: {
       height: 56,
       borderRadius: 12,
-      backgroundColor:
-        "#F9A800",
+      backgroundColor: PLAN_ACTION_COLOR,
       justifyContent:
         "center",
       alignItems: "center",

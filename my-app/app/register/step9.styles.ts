@@ -1,7 +1,9 @@
-import { StyleSheet, Platform } from "react-native";
+import { StyleSheet } from "react-native";
 
 // 1. ตัวแปรสี
+
 export const ORANGE = "#F5A400";
+
 export const BG = "#F3F3F3";
 export const CARD_BG = "#FDF8EA";
 export const IOS_GREEN = "#34C759";
@@ -58,6 +60,25 @@ const styles = StyleSheet.create({
     fontFamily: FONT_REGULAR // 👈 ใช้ฟอนต์ธรรมดา
   },
 
+  timeHint: {
+    color: "#555",
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: -8,
+    marginBottom: 16,
+    fontFamily: FONT_REGULAR,
+  },
+
+  timeOrderError: {
+    color: "#B42318",
+    backgroundColor: "#FEE4E2",
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 12,
+    fontSize: 14,
+    fontFamily: FONT_BOLD,
+  },
+
   dropdownButton: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -107,6 +128,9 @@ const styles = StyleSheet.create({
     fontFamily: FONT_REGULAR 
   },
 
+  dropdownItemDisabled: { backgroundColor: "#F5F5F5" },
+  dropdownItemTextDisabled: { color: "#B8B8B8" },
+
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -148,6 +172,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    gap: 12,
   },
 
   switchLabel: { 
@@ -195,6 +220,104 @@ const styles = StyleSheet.create({
     color: "#222",
     fontFamily: FONT_REGULAR 
   },
+
+  timePeriod: {
+    color: "#555",
+    fontSize: 12,
+    marginTop: 5,
+    fontFamily: FONT_REGULAR,
+  },
+
+  disabledAddMealBtn: { opacity: 0.45 },
+
+  timePickerBackdrop: {
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: 20,
+    backgroundColor: "rgba(0,0,0,0.4)",
+  },
+  timePickerCard: {
+    width: "100%",
+    maxWidth: 460,
+    maxHeight: "85%",
+    alignSelf: "center",
+    padding: 20,
+    borderRadius: 18,
+    backgroundColor: "#FFFFFF",
+  },
+  timePickerTitle: {
+    color: "#222",
+    fontSize: 20,
+    fontFamily: FONT_BOLD,
+  },
+  timePickerHint: {
+    marginTop: 5,
+    color: "#666",
+    fontSize: 13,
+    lineHeight: 19,
+    fontFamily: FONT_REGULAR,
+  },
+  pickerColumns: {
+    flexDirection: "row",
+    gap: 14,
+    marginTop: 16,
+  },
+  pickerColumn: { flex: 1, minWidth: 0 },
+  pickerColumnTitle: {
+    marginBottom: 6,
+    color: "#555",
+    fontSize: 13,
+    textAlign: "center",
+    fontFamily: FONT_BOLD,
+  },
+  pickerScroll: {
+    height: 220,
+    borderWidth: 1,
+    borderColor: "#E8E8E8",
+    borderRadius: 10,
+    backgroundColor: "#FAFAFA",
+  },
+  pickerOption: {
+    minHeight: 38,
+    alignItems: "center",
+    justifyContent: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: "#EEEEEE",
+  },
+  pickerOptionSelected: { backgroundColor: "#FFF0D7" },
+  pickerOptionDisabled: { backgroundColor: "#F1F1F1" },
+  pickerOptionText: {
+    color: "#333",
+    fontSize: 16,
+    fontFamily: FONT_REGULAR,
+  },
+  pickerOptionTextSelected: { color: ORANGE, fontFamily: FONT_BOLD },
+  pickerOptionTextDisabled: { color: "#BDBDBD" },
+  timePickerButtons: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 10,
+    marginTop: 16,
+  },
+  timePickerCancelButton: {
+    minWidth: 92,
+    alignItems: "center",
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: "#F2F2F2",
+  },
+  timePickerCancelText: { color: "#444", fontSize: 14, fontFamily: FONT_BOLD },
+  timePickerConfirmButton: {
+    minWidth: 120,
+    alignItems: "center",
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: ORANGE,
+  },
+  timePickerConfirmDisabled: { backgroundColor: "#C9C9C9" },
+  timePickerConfirmText: { color: "#FFFFFF", fontSize: 14, fontFamily: FONT_BOLD },
 
   spacer: { flex: 1, minHeight: 60 },
 

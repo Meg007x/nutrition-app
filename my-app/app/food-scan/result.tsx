@@ -19,14 +19,13 @@ import { useLocalSearchParams, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { BASE_URL } from "../../constants/config";
 
-type IngredientTabKey = "veg_group" | "seasoning_group" | "protein_group";
 type TabKey = "nutrition" | "ingredients";
 
 type IngredientItem = {
   ingredient_id: string;
   name: string;
   category?: string;
-  category_group?: IngredientTabKey | string;
+  category_group?: string;
   category_group_label?: string;
   sub_category?: string;
   sub_category_label?: string;
@@ -107,6 +106,9 @@ type CurrentUser = {
   health_goals?: {
     protein_target_g?: number;
     tdee_target_kcal?: number;
+    target_calories?: number;
+    target_carb_g?: number;
+    target_fat_g?: number;
   };
   meal_settings?: {
     meals_per_day?: number;
@@ -125,11 +127,6 @@ const BORDER = "#202020";
 
 const FORCE_MOCK_MODE = false;
 
-const GROUP_LABELS: Record<IngredientTabKey, string> = {
-  veg_group: "ผักและผลไม้",
-  seasoning_group: "เครื่องปรุง/ส่วนผสม",
-  protein_group: "เนื้อสัตว์และโปรตีน",
-};
 
 const DEFAULT_DAILY_TARGET = {
   calories: 1625,
@@ -141,7 +138,6 @@ const DEFAULT_DAILY_TARGET = {
 };
 
 const DEFAULT_MEALS = ["เช้า", "กลางวัน", "เย็น", "คํ่า", "ดึก"];
-const MAX_EXTRA_INGREDIENTS = 5;
 
 const MOCK_FOOD_DATA: FoodData = {
   id: "f_spaghetti_tomato_basil",
@@ -241,99 +237,18 @@ function getApiBase() {
   return BASE_URL;
 }
 
-function fallbackGroupFromLegacyCategory(category?: string): IngredientTabKey {
-  const c = String(category || "").trim().toLowerCase();
-
-  if (["veg", "veg_fruit", "fruit", "vegetable"].includes(c)) {
-    return "veg_group";
-  }
-  if (
-    [
-      "seasoning",
-      "condiment",
-      "dairy",
-      "bread",
-      "sweet",
-      "egg_cheese",
-      "egg",
-      "cheese",
-      "other",
-    ].includes(c)
-  ) {
-    return "seasoning_group";
-  }
-
-  return "protein_group";
-}
-
-function fallbackGroupLabelFromLegacyCategory(category?: string) {
-  return GROUP_LABELS[fallbackGroupFromLegacyCategory(category)];
-}
-
-function fallbackSubCategoryFromLegacy(item: any): string {
-  const category = String(item?.category || "").trim().toLowerCase();
-  const name = String(item?.name || "").trim();
-
-  if (category === "veg") {
-    if (["ใบโหระพา", "พาร์สลีย์"].includes(name)) return "herb";
-    return "vegetable";
-  }
-
-  if (category === "veg_fruit") {
-    if (["กล้วยหอม", "แอปเปิล"].includes(name)) return "fruit";
-    return "vegetable";
-  }
-
-  if (category === "seasoning") {
-    if (["ครีมซอส"].includes(name)) return "sauce";
-    if (["เส้นพาสต้า", "แป้งพิซซ่า"].includes(name)) return "bread_flour";
-    return "seasoning";
-  }
-
-  if (category === "dairy") return "dairy";
-  if (category === "egg_cheese") return "egg_cheese";
-  if (category === "bread") return "bread_flour";
-  if (category === "sweet") return "sweetener";
-  if (category === "other") {
-    if (["ชีส"].includes(name)) return "egg_cheese";
-    return "other";
-  }
-  if (category === "meat") return "meat";
-  if (category === "seafood") return "seafood";
-  if (category === "nuts") return "nuts_seeds";
-
-  return "other";
-}
-
-function fallbackSubCategoryLabel(subCategory?: string) {
-  const map: Record<string, string> = {
-    vegetable: "ผัก",
-    fruit: "ผลไม้",
-    herb: "สมุนไพร",
-    seasoning: "เครื่องปรุง",
-    sauce: "ซอส",
-    dairy: "นมและผลิตภัณฑ์นม",
-    egg_cheese: "ไข่และชีส",
-    bread_flour: "ขนมปังและแป้ง",
-    sweetener: "ของหวานและน้ำตาล",
-    other: "อื่น ๆ",
-    meat: "เนื้อสัตว์",
-    seafood: "อาหารทะเล",
-    nuts_seeds: "ถั่วและเมล็ดพืช",
-  };
-
-  return map[subCategory || "other"] || "อื่น ๆ";
-}
-
 function buildDynamicDailyTarget(user: CurrentUser | null) {
-  const calories = Number(user?.health_goals?.tdee_target_kcal);
+  // Use stored targets (Single Source of Truth) — carbs/fat too!
+  const calories = Number(user?.health_goals?.target_calories) || Number(user?.health_goals?.tdee_target_kcal);
   const protein = Number(user?.health_goals?.protein_target_g);
+  const carb = Number(user?.health_goals?.target_carb_g);
+  const fat = Number(user?.health_goals?.target_fat_g);
 
   return {
     calories: calories > 0 ? Math.round(calories) : DEFAULT_DAILY_TARGET.calories,
     protein: protein > 0 ? Math.round(protein) : DEFAULT_DAILY_TARGET.protein,
-    carb: DEFAULT_DAILY_TARGET.carb,
-    fat: DEFAULT_DAILY_TARGET.fat,
+    carb: carb > 0 ? Math.round(carb) : DEFAULT_DAILY_TARGET.carb,
+    fat: fat > 0 ? Math.round(fat) : DEFAULT_DAILY_TARGET.fat,
     fiber: DEFAULT_DAILY_TARGET.fiber,
     sodium: DEFAULT_DAILY_TARGET.sodium,
   };
@@ -375,18 +290,12 @@ export default function ResultScreen() {
   const [mealOptions, setMealOptions] = useState<string[]>(DEFAULT_MEALS);
   const [selectedMeal, setSelectedMeal] = useState(DEFAULT_MEALS[0]);
 
-  const [ingredientOptions, setIngredientOptions] = useState<IngredientItem[]>([]);
-  const [extraIngredientInput, setExtraIngredientInput] = useState("");
-  const [extraIngredients, setExtraIngredients] = useState<IngredientItem[]>([]);
 
   const [showEditModal, setShowEditModal] = useState(false);
   const [showPortionModal, setShowPortionModal] = useState(false);
   const [showMealModal, setShowMealModal] = useState(false);
-  const [showIngredientModal, setShowIngredientModal] = useState(false);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
 
-  const [ingredientTab, setIngredientTab] = useState<IngredientTabKey>("veg_group");
-  const [selectedSubCategory, setSelectedSubCategory] = useState<string>("all");
 
   const [dailyConsumed, setDailyConsumed] = useState({
     calories: 0,
@@ -497,7 +406,6 @@ export default function ResultScreen() {
 
   useEffect(() => {
     loadCurrentUser();
-    fetchIngredients();
   }, []);
 
   useEffect(() => {
@@ -531,9 +439,6 @@ export default function ResultScreen() {
     fetchDailySummary();
   }, [resolvedUserId, currentUser?.meal_settings?.schedules?.length]);
 
-  useEffect(() => {
-    setSelectedSubCategory("all");
-  }, [ingredientTab]);
 
   const fetchMealSettings = async () => {
     if (!resolvedUserId) {
@@ -599,61 +504,6 @@ export default function ResultScreen() {
     }
   };
 
-  const fetchIngredients = async () => {
-    try {
-      setLoadingIngredients(true);
-
-      const response = await fetch(`${API_BASE}/api/ingredients`);
-      const res = await response.json();
-
-      let items: any[] = [];
-
-      if (Array.isArray(res)) {
-        items = res;
-      } else if (Array.isArray(res?.data)) {
-        items = res.data;
-      } else if (Array.isArray(res?.ingredients)) {
-        items = res.ingredients;
-      }
-
-      const mapped: IngredientItem[] = items
-        .map((item: any) => {
-          const category_group =
-            item.category_group ||
-            fallbackGroupFromLegacyCategory(item.category);
-          const category_group_label =
-            item.category_group_label ||
-            fallbackGroupLabelFromLegacyCategory(item.category);
-          const sub_category =
-            item.sub_category || fallbackSubCategoryFromLegacy(item);
-          const sub_category_label =
-            item.sub_category_label ||
-            fallbackSubCategoryLabel(sub_category);
-
-          return {
-            ingredient_id: item._id || item.ingredient_id || "",
-            name: item.name || "",
-            category: item.category || "",
-            category_group,
-            category_group_label,
-            sub_category,
-            sub_category_label,
-            qty: 1,
-            unit: item.default_unit || "หน่วย",
-            keywords: Array.isArray(item.keywords) ? item.keywords : [],
-          };
-        })
-        .filter((item) => item.ingredient_id && item.name);
-
-      setIngredientOptions(mapped);
-    } catch (error) {
-      console.error("❌ fetchIngredients error:", error);
-      setIngredientOptions([]);
-    } finally {
-      setLoadingIngredients(false);
-    }
-  };
-
   const fetchDailySummary = async () => {
     if (!resolvedUserId) {
       resetDailyConsumed();
@@ -680,6 +530,69 @@ export default function ResultScreen() {
       }
     } catch (error) {
       resetDailyConsumed();
+    }
+  };
+
+  // หากข้อมูลจากการสแกนไม่มี ingredients ให้ดึงรายละเอียดเมนูจาก MasterFood API
+  const loadFoodIngredients = async (foodData: FoodData) => {
+    const currentIngredients = Array.isArray(foodData?.ingredients)
+      ? foodData.ingredients
+      : [];
+
+    if (currentIngredients.length > 0 || !foodData?.id) return;
+
+    try {
+      setLoadingIngredients(true);
+      const response = await fetch(
+        `${API_BASE}/api/meal/foods/${encodeURIComponent(String(foodData.id))}`,
+        { method: "GET" }
+      );
+
+      if (!response.ok) {
+        console.warn("ไม่สามารถดึงรายละเอียดส่วนผสมได้:", response.status);
+        return;
+      }
+
+      const result = await response.json();
+      const details = result?.food || result?.data;
+      const rawIngredients = Array.isArray(details?.ingredients)
+        ? details.ingredients
+        : [];
+
+      const ingredients: IngredientItem[] = rawIngredients
+        .map((item: any, index: number) => {
+          const qty = Number(
+            item?.qty ?? item?.weight_g ?? item?.quantity ?? item?.amount ?? 0
+          );
+
+          return {
+            ingredient_id: String(
+              item?.ingredient_id || item?._id || item?.food_id || `ingredient-${index}`
+            ),
+            name: String(
+              item?.name || item?.name_snap || item?.ingredient_name || item?.name_th || ""
+            ).trim(),
+            category: item?.category,
+            category_group: item?.category_group,
+            category_group_label: item?.category_group_label,
+            sub_category: item?.sub_category,
+            sub_category_label: item?.sub_category_label,
+            qty: Number.isFinite(qty) ? qty : 0,
+            unit: String(item?.unit || (item?.weight_g != null ? "g" : "กรัม")),
+            keywords: Array.isArray(item?.keywords) ? item.keywords : [],
+          };
+        })
+        .filter((item: IngredientItem) => item.name);
+
+      setFood((current) =>
+        current && current.id === foodData.id
+          ? { ...current, ingredients }
+          : current
+      );
+    } catch (error) {
+      console.warn("เกิดข้อผิดพลาดขณะดึงส่วนผสมของเมนู:", error);
+    } finally {
+      setLoadingIngredients(false);
     }
   };
 
@@ -725,6 +638,7 @@ export default function ResultScreen() {
       }
 
       setFood(res.data);
+      void loadFoodIngredients(res.data);
       setAiDishName(res.aiDetection?.dishName || "");
       setCustomDishName(res.data.dishName || "");
     } catch (err: any) {
@@ -797,198 +711,6 @@ export default function ResultScreen() {
     );
   }, [food, portionMultiplier]);
 
-  const selectedIngredientLabel = extraIngredientInput || "เลือกส่วนผสม";
-
-  const currentTabIngredients = useMemo(() => {
-    return ingredientOptions.filter(
-      (item) => item.category_group === ingredientTab
-    );
-  }, [ingredientOptions, ingredientTab]);
-
-  const subCategoryOptions = useMemo(() => {
-    const map = new Map<string, string>();
-
-    currentTabIngredients.forEach((item) => {
-      if (item.sub_category) {
-        map.set(
-          item.sub_category,
-          item.sub_category_label || fallbackSubCategoryLabel(item.sub_category)
-        );
-      }
-    });
-
-    return [
-      { value: "all", label: "ทั้งหมด" },
-      ...Array.from(map.entries()).map(([value, label]) => ({
-        value,
-        label,
-      })),
-    ];
-  }, [currentTabIngredients]);
-
-  const filteredIngredientOptions = useMemo(() => {
-    if (selectedSubCategory === "all") return currentTabIngredients;
-    return currentTabIngredients.filter(
-      (item) => item.sub_category === selectedSubCategory
-    );
-  }, [currentTabIngredients, selectedSubCategory]);
-
-  const vegCount = ingredientOptions.filter(
-    (item) => item.category_group === "veg_group"
-  ).length;
-
-  const seasoningCount = ingredientOptions.filter(
-    (item) => item.category_group === "seasoning_group"
-  ).length;
-
-  const proteinCount = ingredientOptions.filter(
-    (item) => item.category_group === "protein_group"
-  ).length;
-
-  const sanitizeQtyInput = (value: string) => {
-    let cleaned = value.replace(/[^0-9.]/g, "");
-
-    const firstDotIndex = cleaned.indexOf(".");
-    if (firstDotIndex !== -1) {
-      cleaned =
-        cleaned.slice(0, firstDotIndex + 1) +
-        cleaned.slice(firstDotIndex + 1).replace(/\./g, "");
-    }
-
-    return cleaned;
-  };
-
-  const getQtyStep = (unit?: string) => {
-    switch ((unit || "").toLowerCase()) {
-      case "g":
-      case "gram":
-        return 1;
-      case "ml":
-        return 5;
-      case "tsp":
-      case "ช้อนชา":
-        return 0.5;
-      case "tbsp":
-      case "ช้อนโต๊ะ":
-        return 0.5;
-      case "piece":
-      case "ชิ้น":
-        return 1;
-      default:
-        return 1;
-    }
-  };
-
-  const clampQty = (num: number, min = 0.1, max = 5000) => {
-    if (Number.isNaN(num)) return min;
-    return Math.min(Math.max(num, min), max);
-  };
-
-  const updateExtraIngredientQty = (index: number, value: string) => {
-    const cleaned = sanitizeQtyInput(value);
-
-    setExtraIngredients((prev) =>
-      prev.map((item, i) =>
-        i === index
-          ? {
-              ...item,
-              qty: cleaned === "" ? 0 : Number(cleaned),
-            }
-          : item
-      )
-    );
-  };
-
-  const normalizeExtraIngredientQty = (index: number) => {
-    setExtraIngredients((prev) =>
-      prev.map((item, i) =>
-        i === index
-          ? {
-              ...item,
-              qty: clampQty(Number(item.qty || 0)),
-            }
-          : item
-      )
-    );
-  };
-
-  const increaseExtraIngredientQty = (index: number) => {
-    setExtraIngredients((prev) =>
-      prev.map((item, i) => {
-        if (i !== index) return item;
-
-        const step = getQtyStep(item.unit);
-        const nextQty = clampQty(
-          Math.round((Number(item.qty || 0) + step) * 10) / 10
-        );
-
-        return {
-          ...item,
-          qty: nextQty,
-        };
-      })
-    );
-  };
-
-  const decreaseExtraIngredientQty = (index: number) => {
-    setExtraIngredients((prev) =>
-      prev.map((item, i) => {
-        if (i !== index) return item;
-
-        const step = getQtyStep(item.unit);
-        const nextQty = clampQty(
-          Math.round((Number(item.qty || 0) - step) * 10) / 10
-        );
-
-        return {
-          ...item,
-          qty: nextQty,
-        };
-      })
-    );
-  };
-
-  const handleAddExtraIngredient = () => {
-    const found = ingredientOptions.find(
-      (item) => item.name === extraIngredientInput
-    );
-
-    if (!found) {
-      Alert.alert("ไม่พบส่วนผสม", "กรุณาเลือกส่วนผสมจากดรอปดาวลิส");
-      return;
-    }
-
-    if (extraIngredients.length >= MAX_EXTRA_INGREDIENTS) {
-      Alert.alert(
-        "เพิ่มส่วนผสมเกินกำหนด",
-        `สามารถเพิ่มส่วนผสมได้ไม่เกิน ${MAX_EXTRA_INGREDIENTS} รายการ`
-      );
-      return;
-    }
-
-    const isDuplicate = extraIngredients.some(
-      (item) => item.ingredient_id === found.ingredient_id
-    );
-
-    if (isDuplicate) {
-      Alert.alert("เพิ่มแล้ว", "ส่วนผสมนี้ถูกเพิ่มไปแล้ว");
-      return;
-    }
-
-    setExtraIngredients((prev) => [
-      ...prev,
-      {
-        ...found,
-        qty: found.qty && found.qty > 0 ? found.qty : 1,
-      },
-    ]);
-    setExtraIngredientInput("");
-  };
-
-  const removeExtraIngredient = (index: number) => {
-    setExtraIngredients((prev) => prev.filter((_, i) => i !== index));
-  };
-
   const goToFoodScanIndex = () => {
     try {
       router.back();
@@ -1009,15 +731,11 @@ export default function ResultScreen() {
     setCustomDishName("");
     setCustomGram("");
     setPortionMultiplier(1);
-    setExtraIngredientInput("");
-    setExtraIngredients([]);
     setSelectedMeal(mealOptions[0] || DEFAULT_MEALS[0]);
     setActiveTab("nutrition");
-    setSelectedSubCategory("all");
     setShowEditModal(false);
     setShowMealModal(false);
     setShowPortionModal(false);
-    setShowIngredientModal(false);
     setShowDeleteConfirmModal(false);
 
     goToFoodScanIndex();
@@ -1290,119 +1008,34 @@ const handleSave = async () => {
             <View style={styles.infoCard}>
               <View style={styles.sectionHeadRow}>
                 <Text style={styles.sectionTitle}>ส่วนผสม</Text>
-                <Text style={styles.sectionUnitTitle}>เมตริก</Text>
               </View>
 
-              {food.ingredients.map((item, index) => (
-                <View key={`${item.ingredient_id}-${index}`} style={styles.ingRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.ingName}>{item.name}</Text>
-                    <Text style={styles.ingCategory}>
-                      {item.sub_category_label ||
-                        item.category_group_label ||
-                        "วัตถุดิบ"}
-                    </Text>
-                  </View>
-                  <Text style={styles.ingVal}>
-                    {item.qty} {item.unit}
+              {loadingIngredients ? (
+                <View style={{ alignItems: "center", paddingVertical: 20 }}>
+                  <ActivityIndicator size="small" color={ORANGE} />
+                  <Text style={{ marginTop: 8, color: "#666" }}>
+                    กำลังโหลดข้อมูลส่วนผสม...
                   </Text>
                 </View>
-              ))}
-
-              {extraIngredients.length > 0 && (
-                <>
-                  <Text style={[styles.sectionTitle, { marginTop: 18 }]}>
-                    ส่วนผสมที่เพิ่ม
-                  </Text>
-                  {extraIngredients.map((item, index) => (
-                    <View key={`extra-${index}`} style={styles.ingRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.ingName}>{item.name}</Text>
-                        <Text style={styles.ingCategory}>
-                          {item.sub_category_label ||
-                            item.category_group_label ||
-                            "วัตถุดิบ"}
-                        </Text>
-                      </View>
-
-                      <View style={styles.extraEditorWrap}>
-                        <View style={styles.qtyControl}>
-                          <TextInput
-                            value={String(item.qty ?? "")}
-                            onChangeText={(value) =>
-                              updateExtraIngredientQty(index, value)
-                            }
-                            onBlur={() => normalizeExtraIngredientQty(index)}
-                            keyboardType={
-                              Platform.OS === "ios" ? "decimal-pad" : "numeric"
-                            }
-                            style={styles.qtyInput}
-                            placeholder="1"
-                            placeholderTextColor="#999"
-                          />
-
-                          <View style={styles.arrowWrap}>
-                            <TouchableOpacity
-                              onPress={() => increaseExtraIngredientQty(index)}
-                            >
-                              <Ionicons name="chevron-up" size={16} color="#111" />
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                              onPress={() => decreaseExtraIngredientQty(index)}
-                            >
-                              <Ionicons name="chevron-down" size={16} color="#111" />
-                            </TouchableOpacity>
-                          </View>
-
-                          <Text style={styles.qtyUnit}>{item.unit}</Text>
-                        </View>
-
-                        <TouchableOpacity onPress={() => removeExtraIngredient(index)}>
-                          <Ionicons
-                            name="close-circle"
-                            size={22}
-                            color="#C62828"
-                          />
-                        </TouchableOpacity>
-                      </View>
+              ) : Array.isArray(food.ingredients) && food.ingredients.length > 0 ? (
+                food.ingredients.map((item, index) => (
+                  <View key={`${item.ingredient_id}-${index}`} style={styles.ingRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.ingName}>{item.name}</Text>
+                      <Text style={styles.ingCategory}>
+                        {item.sub_category_label ||
+                          item.category_group_label ||
+                          "วัตถุดิบ"}
+                      </Text>
                     </View>
-                  ))}
-                </>
+                  </View>
+                ))
+              ) : (
+                <Text style={{ color: "#777", textAlign: "center", paddingVertical: 20 }}>
+                  ไม่พบข้อมูลส่วนผสม
+                </Text>
               )}
 
-              <View style={{ marginTop: 20 }}>
-                <Text style={styles.sectionTitle}>เพิ่มส่วนผสม</Text>
-
-                <TouchableOpacity
-                  style={styles.selectBox}
-                  onPress={() => setShowIngredientModal(true)}
-                >
-                  <Text
-                    style={[
-                      styles.selectText,
-                      !extraIngredientInput && {
-                        color: "#888",
-                        fontWeight: "500",
-                      },
-                    ]}
-                  >
-                    {selectedIngredientLabel}
-                  </Text>
-                  <Ionicons name="chevron-down" size={22} color="#111" />
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.addIngredientBtn}
-                  onPress={handleAddExtraIngredient}
-                >
-                  <Text style={styles.addIngredientBtnText}>เพิ่มส่วนผสม</Text>
-                </TouchableOpacity>
-
-                <Text style={styles.limitText}>
-                  เพิ่มได้อีก {MAX_EXTRA_INGREDIENTS - extraIngredients.length} รายการ
-                </Text>
-              </View>
             </View>
           )}
 
@@ -1477,150 +1110,6 @@ const handleSave = async () => {
         }}
       />
 
-      <Modal visible={showIngredientModal} transparent animationType="fade">
-        <Pressable
-          style={styles.modalBackdrop}
-          onPress={() => setShowIngredientModal(false)}
-        >
-          <Pressable
-            style={styles.modalCard}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <Text style={styles.modalTitle}>เลือกส่วนผสม</Text>
-
-            <View style={styles.ingredientTabWrap}>
-              <TouchableOpacity
-                style={[
-                  styles.ingredientTabBtn,
-                  ingredientTab === "veg_group" && styles.ingredientTabBtnActive,
-                ]}
-                onPress={() => setIngredientTab("veg_group")}
-              >
-                <Text
-                  style={[
-                    styles.ingredientTabText,
-                    ingredientTab === "veg_group" && styles.ingredientTabTextActive,
-                  ]}
-                >
-                  {`ผักและผลไม้\n(${vegCount})`}
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.ingredientTabBtn,
-                  ingredientTab === "seasoning_group" &&
-                    styles.ingredientTabBtnActive,
-                ]}
-                onPress={() => setIngredientTab("seasoning_group")}
-              >
-                <Text
-                  style={[
-                    styles.ingredientTabText,
-                    ingredientTab === "seasoning_group" &&
-                      styles.ingredientTabTextActive,
-                  ]}
-                >
-                  {`เครื่องปรุง/ส่วนผสม\n(${seasoningCount})`}
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.ingredientTabBtn,
-                  ingredientTab === "protein_group" &&
-                    styles.ingredientTabBtnActive,
-                ]}
-                onPress={() => setIngredientTab("protein_group")}
-              >
-                <Text
-                  style={[
-                    styles.ingredientTabText,
-                    ingredientTab === "protein_group" &&
-                      styles.ingredientTabTextActive,
-                  ]}
-                >
-                  {`เนื้อสัตว์และโปรตีน\n(${proteinCount})`}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.subCategoryRow}
-            >
-              {subCategoryOptions.map((sub) => (
-                <TouchableOpacity
-                  key={sub.value}
-                  style={[
-                    styles.subCategoryChip,
-                    selectedSubCategory === sub.value &&
-                      styles.subCategoryChipActive,
-                  ]}
-                  onPress={() => setSelectedSubCategory(sub.value)}
-                >
-                  <Text
-                    style={[
-                      styles.subCategoryChipText,
-                      selectedSubCategory === sub.value &&
-                        styles.subCategoryChipTextActive,
-                    ]}
-                  >
-                    {sub.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            {loadingIngredients ? (
-              <View style={{ paddingVertical: 20, alignItems: "center" }}>
-                <ActivityIndicator size="small" color={ORANGE} />
-                <Text style={{ marginTop: 8 }}>กำลังโหลดส่วนผสม...</Text>
-              </View>
-            ) : (
-              <ScrollView
-                style={{ maxHeight: 320 }}
-                showsVerticalScrollIndicator={false}
-              >
-                {filteredIngredientOptions.map((item) => (
-                  <TouchableOpacity
-                    key={item.ingredient_id}
-                    style={styles.optionRow}
-                    onPress={() => {
-                      setExtraIngredientInput(item.name);
-                      setShowIngredientModal(false);
-                    }}
-                  >
-                    <View>
-                      <Text style={styles.optionText}>{item.name}</Text>
-                      <Text style={styles.optionSubText}>
-                        {item.sub_category_label || "หมวดย่อย"}
-                      </Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={18} color="#555" />
-                  </TouchableOpacity>
-                ))}
-
-                {!filteredIngredientOptions.length && (
-                  <View style={{ paddingVertical: 20, alignItems: "center" }}>
-                    <Text style={{ color: "#777" }}>
-                      ไม่พบส่วนผสมในหมวดนี้
-                    </Text>
-                  </View>
-                )}
-              </ScrollView>
-            )}
-
-            <TouchableOpacity
-              style={styles.closeBtn}
-              onPress={() => setShowIngredientModal(false)}
-            >
-              <Text style={styles.closeBtnText}>ปิด</Text>
-            </TouchableOpacity>
-          </Pressable>
-        </Pressable>
-      </Modal>
 
       <Modal visible={showEditModal} transparent animationType="fade">
         <Pressable
@@ -2133,40 +1622,6 @@ const styles = StyleSheet.create({
     color: "#111",
   },
 
-  extraEditorWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  qtyControl: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#DDD",
-    borderRadius: 10,
-    backgroundColor: "#FFF",
-    paddingHorizontal: 8,
-    height: 40,
-  },
-  qtyInput: {
-    minWidth: 40,
-    textAlign: "center",
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#111",
-    paddingVertical: 0,
-  },
-  arrowWrap: {
-    justifyContent: "center",
-    alignItems: "center",
-    marginHorizontal: 4,
-  },
-  qtyUnit: {
-    fontSize: 14,
-    color: "#666",
-    fontWeight: "700",
-    marginLeft: 4,
-  },
 
   mealSection: {
     marginTop: 26,
@@ -2213,76 +1668,6 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
 
-  addIngredientBtn: {
-    marginTop: 12,
-    backgroundColor: ORANGE,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 14,
-  },
-  addIngredientBtnText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "800",
-  },
-
-  limitText: {
-    marginTop: 8,
-    color: "#666",
-    fontSize: 13,
-  },
-
-  ingredientTabWrap: {
-    flexDirection: "row",
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#DDD",
-    borderRadius: 10,
-    overflow: "hidden",
-  },
-  ingredientTabBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 6,
-    backgroundColor: "#F7F7F7",
-    alignItems: "center",
-  },
-  ingredientTabBtnActive: {
-    backgroundColor: ORANGE,
-  },
-  ingredientTabText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#333",
-    textAlign: "center",
-  },
-  ingredientTabTextActive: {
-    color: "#fff",
-  },
-
-  subCategoryRow: {
-    gap: 8,
-    paddingBottom: 10,
-    paddingRight: 4,
-  },
-  subCategoryChip: {
-    backgroundColor: "#F3F3F3",
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  subCategoryChipActive: {
-    backgroundColor: ORANGE,
-  },
-  subCategoryChipText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#444",
-  },
-  subCategoryChipTextActive: {
-    color: "#fff",
-  },
 
   modalBackdrop: {
     flex: 1,

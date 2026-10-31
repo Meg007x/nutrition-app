@@ -160,7 +160,7 @@ export default function NotificationScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: '#FFFFFF' }]}>
       
       {/* 🟠 1. แถบเลย์เอาท์ด้านบนสีส้ม (Header) ตามรูปดีไซน์เป๊ะๆ */}
-      <View style={{ backgroundColor: '#F28A1A', paddingTop: 12, paddingBottom: 16, paddingHorizontal: 16 }}>
+      <View style={{ backgroundColor: '#F5A400', paddingTop: 12, paddingBottom: 16, paddingHorizontal: 16 }}>
         {/* แถบสถานะจำลองด้านบนสุด */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
           <ThemedText type="defaultSemiBold" style={{ color: '#FFFFFF', fontSize: 14 }}>9:41</ThemedText>

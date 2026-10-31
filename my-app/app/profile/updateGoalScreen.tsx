@@ -8,7 +8,6 @@ import {
   Modal, 
   Pressable, 
   ActivityIndicator, 
-  Alert,
   Keyboard,
   Platform
 } from 'react-native';
@@ -32,6 +31,7 @@ export default function UpdateGoalScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [currentUserId, setCurrentUserId] = useState('');
+  const [currentWeight, setCurrentWeight] = useState<number | null>(null);
 
   // 🎯 States บันทึกค่าที่ทำงานบนฟอร์มปัจจุบัน
   const [selectedGoal, setSelectedGoal] = useState<GoalType>('รักษารูปร่าง');
@@ -62,22 +62,26 @@ export default function UpdateGoalScreen() {
       const response = await fetch(`${BASE_URL}/api/users/profile?userId=${userId}`);
       const json = await response.json();
 
-      if (json.success && json.data && json.data.health_goals) {
+      if (json.success && json.data) {
+        const profileWeight = Number(json.data.weight_kg);
+        setCurrentWeight(Number.isFinite(profileWeight) && profileWeight > 0 ? profileWeight : null);
         const goals = json.data.health_goals;
-        
-        // 1. ดึงเป้าหมายหลักตรงตามคีย์ DB 
-        if (goals.primary_goal) {
-          setSelectedGoal(goals.primary_goal as GoalType);
-        }
 
-        // 2. ดึงเป้าหมายน้ำหนักที่ต้องการกรอกคาไว้เป็นค่าแรกสุด
-        const savedWeight = goals.target_weight_kg ? goals.target_weight_kg.toString() : '';
-        setTargetWeight(savedWeight);
-        setOriginalWeight(savedWeight); // ล็อกจดจำประวัติไว้
+        if (goals) {
+          // 1. ดึงเป้าหมายหลักตรงตามคีย์ DB
+          if (goals.primary_goal) {
+            setSelectedGoal(goals.primary_goal as GoalType);
+          }
 
-        // 3. ดึงระยะเวลาจำนวนสัปดาห์
-        if (goals.duration_weeks) {
-          setSelectedWeek(`${goals.duration_weeks} สัปดาห์`);
+          // 2. ดึงเป้าหมายน้ำหนักที่ต้องการกรอกคาไว้เป็นค่าแรกสุด
+          const savedWeight = goals.target_weight_kg ? goals.target_weight_kg.toString() : '';
+          setTargetWeight(savedWeight);
+          setOriginalWeight(savedWeight); // ล็อกจดจำประวัติไว้
+
+          // 3. ดึงระยะเวลาจำนวนสัปดาห์
+          if (goals.duration_weeks) {
+            setSelectedWeek(`${goals.duration_weeks} สัปดาห์`);
+          }
         }
       }
     } catch (error) {
@@ -103,8 +107,17 @@ const handleSaveGoal = async () => {
     }
 
     // 3. เช็กว่ากรอกน้ำหนักหรือยัง (ถ้าไม่ใช่รักษารูปร่าง)
-    if (selectedGoal !== 'รักษารูปร่าง' && !targetWeight) {
+    if (selectedGoal !== 'รักษารูปร่าง' && !targetWeight.trim()) {
       alert("กรุณาระบุน้ำหนักเป้าหมายที่ต้องการ");
+      return;
+    }
+
+    const parsedTargetWeight = Number.parseFloat(targetWeight);
+    if (
+      selectedGoal !== 'รักษารูปร่าง' &&
+      (!Number.isFinite(parsedTargetWeight) || parsedTargetWeight <= 0)
+    ) {
+      alert("กรุณาระบุน้ำหนักเป้าหมายที่ถูกต้อง");
       return;
     }
 
@@ -113,8 +126,12 @@ const handleSaveGoal = async () => {
     // แปลง "4 สัปดาห์" ให้เหลือแค่ตัวเลข 4
     const weeksNumber = parseInt(selectedWeek.replace(/[^0-9]/g, '')) || 4;
     
-    // แปลงน้ำหนักเป็นตัวเลข หากเลือกรักษารูปร่างให้ส่งเป็นน้ำหนักเดิม หรือส่งเลขที่หลังบ้านต้องการ (ลองส่ง parseFloat ดู)
-    const weightToSend = selectedGoal === 'รักษารูปร่าง' ? parseFloat(originalWeight) || 0 : parseFloat(targetWeight);
+    const originalTargetWeight = Number.parseFloat(originalWeight);
+    const weightToSend = selectedGoal === 'รักษารูปร่าง'
+      ? Number.isFinite(originalTargetWeight) && originalTargetWeight > 0
+        ? originalTargetWeight
+        : currentWeight
+      : parsedTargetWeight;
 
     // สร้างก้อนข้อมูลที่จะส่งไปให้คุณเห็นใน Console ก่อนส่งจริง
     const payload = {

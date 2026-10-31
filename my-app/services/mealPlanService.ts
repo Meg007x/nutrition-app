@@ -34,6 +34,10 @@ export type Food = {
 
   portion?: any;
   ingredients?: any[];
+  portion_multiplier?: number;
+  actual_weight_g?: number;
+  calculated_nutrition?: any;
+  allergens_summary?: any[];
 };
 
 export type Slot = {
@@ -159,6 +163,37 @@ export async function getUserPlan(userId: string) {
   return d;
 }
 
+export async function getPlanById(planId: string) {
+  if (!planId || !planId.trim()) {
+    throw new Error("plan_id ไม่ถูกต้อง");
+  }
+
+  const url =
+    `${API_BASE_URL}/meal/plans/` +
+    `${encodeURIComponent(planId)}`;
+
+  let r: Response;
+
+  try {
+    r = await fetch(url);
+  } catch (error: any) {
+    console.error("[GET PLAN BY ID ERROR]", error);
+    throw new Error(
+      `เชื่อมต่อเซิร์ฟเวอร์ไม่ได้: ${
+        error?.message || "Network error"
+      }`
+    );
+  }
+
+  const d = await parseResponse(r);
+
+  if (!r.ok) {
+    throw new Error(d?.message || "โหลดแผนอาหารไม่ได้");
+  }
+
+  return d;
+}
+
 /* =========================================================
    GET FOOD
 ========================================================= */
@@ -192,12 +227,18 @@ export async function getFood(foodId: string) {
 
 export async function searchFoods(
   q: string,
-  limit = 20
+  limit = 20,
+  userId?: string
 ) {
+  const params = new URLSearchParams({
+    q: q,
+    limit: String(limit),
+  });
+  if (userId) params.set("user_id", userId);
+
   const url =
     `${API_BASE_URL}/meal/search-foods` +
-    `?q=${encodeURIComponent(q)}` +
-    `&limit=${limit}`;
+    `?${params.toString()}`;
 
   const r = await fetch(url);
 
@@ -208,6 +249,49 @@ export async function searchFoods(
       d?.message ||
         "ค้นหาอาหารไม่ได้"
     );
+  }
+
+  return d;
+}
+
+export async function searchSafeFoods(
+  userId: string,
+  q: string,
+  targetKcal?: number,
+  limit: number | "all" = "all",
+  category?: { field: "category" | "category_type"; value: string; label: string } | null
+) {
+  if (!userId?.trim()) {
+    throw new Error("user_id ไม่ถูกต้อง");
+  }
+
+  if (
+    targetKcal !== undefined &&
+    (!Number.isFinite(targetKcal) || targetKcal < 0)
+  ) {
+    throw new Error("ค่าแคลอรี่ไม่ถูกต้อง");
+  }
+
+  const params = new URLSearchParams({
+    user_id: userId,
+    q,
+    limit: String(limit),
+  });
+  if (category) {
+    params.set("category", category.value);
+    params.set("category_field", category.field);
+    params.set("category_label", category.label);
+  }
+  if (targetKcal !== undefined) {
+    params.set("target_kcal", String(targetKcal));
+    params.set("kcal_tolerance", "50");
+  }
+  const url = `${API_BASE_URL}/meal/safe-foods?${params.toString()}`;
+  const r = await fetch(url);
+  const d = await parseResponse(r);
+
+  if (!r.ok) {
+    throw new Error(d?.message || "ค้นหาเมนูอาหารไม่ได้");
   }
 
   return d;
@@ -689,12 +773,12 @@ export function getEatenKcal(
         return total;
       }
 
-      return (
-        total +
-        getFoodNutrition(
-          slot.main_food
-        ).kcal
+      const mainKcal = getFoodNutrition(slot.main_food).kcal;
+      const addonsKcal = (slot.addons || []).reduce(
+        (sum, addon) => sum + getFoodNutrition(addon).kcal,
+        0
       );
+      return total + mainKcal + addonsKcal;
     },
     0
   );

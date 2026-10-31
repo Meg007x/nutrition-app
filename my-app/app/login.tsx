@@ -14,7 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ThemedText } from "../components/themed-text";
 import { loginUser } from "../services/auth";
-import { styles, ROW_COLOR_2 } from "../style/login.styles";
+import styles, { ORANGE } from "../style/login.styles";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -173,7 +173,7 @@ export default function LoginScreen() {
 
               <View style={styles.socialRow}>
                 <TouchableOpacity style={styles.socialBtn} activeOpacity={0.7}>
-                  <Ionicons name="logo-google" size={24} color={ROW_COLOR_2} />
+                  <Ionicons name="logo-google" size={24} color={ORANGE} />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.socialBtn} activeOpacity={0.7}>
                   <Ionicons name="logo-apple" size={24} color="#000" />

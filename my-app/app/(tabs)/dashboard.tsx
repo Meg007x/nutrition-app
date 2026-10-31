@@ -496,17 +496,20 @@ const styles = StyleSheet.create({
     color: "#555",
     fontSize: 15,
     fontWeight: "600",
+    fontFamily: "NotoSansThai",
   },
   emptyTitle: {
     fontSize: 20,
     fontWeight: "900",
     color: "#111",
+    fontFamily: "NotoSansThaiBold",
   },
   emptyDesc: {
     marginTop: 8,
     fontSize: 15,
     color: "#666",
     textAlign: "center",
+    fontFamily: "NotoSansThai",
   },
   loginAgainButton: {
     marginTop: 16,
@@ -519,6 +522,7 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "900",
     fontSize: 15,
+    fontFamily: "NotoSansThaiBold",
   },
   header: {
     flexDirection: "row",
@@ -533,15 +537,18 @@ const styles = StyleSheet.create({
   welcome: {
     fontSize: 14,
     color: "#555",
+    fontFamily: "NotoSansThai",
   },
   name: {
     fontSize: 28,
     fontWeight: "700",
     color: "#111",
+    fontFamily: "NotoSansThaiBold",
   },
   date: {
     marginTop: 4,
     color: "#555",
+    fontFamily: "NotoSansThai",
   },
   weekLinkWrap: {
     marginTop: 6,
@@ -549,6 +556,7 @@ const styles = StyleSheet.create({
   weekLink: {
     color: "#2e7d32",
     fontWeight: "800",
+    fontFamily: "NotoSansThaiBold",
   },
   headerRight: {
     alignItems: "flex-end",
@@ -574,6 +582,7 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 11,
     fontWeight: "900",
+    fontFamily: "NotoSansThaiBold",
   },
   streakPill: {
     backgroundColor: "#f39c12",
@@ -584,6 +593,7 @@ const styles = StyleSheet.create({
   streakText: {
     color: "#fff",
     fontWeight: "900",
+    fontFamily: "NotoSansThaiBold",
   },
   card: {
     marginTop: 14,
@@ -598,6 +608,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     marginBottom: 10,
     color: "#111",
+    fontFamily: "NotoSansThaiBold",
   },
   rowBetween: {
     flexDirection: "row",
@@ -611,12 +622,14 @@ const styles = StyleSheet.create({
   label: {
     color: "#d00",
     fontWeight: "800",
+    fontFamily: "NotoSansThaiBold",
   },
   bigNumber: {
     fontSize: 36,
     fontWeight: "900",
     marginTop: 6,
     color: "#111",
+    fontFamily: "NotoSansThaiBold",
   },
   textDanger: {
     color: "#d00",
@@ -624,6 +637,7 @@ const styles = StyleSheet.create({
   sub: {
     color: "#555",
     marginTop: 4,
+    fontFamily: "NotoSansThai",
   },
   circle: {
     width: 110,
@@ -643,6 +657,7 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: "900",
     color: "#111",
+    fontFamily: "NotoSansThaiBold",
   },
   macroRow: {
     marginTop: 18,
@@ -668,12 +683,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#666",
     fontWeight: "800",
+    fontFamily: "NotoSansThaiBold",
   },
   macroValue: {
     marginTop: 6,
     fontSize: 16,
     fontWeight: "900",
     color: "#111",
+    fontFamily: "NotoSansThaiBold",
   },
   track: {
     marginTop: 8,
@@ -706,10 +723,12 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "900",
     fontSize: 16,
+    fontFamily: "NotoSansThaiBold",
   },
   alertBody: {
     color: "#fff",
     marginTop: 4,
+    fontFamily: "NotoSansThai",
   },
   reco: {
     marginTop: 12,
@@ -720,10 +739,12 @@ const styles = StyleSheet.create({
   recoTitle: {
     color: "#fff",
     fontWeight: "900",
+    fontFamily: "NotoSansThaiBold",
   },
   recoBody: {
     color: "#fff",
     marginTop: 6,
+    fontFamily: "NotoSansThai",
   },
   alertBlue: {
     marginTop: 12,
@@ -737,10 +758,12 @@ const styles = StyleSheet.create({
     color: "#1457b3",
     fontWeight: "900",
     fontSize: 15,
+    fontFamily: "NotoSansThaiBold",
   },
   alertBlueBody: {
     color: "#1457b3",
     marginTop: 4,
+    fontFamily: "NotoSansThai",
   },
   waterRow: {
     marginTop: 12,
@@ -773,11 +796,13 @@ const styles = StyleSheet.create({
   waterTitle: {
     fontWeight: "900",
     color: "#111",
+    fontFamily: "NotoSansThaiBold",
   },
   waterValue: {
     marginTop: 4,
     color: "#333",
     fontWeight: "700",
+    fontFamily: "NotoSansThaiBold",
   },
   nextMealHeader: {
     marginTop: 18,
@@ -789,10 +814,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "900",
     color: "#111",
+    fontFamily: "NotoSansThaiBold",
   },
   nextMealLink: {
     color: "#2e7d32",
     fontWeight: "800",
+    fontFamily: "NotoSansThaiBold",
   },
   mealCard: {
     marginTop: 10,
@@ -805,17 +832,20 @@ const styles = StyleSheet.create({
   mealTime: {
     color: "#2e7d32",
     fontWeight: "900",
+    fontFamily: "NotoSansThaiBold",
   },
   mealName: {
     fontSize: 16,
     fontWeight: "900",
     marginTop: 4,
     color: "#111",
+    fontFamily: "NotoSansThaiBold",
   },
   mealSub: {
     color: "#555",
     marginTop: 2,
     fontWeight: "700",
+    fontFamily: "NotoSansThaiBold",
   },
   modalOverlay: {
     flex: 1,
@@ -841,12 +871,14 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     marginTop: 6,
     color: "#111",
+    fontFamily: "NotoSansThaiBold",
   },
   modalGreat: {
     fontSize: 20,
     fontWeight: "900",
     marginTop: 6,
     color: "#111",
+    fontFamily: "NotoSansThaiBold",
   },
   modalDesc: {
     textAlign: "center",
@@ -854,6 +886,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     lineHeight: 20,
     fontWeight: "600",
+    fontFamily: "NotoSansThai",
   },
   modalButton: {
     marginTop: 16,
@@ -868,5 +901,6 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "900",
     fontSize: 16,
+    fontFamily: "NotoSansThaiBold",
   },
 });

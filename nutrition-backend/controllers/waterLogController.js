@@ -1,6 +1,7 @@
 const WaterLog = require("../models/WaterLog");
 const User = require("../models/User"); // ถ้าไฟล์ชื่ออื่น ให้แก้ตามจริง
 const { updateStreak } = require("../utils/streakUpdater");
+const { getWaterTargetRange } = require("../utils/waterTargets");
 
 const getTodayDateString = () => {
   const now = new Date();
@@ -28,18 +29,22 @@ const resolveWaterTarget = async (userId) => {
 
     if (!user) return 2000;
 
-    if (typeof user.water_target_ml === "number") {
-      return user.water_target_ml;
+    const range = getWaterTargetRange(user.weight_kg);
+    if (Number.isFinite(user.water_target_ml) && user.water_target_ml > 0) {
+      return Math.min(range.maximum, Math.max(range.minimum, user.water_target_ml));
     }
 
     if (
       user.health_goals &&
       typeof user.health_goals.water_target_ml === "number"
     ) {
-      return user.health_goals.water_target_ml;
+      return Math.min(
+        range.maximum,
+        Math.max(range.minimum, user.health_goals.water_target_ml)
+      );
     }
 
-    return 2000;
+    return range.minimum;
   } catch (error) {
     return 2000;
   }
@@ -232,6 +237,97 @@ error: "ไม่สามารถลบรายการน้ำดื่ม
 }
 };
 
+exports.updateWaterRecord = async (req, res) => {
+  try {
+    const { userId, date, index } = req.params;
+    const { amount_ml, time, container_type } = req.body;
+
+    if (!userId || !date || index === undefined) {
+      return res.status(400).json({
+        success: false,
+        error: "ข้อมูลไม่ครบ",
+      });
+    }
+
+    const recordIndex = Number(index);
+    if (!Number.isInteger(recordIndex) || recordIndex < 0) {
+      return res.status(400).json({
+        success: false,
+        error: "index ไม่ถูกต้อง",
+      });
+    }
+
+    const safeAmount = Number(amount_ml);
+    if (!Number.isFinite(safeAmount) || safeAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: "amount_ml ต้องมากกว่า 0",
+      });
+    }
+
+    if (typeof time !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+      return res.status(400).json({
+        success: false,
+        error: "กรุณาระบุเวลาเป็นชั่วโมงและนาที เช่น 09:30",
+      });
+    }
+
+    if (date === getTodayDateString() && time > getCurrentTimeString()) {
+      return res.status(400).json({
+        success: false,
+        error: "ไม่สามารถแก้ไขเป็นเวลาในอนาคตได้",
+      });
+    }
+
+    if (!["glass", "bottle"].includes(container_type)) {
+      return res.status(400).json({
+        success: false,
+        error: "container_type ต้องเป็น glass หรือ bottle",
+      });
+    }
+
+    const doc = await WaterLog.findOne({ user_id: userId, date });
+    if (!doc) {
+      return res.status(404).json({
+        success: false,
+        error: "ไม่พบข้อมูลการดื่มน้ำของวันที่ระบุ",
+      });
+    }
+
+    const record = doc.records[recordIndex];
+    if (!record) {
+      return res.status(404).json({
+        success: false,
+        error: "ไม่พบรายการที่ต้องการแก้ไข",
+      });
+    }
+
+    const previousAmount = Number(record.amount_ml || 0);
+    record.amount_ml = safeAmount;
+    record.time = time;
+    record.container_type = container_type;
+    record.last_edited_at = new Date();
+    doc.total_drank_ml = Math.max(
+      0,
+      Number(doc.total_drank_ml || 0) - previousAmount + safeAmount
+    );
+
+    await doc.save();
+
+    return res.json({
+      success: true,
+      message: "แก้ไขรายการน้ำดื่มเรียบร้อยแล้ว",
+      waterLog: doc,
+    });
+  } catch (error) {
+    console.error("updateWaterRecord error:", error);
+    return res.status(500).json({
+      success: false,
+      error: "ไม่สามารถแก้ไขรายการน้ำดื่มได้",
+    });
+  }
+};
+
 exports.updateTargetWater = async (req, res) => {
   try {
     const { userId, date } = req.params;
@@ -246,10 +342,24 @@ exports.updateTargetWater = async (req, res) => {
       });
     }
 
-    if (!safeTarget || safeTarget <= 0) {
+    if (!Number.isInteger(safeTarget)) {
       return res.status(400).json({
         success: false,
-        error: "target_ml ต้องมากกว่า 0",
+        error: "target_ml ต้องเป็นจำนวนเต็ม",
+      });
+    }
+    const user = await User.findOne({ user_id: userId }).lean();
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: "ไม่พบข้อมูลผู้ใช้",
+      });
+    }
+    const waterRange = getWaterTargetRange(user.weight_kg);
+    if (safeTarget < waterRange.minimum || safeTarget > waterRange.maximum) {
+      return res.status(400).json({
+        success: false,
+        error: `target_ml ต้องอยู่ระหว่าง ${waterRange.minimum.toLocaleString()}-${waterRange.maximum.toLocaleString()} มล.`,
       });
     }
 

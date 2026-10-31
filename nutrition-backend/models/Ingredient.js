@@ -58,6 +58,7 @@ const IngredientSchema = new mongoose.Schema(
   {
     _id: { type: String, required: true },
     usda_fdc_id: { type: Number, default: null },
+    thai_fdc_id: { type: String, default: "" },
     name: { type: String, default: "" },
     name_en: { type: String, default: "" },
     keywords: { type: [String], default: [] },

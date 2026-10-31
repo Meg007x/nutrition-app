@@ -9,6 +9,8 @@
 
 const mongoose = require("mongoose");
 const Ingredient = require("../models/Ingredient");
+const { calculateTargetCalories } = require("./calorieTargets");
+const { calculateMacroTargets } = require("./macroTargets");
 
 // ======================================================
 // Helper: safe number
@@ -85,46 +87,82 @@ async function calculateFromIngredients(ingredients) {
 // ======================================================
 async function getNutritionWithFallback(food) {
   if (!food) return zeroNutrition();
+  // New MasterFood rows store nutrition per 100 g. Convert it using the
+  // documented serving weight when one exists; otherwise keep the per-100 g basis.
+  var per100g = food.nutrition_per_100g;
+  var np = per100g || food.nutrition_per_portion || {};
+  var factor = per100g
+    ? (num(food.portion_reference && food.portion_reference.total_weight_g) || 100) / 100
+    : 1;
+  return {
+    kcal:       num(np.kcal) * factor,
+    protein_g:  num(np.protein_g) * factor,
+    carb_g:     num(np.carb_g) * factor,
+    fat_g:      num(np.fat_g) * factor,
+    fiber_g:    num(np.fiber_g) * factor,
+    sodium_mg:  num(np.sodium_mg) * factor,
+  };
+}
 
-  // ลองคำนวณจาก ingredients ก่อน
-  if (Array.isArray(food.ingredients) && food.ingredients.length > 0) {
-    var hasWeight = food.ingredients.some(function(ing) {
-      return ing.weight_g > 0 || ing.qty > 0;
-    });
-
-    if (hasWeight) {
-      var calculated = await calculateFromIngredients(food.ingredients);
-      // ถ้าได้ค่ามากกว่า 0 ถือว่าสำเร็จ
-      if (calculated.kcal > 0) return calculated;
-    }
+// ======================================================
+// Calculate goal-adjusted targets (Single Source of Truth)
+// Keep goal adjustments aligned with the frontend calorie target helper.
+// ======================================================
+function buildAdjustedTargets(user) {
+  var tdee = num(user?.health_goals?.tdee_target_kcal);
+  var protein = num(user?.health_goals?.protein_target_g);
+  var goal = user?.health_goals?.primary_goal;
+  var targetCalories = calculateTargetCalories(tdee, goal);
+  var macros = calculateMacroTargets(targetCalories, protein);
+  if (!macros.valid) {
+    throw new Error(macros.message);
   }
 
-  // Fallback: nutrition_per_portion (Static)
-  var np = food.nutrition_per_portion || {};
   return {
-    kcal:       num(np.kcal),
-    protein_g:  num(np.protein_g),
-    carb_g:     num(np.carb_g),
-    fat_g:      num(np.fat_g),
-    fiber_g:    num(np.fiber_g),
-    sodium_mg:  num(np.sodium_mg),
+    target_calories: macros.target_calories,
+    target_protein_g: macros.target_protein_g,
+    target_carb_g: macros.target_carb_g,
+    target_fat_g: macros.target_fat_g,
   };
 }
 
 // ======================================================
 // Build Daily Target (v2 schema format)
+// Uses stored targets first, then falls back to formula
 // ======================================================
 function buildDailyTarget(user) {
+  // Source 1: Stored targets (Single Source of Truth)
+  var storedKcal = num(user?.health_goals?.target_calories);
+  var storedProtein = num(user?.health_goals?.protein_target_g);
+  var storedCarb = num(user?.health_goals?.target_carb_g);
+  var storedFat = num(user?.health_goals?.target_fat_g);
+
+  if (storedKcal > 0) {
+    return {
+      target_kcal: storedKcal,
+      target_protein_g: storedProtein,
+      target_carb_g: storedCarb,
+      target_fat_g: storedFat,
+    };
+  }
+
+  // Source 2: Fallback to formula
   var tdee = num(user?.health_goals?.tdee_target_kcal);
   var protein = num(user?.health_goals?.protein_target_g);
-  var carb = tdee > 0 ? Math.round((tdee * 0.5) / 4) : 0;
-  var fat  = tdee > 0 ? Math.round((tdee * 0.25) / 9) : 0;
+  var targetCalories = calculateTargetCalories(
+    tdee,
+    user?.health_goals?.primary_goal
+  );
+  var macros = calculateMacroTargets(targetCalories, protein);
+  if (!macros.valid) {
+    throw new Error(macros.message);
+  }
 
   return {
-    target_kcal: tdee,
-    target_protein_g: protein,
-    target_carb_g: carb,
-    target_fat_g: fat,
+    target_kcal: macros.target_calories,
+    target_protein_g: macros.target_protein_g,
+    target_carb_g: macros.target_carb_g,
+    target_fat_g: macros.target_fat_g,
   };
 }
 
@@ -164,6 +202,7 @@ function buildDailySummary(slots, dailyTarget) {
 module.exports = {
   calculateFromIngredients: calculateFromIngredients,
   getNutritionWithFallback: getNutritionWithFallback,
+  buildAdjustedTargets: buildAdjustedTargets,
   buildDailyTarget: buildDailyTarget,
   buildDailySummary: buildDailySummary,
   zeroNutrition: zeroNutrition,

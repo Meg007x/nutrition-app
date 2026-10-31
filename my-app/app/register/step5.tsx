@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -15,6 +15,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useRegister } from "../../context/register-context";
+import type { ProteinInputMode, ProteinLevel } from "../../types/register-types";
+import { getRecommendedProteinLevel } from "../../utils/proteinTargets";
 import styles, { 
   ORANGE, 
   BG, 
@@ -25,9 +27,6 @@ import styles, {
   WARN_COLOR, 
   ERROR_COLOR 
 } from "./step5-1.styles";
-
-type ProteinLevel = "low" | "medium" | "high";
-type ProteinMode = "auto" | "custom";
 
 const proteinOptions: { label: string; value: ProteinLevel; desc: string; hint: string; detail: string; }[] = [
   {
@@ -48,7 +47,7 @@ const proteinOptions: { label: string; value: ProteinLevel; desc: string; hint: 
     label: "สูง",
     value: "high",
     desc: "เน้นสร้างกล้ามเนื้อแบบที่คุณต้องการ",
-    hint: "ประมาณ 2.0-2.4 กรัม / กก.",
+    hint: "2.0 กรัม / กก.",
     detail: "ระดับนี้ออกแบบมาสำหรับคนที่เล่นเวทเทรนนิ่งเป็นประจำ หรือต้องการเพิ่มมวลกล้ามเนื้ออย่างจริงจัง ช่วยให้ร่างกายสร้างและซ่อมแซมกล้ามเนื้อได้เร็วขึ้น",
   },
 ];
@@ -58,40 +57,31 @@ export default function RegisterStep5_1Screen() {
   
   const currentWeight = form.weightKg ? Number(form.weightKg) : 60; // ดึงน้ำหนักมาใช้ประเมิน
   const currentActivity = form.activityLevel || "medium";
-
-  // ฟังก์ชันแนะนำโปรตีนคร่าวๆ ตามกิจกรรม (ปรับให้ตรงกับ Type ของ Context)
-  const getRecommendedLevel = (): ProteinLevel => {
-    if (currentActivity === "sedentary" || currentActivity === "light") return "low";
-    if (currentActivity === "active" || currentActivity === "very_active") return "high";
-    return "medium"; // สำหรับ "moderate" หรือ "medium"
-  };
-
-  const recommendedLevel = getRecommendedLevel();
+  const recommendedLevel = getRecommendedProteinLevel(currentActivity);
 
   const [selectedProtein, setSelectedProtein] = useState<ProteinLevel>(
     (form.proteinLevel as ProteinLevel) || recommendedLevel
   );
   
-  const [proteinMode, setProteinMode] = useState<ProteinMode>(
-    form.recommendedProteinG ? "custom" : "auto"
+  const [proteinMode, setProteinMode] = useState<ProteinInputMode>(
+    form.proteinInputMode
   );
 
   // คำนวณค่าโปรตีนออโต้ตั้งต้น
   const autoRecommendedProtein = useMemo(() => {
-    const result = calculateRecommendedProtein(String(currentWeight), selectedProtein as any);
+    const result = calculateRecommendedProtein(String(currentWeight), selectedProtein);
     return result ?? (currentWeight * 1.6); // Fallback
   }, [calculateRecommendedProtein, currentWeight, selectedProtein]);
 
   const [customProtein, setCustomProtein] = useState(
-    form.recommendedProteinG ? String(form.recommendedProteinG) : String(autoRecommendedProtein)
+    form.recommendedProteinG !== null
+      ? String(form.recommendedProteinG)
+      : String(autoRecommendedProtein)
   );
-
-  // อัปเดตค่า Custom เมื่อสลับโหมด หรือเปลี่ยน Level (เพื่อให้ผู้ใช้เห็นค่าที่แนะนำทันที)
-  useEffect(() => {
-    if (proteinMode === "auto") {
-      setCustomProtein(String(autoRecommendedProtein));
-    }
-  }, [autoRecommendedProtein, proteinMode]);
+  const displayedProteinTarget =
+    proteinMode === "custom"
+      ? Number(customProtein) || 0
+      : autoRecommendedProtein;
 
   // --- 💡 ระบบวิเคราะห์และดักจับความเหมาะสมของโปรตีน ---
   const validationStatus = useMemo(() => {
@@ -119,7 +109,8 @@ export default function RegisterStep5_1Screen() {
     const finalVal = proteinMode === "custom" ? Number(customProtein) : autoRecommendedProtein;
 
     updateForm({
-      proteinLevel: selectedProtein as any,
+      proteinLevel: selectedProtein,
+      proteinInputMode: proteinMode,
       recommendedProteinG: finalVal,
     });
 
@@ -151,12 +142,12 @@ export default function RegisterStep5_1Screen() {
 
         {/* แสดงค่าโปรตีนที่ได้รับจริง */}
         <View style={styles.proteinValueCard}>
-          <Text style={styles.proteinValueLabel}>ระดับโปรตีนที่ได้รับจริง</Text>
+          <Text style={styles.proteinValueLabel}>เป้าหมายโปรตีนต่อวัน</Text>
           <Text style={styles.proteinValueNumber}>
-            {autoRecommendedProtein} กรัม / วัน
+            {displayedProteinTarget} กรัม / วัน
           </Text>
           <Text style={styles.proteinValueHint}>
-            คิดเป็นประมาณ {currentWeight > 0 ? (autoRecommendedProtein / currentWeight).toFixed(1) : "1.6"} กรัม ต่อน้ำหนักตัว 1 กก.
+            คิดเป็น {currentWeight > 0 ? (displayedProteinTarget / currentWeight).toFixed(1) : "1.6"} กรัม ต่อน้ำหนักตัว 1 กก.
           </Text>
         </View>
 

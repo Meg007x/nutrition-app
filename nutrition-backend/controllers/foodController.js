@@ -1,5 +1,16 @@
 const mongoose = require("mongoose");
 
+const getIngredientGroupLabel = (item) => {
+  if (
+    item.sub_category === "dairy" ||
+    item.sub_category_label === "นมและผลิตภัณฑ์นม"
+  ) {
+    return "นมและผลิตภัณฑ์นม";
+  }
+
+  return item.category_group_label || "อื่นๆ";
+};
+
 // ==========================================
 // [ฟังก์ชันที่ 1] ดึงข้อมูลวัตถุดิบทั้งหมด
 // ใช้สำหรับหน้าเพิ่มส่วนผสม / dropdown / modal
@@ -75,7 +86,7 @@ const getDislikedFoods = async (req, res) => {
     const l1Map = new Map(); // category_group_label -> Map(sub_category_label -> [])
 
     allIngredients.forEach((item) => {
-      const l1 = item.category_group_label || "อื่น ๆ";
+      const l1 = getIngredientGroupLabel(item);
       const l2 = item.sub_category_label || "ทั่วไป";
 
       if (!l1Map.has(l1)) l1Map.set(l1, new Map());
@@ -142,7 +153,7 @@ const getIngredientHierarchy = async (req, res) => {
     const tier1Map = new Map();
 
     allIngredients.forEach((item) => {
-      const t1 = item.category_group_label || "อื่นๆ";
+      const t1 = getIngredientGroupLabel(item);
       const t2 = item.sub_category_label || "ทั่วไป";
       const t3 = { id: String(item._id), name: item.name };
 

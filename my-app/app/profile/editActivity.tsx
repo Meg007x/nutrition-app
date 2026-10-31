@@ -14,19 +14,39 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { BASE_URL } from '../../constants/config';
+import { getActivityFactor } from '../../utils/activityLevels';
+import {
+  calculateProteinTarget,
+  getRecommendedProteinLevel,
+} from '../../utils/proteinTargets';
 
 // ดึงไฟล์ CSS เดิมมาใช้
 import { styles, ORANGE, IOS_GREEN, ERROR_COLOR } from '@/style/editActivity.styles';
 
 const activityOptions = [
-  { label: "น้อย", value: "light", desc: "นั่งทำงานเป็นส่วนใหญ่ หรือออกกำลังกายน้อยมาก" },
-  { label: "ปานกลาง", value: "moderate", desc: "มีการเดินหรือออกกำลังกายเบาๆ 2-3 วันต่อสัปดาห์" },
-  { label: "มาก", value: "active", desc: "ออกกำลังกายสม่ำเสมอ หรือใช้ร่างกายค่อนข้างมาก" },
-  { label: "หนัก", value: "very_active", desc: "ออกกำลังกายหนักหรือใช้แรงงานเป็นประจำเกือบทุกวัน" },
+  { label: "กิจกรรมน้อย · 1.20", value: "sedentary", desc: "นั่งทำงานเป็นส่วนใหญ่ หรือออกกำลังกายน้อยมาก" },
+  { label: "กิจกรรมเล็กน้อย · 1.375", value: "light", desc: "มีการเดินหรือออกกำลังกายเบาๆ 2-3 วันต่อสัปดาห์" },
+  { label: "กิจกรรมปานกลาง · 1.55", value: "moderate", desc: "ออกกำลังกายสม่ำเสมอ หรือใช้ร่างกายค่อนข้างมาก" },
+  { label: "กิจกรรมหนัก · 1.725", value: "active", desc: "ออกกำลังกายหนักหรือใช้แรงงานเป็นประจำเกือบทุกวัน" },
+  { label: "กิจกรรมหนักมาก · 1.90", value: "extra_active", desc: "ฝึกซ้อมหนักมากทุกวันร่วมกับทำงานที่ใช้แรงมาก" },
 ];
 
-const mapActivityFromDB: any = { "น้อย": "light", "ปานกลาง": "moderate", "มาก": "active", "หนัก": "very_active" };
-const mapActivityToDB: any = { "light": "น้อย", "moderate": "ปานกลาง", "active": "มาก", "very_active": "หนัก" };
+const mapActivityFromDB: Record<string, string> = {
+  "น้อย": "sedentary",
+  "เบา": "light",
+  "เล็กน้อย": "light",
+  "ปานกลาง": "moderate",
+  "มาก": "moderate",
+  "หนัก": "active",
+  "หนักมาก": "extra_active",
+};
+const mapActivityToDB: Record<string, string> = {
+  sedentary: "น้อย",
+  light: "เล็กน้อย",
+  moderate: "ปานกลาง",
+  active: "หนัก",
+  extra_active: "หนักมาก",
+};
 
 export default function EditActivityScreen() {
   const router = useRouter();
@@ -98,15 +118,14 @@ export default function EditActivityScreen() {
     const { weight_kg, height_cm, age, gender } = userData;
     let bmr = (10 * weight_kg) + (6.25 * height_cm) - (5 * age);
     bmr += gender === 'ชาย' ? 5 : -161;
-    const multipliers: any = { light: 1.375, moderate: 1.55, active: 1.725, very_active: 1.9 };
-    return Math.floor(bmr * (multipliers[selectedActivity] || 1.2));
+    return Math.round(bmr * getActivityFactor(selectedActivity));
   }, [userData, selectedActivity]);
 
   const autoProtein = useMemo(() => {
     if (!userData) return 0;
     const weight = userData.weight_kg || 60;
-    const proteinMultipliers: any = { light: 1.2, moderate: 1.6, active: 1.8, very_active: 2.0 };
-    return Math.floor(weight * (proteinMultipliers[selectedActivity] || 1.6));
+    const recommendedLevel = getRecommendedProteinLevel(selectedActivity);
+    return calculateProteinTarget(weight, recommendedLevel);
   }, [userData, selectedActivity]);
 
   const validateProtein = () => {

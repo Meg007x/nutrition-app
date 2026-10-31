@@ -6,9 +6,11 @@ export type ActivityLevel =
   | 'moderate'
   | 'active'
   | 'very_active'
+  | 'extra_active'
   | '';
 
 export type ProteinLevel = 'low' | 'medium' | 'high' | '';
+export type ProteinInputMode = 'auto' | 'custom';
 
 // 🚀 สร้าง Type ใหม่สำหรับเก็บหมวดหมู่อาหาร (ใช้ได้ทั้งแพ้อาหาร และ อาหารที่ไม่ชอบ)
 export type CategorizedFood = {
@@ -16,6 +18,13 @@ export type CategorizedFood = {
   condiment: string[];
   meat: string[];
   other: string[];
+};
+
+export type AllergyV2Item = {
+  type: "specific";
+  code: string;
+  label: string;
+  ingredient_id: string | null;
 };
 
 export type RegisterData = {
@@ -44,11 +53,14 @@ export type RegisterData = {
   // step5
   activityLevel: ActivityLevel;
   proteinLevel: ProteinLevel;
+  proteinInputMode: ProteinInputMode;
   recommendedProteinG: number | null;
 
   // step6
+  // step6
   hasAllergies: boolean | null;
-  allergies: CategorizedFood | any; // 👈 ปรับให้รองรับ Object แยกหมวดหมู่
+  allergies: CategorizedFood | any;
+  allergies_v2: AllergyV2Item[];
 
   // step7
   dislikedFoods: CategorizedFood | any; // 👈 เผื่อหน้า 7 ทำเป็นหมวดหมู่ด้วยเลย
@@ -86,10 +98,12 @@ export const initialRegisterData: RegisterData = {
 
   activityLevel: '',
   proteinLevel: '',
+  proteinInputMode: 'auto',
   recommendedProteinG: null,
 
   hasAllergies: null,
   allergies: { veg: [], condiment: [], meat: [], other: [] }, // 👈 เปลี่ยนค่าเริ่มต้นให้เป็น Object
+  allergies_v2: [],
 
   dislikedFoods: { veg: [], condiment: [], meat: [], other: [] }, // 👈 เปลี่ยนค่าเริ่มต้นให้เป็น Object
 

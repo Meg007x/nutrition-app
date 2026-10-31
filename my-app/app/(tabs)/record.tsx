@@ -103,6 +103,7 @@ const styles = StyleSheet.create({
     color: GRAY,
     fontWeight: "700",
     marginBottom: 2,
+    fontFamily: "NotoSansThaiBold",
   },
 
   titleRow: {
@@ -115,6 +116,7 @@ const styles = StyleSheet.create({
     fontSize: 23,
     color: BLACK,
     fontWeight: "900",
+    fontFamily: "NotoSansThaiBold",
   },
 
   rightHeaderWrap: {
@@ -137,6 +139,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "#666",
     fontWeight: "800",
+    fontFamily: "NotoSansThaiBold",
   },
 
   bellButton: {
@@ -177,5 +180,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: BLACK,
     fontWeight: "900",
+    fontFamily: "NotoSansThaiBold",
   },
 });

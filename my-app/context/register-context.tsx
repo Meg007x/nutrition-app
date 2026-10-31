@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useMemo, useState } from 'react';
 import { RegisterData, initialRegisterData } from '../types/register-types';
+import { calculateProteinTarget } from '../utils/proteinTargets';
 
 type RegisterContextType = {
   form: RegisterData;
@@ -47,11 +48,11 @@ export function RegisterProvider({ children }: { children: React.ReactNode }) {
 
     if (!w || !level) return null;
 
-    let multiplier = 1.2;
-    if (level === 'medium') multiplier = 1.6;
-    if (level === 'high') multiplier = 2.0;
+    if (level === 'low' || level === 'medium' || level === 'high') {
+      return calculateProteinTarget(w, level);
+    }
 
-    return Math.round(w * multiplier);
+    return null;
   };
 
   const value = useMemo(

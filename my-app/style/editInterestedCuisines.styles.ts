@@ -1,6 +1,7 @@
 import { StyleSheet, Platform } from 'react-native';
 
 export const ORANGE = "#F5A400";
+
 export const BG = "#F3F3F3";
 
 export const styles = StyleSheet.create({
@@ -10,7 +11,7 @@ export const styles = StyleSheet.create({
     position: 'relative',
   },
   headerBar: {
-    backgroundColor: ORANGE,
+    backgroundColor: "#EBA032",
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -63,12 +64,12 @@ export const styles = StyleSheet.create({
   },
   // 🧡 กล่องที่ "ถูกเลือกแล้ว" -> เปลี่ยนเป็นพื้นหลังสีส้ม ขอบสีส้ม
   cuisineItemSelected: {
-    backgroundColor: ORANGE,
+    backgroundColor: "#EBA032",
     paddingVertical: 16,
     paddingHorizontal: 20,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: ORANGE,
+    borderColor: "#EBA032",
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

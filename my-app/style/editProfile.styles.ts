@@ -4,33 +4,38 @@ export const styles = StyleSheet.create({
 
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8F8F8',
   }, // 🟢 เปลี่ยนพื้นหลังเป็นสีขาวคลีน
 
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8F8F8',
   },
 
   headerBar: {
-    height: 60,
+    height: 56,
     backgroundColor: '#F5A400',
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
   }, // สีส้มตามแบบ
 
   headerTitle: {
-    fontSize: 20,
-    marginLeft: 8,
-    color: '#000',
+    fontSize: 18,
+    color: '#FFF',
     fontWeight: 'bold',
   },
 
-  scrollContainer: {
-    padding: 16,
+  headerBtn: {
+    width: 40,
+    alignItems: 'center',
+  },
+
+  scrollContent: {
+    padding: 20,
     paddingBottom: 40,
   },
 
@@ -38,22 +43,102 @@ export const styles = StyleSheet.create({
 
   avatarSection: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 28,
   },
 
   avatarWrapper: {
     width: 100,
     height: 100,
     borderRadius: 50,
-    borderWidth: 1,
-    borderColor: '#000',
-    overflow: 'hidden',
-    backgroundColor: '#FFF',
+    position: 'relative',
   },
 
   avatar: {
-    width: '100%',
-    height: '100%',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 3,
+    borderColor: '#F5A400',
+  },
+
+  avatarPlaceholder: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#E8E8E8',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#DDD',
+  },
+
+  cameraBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F5A400',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFF',
+  },
+
+  changePhotoText: {
+    color: '#F5A400',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
+  avatarActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+
+  avatarActionButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+
+  inputGroup: {
+    marginBottom: 16,
+  },
+
+  label: {
+    fontSize: 13,
+    color: '#888',
+    marginBottom: 6,
+    fontWeight: '600',
+  },
+
+  input: {
+    height: 46,
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    fontSize: 16,
+    color: '#222',
+  },
+
+  row: {
+    flexDirection: 'row',
+    marginBottom: 16,
+  },
+
+  infoCard: {
+    flexDirection: 'row',
+    backgroundColor: '#FFF',
+    padding: 16,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
   },
 
   nameRow: {
@@ -165,14 +250,13 @@ export const styles = StyleSheet.create({
   },
 
   infoLabel: {
-    color: 'gray',
-    fontSize: 14,
+    color: '#888',
+    fontSize: 12,
     marginBottom: 2,
-    fontWeight: '600',
   },
 
   infoValue: {
-    color: '#000',
+    color: '#222',
     fontSize: 16,
     fontWeight: 'bold',
   },
@@ -195,26 +279,155 @@ export const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 
-  saveButton: {
+  genderRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+
+  genderBtn: {
+    flex: 1,
+    height: 46,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    backgroundColor: '#FFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  genderBtnActive: {
+    borderColor: '#F5A400',
+    backgroundColor: '#FFF5E6',
+  },
+
+  genderText: {
+    fontSize: 16,
+    color: '#666',
+  },
+
+  genderTextActive: {
+    color: '#F5A400',
+    fontWeight: 'bold',
+  },
+
+  passwordRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+    padding: 16,
+    borderRadius: 10,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+
+  passwordText: {
+    flex: 1,
+    marginLeft: 12,
+    fontSize: 16,
+    color: '#333',
+  },
+
+  saveBtn: {
     backgroundColor: '#F5A400',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
     elevation: 3,
   },
 
-  saveButtonText: {
+  saveBtnText: {
     color: '#FFF',
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
+  },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+
+  modalContainer: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 24,
+  },
+
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginLeft: 8,
+    color: '#333',
+  },
+
+  modalLabel: {
+    fontSize: 13,
+    color: '#555',
+    marginBottom: 6,
+    fontWeight: '600',
+  },
+
+  modalInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#D1D1D6',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 46,
+    marginBottom: 16,
+    backgroundColor: '#F9F9F9',
+  },
+
+  modalInput: {
+    flex: 1,
+    fontSize: 15,
+    color: '#000',
+  },
+
+  modalBtnRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+
+  modalBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  modalBtnCancel: {
+    backgroundColor: '#E5E5EA',
+    marginRight: 8,
+  },
+
+  modalBtnConfirm: {
+    backgroundColor: '#F5A400',
+    marginLeft: 8,
+  },
+
+  modalBtnCancelText: {
+    color: '#333',
+    fontWeight: '600',
+  },
+
+  modalBtnConfirmText: {
+    color: '#FFF',
+    fontWeight: '600',
   },
 
 });

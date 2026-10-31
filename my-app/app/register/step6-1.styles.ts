@@ -10,311 +10,247 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: BG,
   },
-
   headerBar: {
+    height: 56,
     backgroundColor: ORANGE,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+  },
+  headerTitle: {
+    color: "#FFF",
+    fontSize: 18,
+    fontFamily: FONT_BOLD,
+  },
+  backIcon: {
+    padding: 4,
+  },
+  headerRight: {
+    width: 32,
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+  },
+  sectionTitle: {
+    fontSize: 22,
+    color: "#111",
+    fontFamily: FONT_BOLD,
+  },
+  sectionSubtitle: {
+    fontSize: 14,
+    color: "#666",
+    fontFamily: FONT_REGULAR,
+    marginTop: 4,
+    marginBottom: 16,
+  },
+
+  // Group List
+  groupList: {
+    gap: 8,
+    marginBottom: 12,
+  },
+  groupCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#FFF",
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: "#E5E5E5",
+  },
+  groupInfo: {
+    flex: 1,
+  },
+  groupName: {
+    fontSize: 15,
+    fontFamily: FONT_BOLD,
+    color: "#333",
+  },
+  groupHint: {
+    fontSize: 12,
+    fontFamily: FONT_REGULAR,
+    color: "#888",
+    marginTop: 2,
+  },
+  groupRight: {
+    marginLeft: 8,
+  },
+
+  // Action Buttons (จัดให้เข้าชุดกัน)
+  noneBtn: {
+    width: "100%",
+    backgroundColor: "#FFF",
+    borderWidth: 1.5,
+    borderColor: ORANGE,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  noneBtnActive: {
+    backgroundColor: ORANGE,
+  },
+  noneBtnText: {
+    fontSize: 15,
+    color: ORANGE,
+    fontFamily: FONT_BOLD,
+  },
+  noneBtnTextActive: {
+    color: "#FFF",
+  },
+
+  addOutlineBtn: {
+    width: "100%",
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: ORANGE,
+    backgroundColor: "#FFF",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  addOutlineBtnText: {
+    fontSize: 15,
+    color: ORANGE,
+    fontFamily: FONT_BOLD,
+  },
+
+  // Custom Input Row
+  customInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 16,
+  },
+  customInput: {
+    flex: 1,
+    backgroundColor: "#FFF",
+    borderWidth: 1,
+    borderColor: "#DDD",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontFamily: FONT_REGULAR,
+    fontSize: 14,
+    color: "#333",
+  },
+  addBtnSmall: {
+    backgroundColor: ORANGE,
+    borderRadius: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 11,
     alignItems: "center",
     justifyContent: "center",
   },
-
-  headerText: {
+  addBtnSmallText: {
     fontFamily: FONT_BOLD,
-    fontSize: 18,
-    color: "#FFFFFF",
-  },
-
-  scroll: {
-    flex: 1,
-  },
-
-  content: {
-    padding: 16,
-    paddingBottom: 40,
-  },
-
-  stepTitle: {
-    fontFamily: FONT_BOLD,
-    fontSize: 22,
-    color: "#222222",
-    marginBottom: 4,
-  },
-
-  progressTrack: {
-    height: 6,
-    backgroundColor: "#E5E5E5",
-    borderRadius: 10,
-    overflow: "hidden",
-    marginTop: 12,
-  },
-
-  progressFill: {
-    height: "100%",
-    width: "75%",
-    backgroundColor: ORANGE,
-    borderRadius: 10,
-  },
-
-  subtitle: {
-    fontFamily: FONT_REGULAR,
     fontSize: 14,
-    color: "#666666",
-    lineHeight: 22,
-    marginTop: 18,
-    marginBottom: 12,
+    color: "#FFF",
   },
 
-  searchBox: {
-    height: 48,
+  // Disabled State สรรสร้างสีเทาเมื่อเลือก "ไม่มีอาหารที่แพ้"
+  disabledBtn: {
+    backgroundColor: "#F0F0F0",
+    borderColor: "#DDD",
+  },
+  disabledText: {
+    color: "#AAA",
+  },
+
+  // Summary Box
+  summaryBox: {
+    marginTop: 4,
+    backgroundColor: "#FFF8EC",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#F0D3A3",
+    padding: 14,
+    marginBottom: 20,
+  },
+  summaryHeader: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#DDDDDD",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    marginBottom: 14,
+    justifyContent: "space-between",
+    marginBottom: 8,
   },
-
-  searchInput: {
-    flex: 1,
-    minWidth: 0,
-    marginLeft: 8,
-    paddingVertical: 8,
-    fontFamily: FONT_REGULAR,
+  summaryTitle: {
     fontSize: 14,
-    color: "#333333",
+    color: "#6B5A3D",
+    fontFamily: FONT_BOLD,
   },
-
-  // รายการกลุ่มอาหารแพ้: 2 คอลัมน์
-  groupList: {
+  summaryClearText: {
+    fontSize: 13,
+    color: "#A66B00",
+    fontFamily: FONT_BOLD,
+  },
+  summaryItems: {
     flexDirection: "row",
     flexWrap: "wrap",
-    justifyContent: "space-between",
-    rowGap: 12,
+    gap: 8,
   },
-
-  // การ์ดแต่ละกลุ่ม
-  groupCard: {
-    width: "49%",
-    height: 70,
-    minHeight: 80,
-    position: "relative",
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderWidth: 1.2,
-    borderColor: "#E0E0E0",
-    borderRadius: 14,
-    backgroundColor: "#FFFFFF",
+  summaryItem: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-  },
-
-  groupCardSelected: {
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 16,
+    borderWidth: 1,
     borderColor: ORANGE,
-    backgroundColor: "#FFF9ED",
+    backgroundColor: "#FFF",
+  },
+  summaryItemText: {
+    fontSize: 13,
+    color: "#333",
+    fontFamily: FONT_BOLD,
+  },
+  summaryEmptyText: {
+    fontSize: 13,
+    color: "#888",
+    fontFamily: FONT_REGULAR,
   },
 
-  // ข้อความอยู่ตรงกลาง โดยเว้นพื้นที่ไอคอนด้านขวา
-  groupInfo: {
-    position: "absolute",
-    left: 8,
-    right: 28,
-    top: 0,
-    bottom: 0,
+  // Bottom Navigation Bar
+  spacer: {
+    flex: 1,
+    minHeight: 40,
+  },
+  bottomBar: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    justifyContent: "center",
+    marginTop: 20,
   },
-
-  groupName: {
-    width: "100%",
+  cancelBtn: {
+    width: 120,
+    borderWidth: 1.8,
+    borderColor: "#333",
+    borderRadius: 15,
+    paddingVertical: 15,
+    alignItems: "center",
+    backgroundColor: "#FFF",
+  },
+  cancelBtnText: {
+    color: "#333",
     fontFamily: FONT_BOLD,
     fontSize: 16,
-    lineHeight: 19,
-    color: "#333333",
-    textAlign: "center",
   },
-
-  groupNameSelected: {
-    color: "#9A6000",
-  },
-
-  groupHint: {
-    marginTop: 4,
-    fontFamily: FONT_REGULAR,
-    fontSize: 10,
-    lineHeight: 15,
-    color: "#777777",
-    textAlign: "center",
-  },
-
-  selectedDescription: {
-    marginTop: 4,
-    fontFamily: FONT_REGULAR,
-    fontSize: 10,
-    lineHeight: 15,
-    color: "#9A6000",
-    textAlign: "center",
-  },
-
-  // ไอคอนเรียงแนวนอนทางขวา กึ่งกลางแนวตั้ง
-  groupRight: {
-    position: "absolute",
-    right: 7,
-    top: 0,
-    bottom: 0,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 2,
-  },
-
-  // สรุปรายการที่เลือก
-  summaryBox: {
-    marginTop: 22,
-    padding: 16,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#EEEEEE",
-  },
-
-  summaryTitle: {
-    fontFamily: FONT_BOLD,
-    fontSize: 16,
-    color: "#333333",
-    marginBottom: 12,
-  },
-
-  summaryRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
-  },
-
-  summaryInfo: {
-    flex: 1,
-    paddingRight: 8,
-  },
-
-  summaryGroupName: {
-    fontFamily: FONT_BOLD,
-    fontSize: 14,
-    color: "#444444",
-  },
-
-  summaryDetail: {
-    fontFamily: FONT_REGULAR,
-    fontSize: 12,
-    color: "#666666",
-    marginTop: 4,
-  },
-
-  emptyText: {
-    width: "100%",
-    fontFamily: FONT_REGULAR,
-    fontSize: 14,
-    color: "#777777",
-    textAlign: "center",
-    paddingVertical: 12,
-  },
-
-  // ปุ่มไม่มีอาหารที่แพ้
-  noneButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    marginTop: 18,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "#D5D5D5",
-    borderRadius: 12,
-    backgroundColor: "#FFFFFF",
-  },
-
-  noneButtonActive: {
-    borderColor: ORANGE,
-    backgroundColor: "#F5A400",
-  },
-
-  noneButtonText: {
-    fontFamily: FONT_BOLD,
-    fontSize: 14,
-    color: "#444444",
-  },
-
-  noneButtonTextActive: {
-    color: "#FFFFFF",
-  },
-
-  noneChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 10,
-    borderRadius: 10,
-    backgroundColor: "#FFFFFF",
-  },
-
-  noneChipText: {
-    fontFamily: FONT_BOLD,
-    color: "#8A5A00",
-  },
-
-  note: {
-    marginTop: 10,
-    fontFamily: FONT_REGULAR,
-    fontSize: 12,
-    lineHeight: 19,
-    color: "#777777",
-  },
-
-  // ปุ่มย้อนกลับและถัดไป
-  buttonRow: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 24,
-  },
-
-  backButton: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#CCCCCC",
-    backgroundColor: "#FFFFFF",
-  },
-
-  backText: {
-    fontFamily: FONT_BOLD,
-    color: "#555555",
-    fontSize: 15,
-  },
-
-  nextButton: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 14,
-    borderRadius: 12,
+  confirmBtn: {
+    width: 120,
     backgroundColor: ORANGE,
+    borderRadius: 15,
+    paddingVertical: 15,
+    alignItems: "center",
   },
-
-  nextText: {
+  confirmBtnText: {
+    color: "#FFF",
     fontFamily: FONT_BOLD,
-    color: "#FFFFFF",
-    fontSize: 15,
-  },
-
-  disabledButton: {
-    opacity: 0.45,
+    fontSize: 16,
   },
 });
 

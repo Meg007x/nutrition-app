@@ -172,7 +172,7 @@ function inferCategoryGroup(usdaCategory) {
   if (lc.includes("crustacean") || lc.includes("mollusk") || lc.includes("seafood"))
     return { category_group: "protein_group", category_group_label: "เนื้อสัตว์และโปรตีน", sub_category: "seafood", sub_category_label: "อาหารทะเล" };
   if (lc.includes("dairy") || lc.includes("egg"))
-    return { category_group: "seasoning_group", category_group_label: "เครื่องปรุง/ส่วนผสม", sub_category: "dairy", sub_category_label: "นมและผลิตภัณฑ์นม" };
+    return { category_group: "seasoning_group", category_group_label: "นมและผลิตภัณฑ์นม", sub_category: "dairy", sub_category_label: "นมและผลิตภัณฑ์นม" };
   if (lc.includes("cereal") || lc.includes("grain") || lc.includes("pasta") || lc.includes("bread"))
     return { category_group: "seasoning_group", category_group_label: "เครื่องปรุง/ส่วนผสม", sub_category: "bread_flour", sub_category_label: "ขนมปังและแป้ง" };
   if (lc.includes("fat") || lc.includes("oil"))

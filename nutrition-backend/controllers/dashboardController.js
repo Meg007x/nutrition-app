@@ -5,6 +5,9 @@ const DailyPlan = require("../models/DailyPlan");
 const ScanSession = require("../models/ScanSession");
 const MealLog = require("../models/MealLog");
 const { num } = require("../utils/nutritionCalculator");
+const { getWaterTargetRange } = require("../utils/waterTargets");
+const { calculateTargetCalories } = require("../utils/calorieTargets");
+const { calculateMacroTargets } = require("../utils/macroTargets");
 
 const getDashboardData = async (req, res) => {
   const LP = "🔍 [DASHBOARD]";
@@ -26,18 +29,6 @@ const getDashboardData = async (req, res) => {
 
     const db = mongoose.connection.db;
     console.log(`${LP} DB name:`, db.databaseName);
-
-    // 🔧 FIX: ไม่ใช้ $in กับ listCollections เพราะ MongoDB driver บางเวอร์ชันไม่รองรับ
-    // ให้ list ทั้งหมดแล้ว filter ด้วย JavaScript แทน
-    const allCollections = await db.listCollections().toArray();
-    const allColNames = allCollections.map(c => c.name);
-    console.log(`${LP} All collections:`, allColNames);
-
-    const usersColName = allColNames.includes("Users") ? "Users" : (allColNames.includes("users") ? "users" : "Users");
-    console.log(`${LP} Using Users col:`, usersColName);
-
-    const userFilter = { $or: [{ username: userId }, { user_id: userId }, { email: userId }] };
-    console.log(`${LP} User filter:`, JSON.stringify(userFilter));
 
     const user = await User.findOne({
       $or: [{ username: userId }, { user_id: userId }, { email: userId }],
@@ -63,7 +54,15 @@ const getDashboardData = async (req, res) => {
       const waterLog = await WaterLog.findOne({ user_id: currentUserId, date: todayStr }).lean();
       console.log(`${LP} WaterLog:`, waterLog ? `found (drank=${waterLog.total_drank_ml}, target=${waterLog.target_ml})` : "null");
       consumedWater = waterLog ? Number(waterLog.total_drank_ml || 0) : 0;
-      targetWater = waterLog ? Number(waterLog.target_ml || 2000) : (user?.health_goals?.water_target_ml || 2000);
+      const targetRange = getWaterTargetRange(user?.weight_kg);
+      const storedTarget = waterLog?.target_ml ||
+        user?.water_target_ml ||
+        user?.health_goals?.water_target_ml ||
+        targetRange.minimum;
+      targetWater = Math.min(
+        targetRange.maximum,
+        Math.max(targetRange.minimum, Number(storedTarget))
+      );
     } catch (e) {
       console.error(`${LP} ⚠️ WaterLogs error:`, e.message);
     }
@@ -71,12 +70,11 @@ const getDashboardData = async (req, res) => {
     // ดึง ScanSessions
     let todayScans = [];
     try {
-      const scanColName = allColNames.includes("ScanSessions") ? "ScanSessions" : (allColNames.includes("scansessions") ? "scansessions" : null);
-      console.log(`${LP} Scan col:`, scanColName);
-      if (scanColName) {
-        todayScans = await ScanSession.find({ user_id: currentUserId, date: todayStr }).lean();
-        console.log(`${LP} Scans count:`, todayScans.length);
-      }
+      todayScans = await ScanSession.find({
+        user_id: currentUserId,
+        date: todayStr,
+      }).lean();
+      console.log(`${LP} Scans count:`, todayScans.length);
     } catch (e) {
       console.error(`${LP} ⚠️ ScanSessions error:`, e.message);
     }
@@ -149,26 +147,54 @@ const getDashboardData = async (req, res) => {
       console.error(`${LP} ⚠️ DailyPlans nutrition error:`, e.message);
     }
 
-    // คำนวณเป้าหมายสารอาหาร — v2: ใช้ daily_target จาก DailyPlan ถ้ามี, fallback เป็น TDEE formula
+    // คำนวณเป้าหมายสารอาหาร — v2: Single Source of Truth
+    // 1. ใช้ user.health_goals.target_calories เป็นหลัก (stored targets)
+    // 2. Fallback: daily_target จาก DailyPlan
+    // 3. Last resort: calculate current targets with the shared macro formula.
     let targetKcal = 0;
     let proteinTarget = 0;
     let carbTarget = 0;
     let fatTarget = 0;
 
-    // ลองหา daily_target จาก DailyPlan ล่าสุดของวันนี้
-    const latestPlan = await DailyPlan.findOne({ user_id: currentUserId, date: todayStr, plan_status: "active" }).lean();
-    if (latestPlan && latestPlan.daily_target) {
-      targetKcal = num(latestPlan.daily_target.target_kcal);
-      proteinTarget = num(latestPlan.daily_target.target_protein_g);
-      carbTarget = num(latestPlan.daily_target.target_carb_g);
-      fatTarget = num(latestPlan.daily_target.target_fat_g);
+    // Source 1: Rebuild macros from stored calories and protein using the shared formula.
+    const storedKcal = num(user?.health_goals?.target_calories);
+    const storedProtein = num(user?.health_goals?.protein_target_g);
+    if (storedKcal > 0 && storedProtein > 0) {
+      const macros = calculateMacroTargets(storedKcal, storedProtein);
+      if (macros.valid) {
+        targetKcal = macros.target_calories;
+        proteinTarget = macros.target_protein_g;
+        carbTarget = macros.target_carb_g;
+        fatTarget = macros.target_fat_g;
+      }
     }
-    // Fallback: คำนวณจาก health_goals
+    // Source 2: Fallback to DailyPlan daily_target (legacy)
     if (targetKcal === 0) {
-      targetKcal = num(user?.health_goals?.tdee_target_kcal);
-      proteinTarget = num(user?.health_goals?.protein_target_g);
-      carbTarget = targetKcal > 0 ? Math.round((targetKcal * 0.5) / 4) : 0;
-      fatTarget = targetKcal > 0 ? Math.round((targetKcal * 0.25) / 9) : 0;
+      const latestPlan = await DailyPlan.findOne({ user_id: currentUserId, date: todayStr, plan_status: "active" }).lean();
+      if (latestPlan && latestPlan.daily_target) {
+        targetKcal = num(latestPlan.daily_target.target_kcal);
+        proteinTarget = num(latestPlan.daily_target.target_protein_g);
+        carbTarget = num(latestPlan.daily_target.target_carb_g);
+        fatTarget = num(latestPlan.daily_target.target_fat_g);
+      }
+    }
+    // Source 3: Last resort — calculate targets with the shared macro formula.
+    if (targetKcal === 0) {
+      const tdee = num(user?.health_goals?.tdee_target_kcal);
+      const calculatedCalories = calculateTargetCalories(
+        tdee,
+        user?.health_goals?.primary_goal
+      );
+      const macros = calculateMacroTargets(
+        calculatedCalories,
+        user?.health_goals?.protein_target_g
+      );
+      if (macros.valid) {
+        targetKcal = macros.target_calories;
+        proteinTarget = macros.target_protein_g;
+        carbTarget = macros.target_carb_g;
+        fatTarget = macros.target_fat_g;
+      }
     }
     const percentage = targetKcal > 0 ? Math.round((consumedKcal / targetKcal) * 100) : 0;
 

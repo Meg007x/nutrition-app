@@ -2,6 +2,14 @@ const User = require("../models/User");
 const bcrypt = require("bcrypt");
 const NotificationSetting = require('../models/Notification');
 const WaterLog = require('../models/WaterLog');
+const {
+  calculateTDEE,
+  getActivityLabel,
+  normalizeActivityLevel,
+} = require("../utils/activityLevels");
+const { calculateTargetCalories } = require("../utils/calorieTargets");
+const { getWaterTargetRange } = require("../utils/waterTargets");
+const { calculateMacroTargets } = require("../utils/macroTargets");
 
 // 1. ฟังก์ชันดึงค่าตั้งเชื่อมโยงมื้ออาหาร
 const getMealSettings = async (req, res) => {
@@ -61,9 +69,14 @@ const getUserProfile = async (req, res) => {
       return res.status(404).json({ success: false, message: "ไม่พบข้อมูลผู้ใช้รายนี้" });
     }
 
+    const safeUser = user.toObject();
+    delete safeUser.password;
+    delete safeUser.auth_token_hash;
+    delete safeUser.auth_token_expires_at;
+
     return res.status(200).json({
       success: true,
-      data: user
+      data: safeUser
     });
   } catch (error) {
     console.error("❌ Get User Profile Error:", error);
@@ -74,15 +87,45 @@ const getUserProfile = async (req, res) => {
 // 🟢 1. ฟังก์ชันอัปเดตโปรไฟล์ (แก้ไขเพิ่มเติมให้รองรับอีเมล และปิดคำเตือน Mongoose)
 const updateUserProfile = async (req, res) => {
   try {
-    // เพิ่มการรับค่า email จาก req.body
-    const { userId, weight_kg, height_cm, gender, date_of_birth, username, email } = req.body;
+    const userId = req.user.user_id;
+    const { weight_kg, height_cm, gender, date_of_birth, username, email } = req.body;
+    const weight = Number(weight_kg);
+    const height = Number(height_cm);
+    const trimmedUsername = typeof username === "string" ? username.trim() : "";
+    const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
+    const birthDateText = typeof date_of_birth === "string" ? date_of_birth : "";
+    const birthDate = new Date(`${birthDateText}T00:00:00.000Z`);
 
-    if (!userId) {
-      return res.status(400).json({ success: false, message: "กรุณาส่ง userId มาด้วย" });
+    if (!trimmedUsername || trimmedUsername.length > 60) {
+      return res.status(400).json({ success: false, message: "กรุณากรอกชื่อผู้ใช้ไม่เกิน 60 ตัวอักษร" });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      return res.status(400).json({ success: false, message: "รูปแบบอีเมลไม่ถูกต้อง" });
+    }
+    if (!Number.isFinite(weight) || weight <= 0 || !Number.isFinite(height) || height <= 0) {
+      return res.status(400).json({ success: false, message: "น้ำหนักและส่วนสูงต้องเป็นตัวเลขที่มากกว่า 0" });
+    }
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(birthDateText) ||
+      Number.isNaN(birthDate.getTime()) ||
+      birthDate.toISOString().slice(0, 10) !== birthDateText ||
+      birthDate > new Date()
+    ) {
+      return res.status(400).json({ success: false, message: "วันเกิดไม่ถูกต้อง" });
+    }
+    if (!["ชาย", "หญิง", "male", "female"].includes(gender)) {
+      return res.status(400).json({ success: false, message: "กรุณาระบุเพศให้ถูกต้อง" });
+    }
+
+    const emailInUse = await User.findOne({
+      email: normalizedEmail,
+      user_id: { $ne: userId },
+    }).select("user_id");
+    if (emailInUse) {
+      return res.status(409).json({ success: false, message: "อีเมลนี้ถูกใช้งานแล้ว" });
     }
 
     // 1. คำนวณอายุจาก วันเกิด
-    const birthDate = new Date(date_of_birth);
     const today = new Date();
     let age = today.getFullYear() - birthDate.getFullYear();
     const m = today.getMonth() - birthDate.getMonth();
@@ -90,27 +133,25 @@ const updateUserProfile = async (req, res) => {
       age--;
     }
 
-    // 2. สูตรคำนวณ BMR (Mifflin-St Jeor Equation)
-    let bmr = 0;
-    if (gender === "ชาย") {
-      bmr = 10 * weight_kg + 6.25 * height_cm - 5 * age + 5;
-    } else {
-      bmr = 10 * weight_kg + 6.25 * height_cm - 5 * age - 161;
-    }
-
-    // 3. คำนวณ TDEE ตามระดับกิจกรรมเดิมที่มีใน DB (ถ้าไม่มีให้คูณ 1.55 เป็นค่ากลาง)
+    // 2. คำนวณ TDEE ด้วย activity factor มาตรฐานเดียวกับการสมัครสมาชิก
     const userExist = await User.findOne({ user_id: userId });
-    const activityLevel = userExist?.health_goals?.activity_level || "ปานกลาง";
-    
-    let activityMultiplier = 1.375; // ออกกำลังกายน้อย
-    if (activityLevel === "ปานกลาง") activityMultiplier = 1.55;
-    if (activityLevel === "หนัก") activityMultiplier = 1.725;
-
-    const tdee = Math.round(bmr * activityMultiplier);
+    if (!userExist) {
+      return res.status(404).json({ success: false, message: "ไม่พบผู้ใช้รายนี้" });
+    }
+    const activityLevel = normalizeActivityLevel(
+      userExist?.health_goals?.activity_level
+    );
+    const tdee = calculateTDEE(
+      gender,
+      weight,
+      height,
+      age,
+      activityLevel
+    );
 
     // 4. คำนวณ BMI และ สถานะร่างกายใหม่
-    const heightInMeters = height_cm / 100;
-    const bmi = parseFloat((weight_kg / (heightInMeters * heightInMeters)).toFixed(1));
+    const heightInMeters = height / 100;
+    const bmi = parseFloat((weight / (heightInMeters * heightInMeters)).toFixed(1));
     let status = "น้ำหนักปกติ";
     let color = "green";
 
@@ -118,36 +159,59 @@ const updateUserProfile = async (req, res) => {
     else if (bmi >= 23 && bmi < 25) { status = "น้ำหนักเกิน"; color = "orange"; }
     else if (bmi >= 25) { status = "อ้วน"; color = "red"; }
 
-    // 5. อัปเดตข้อมูลลงฐานข้อมูล
-    // เปลี่ยน { new: true } เป็น { returnDocument: 'after' } เพื่อเคลียร์ Warning ทิ้ง
+    // 5. Recalculate goal-adjusted targets (Single Source of Truth)
+    const goal = String(userExist?.health_goals?.primary_goal || '').trim();
+    const targetCalories = calculateTargetCalories(tdee, goal);
+    const macroTargets = calculateMacroTargets(
+      targetCalories,
+      userExist.health_goals?.protein_target_g
+    );
+    if (!macroTargets.valid) {
+      return res.status(400).json({
+        success: false,
+        message: macroTargets.message,
+      });
+    }
+
+    // 6. อัปเดตข้อมูลลงฐานข้อมูล
     const updatedUser = await User.findOneAndUpdate(
       { user_id: userId },
       {
         $set: {
-          username,
-          email, // 👈 เพิ่มการอัปเดต Email ลงในข้อมูลส่วนตัว
-          weight_kg,
-          height_cm,
+          username: trimmedUsername,
+          email: normalizedEmail,
+          weight_kg: weight,
+          height_cm: height,
           gender,
           date_of_birth: birthDate,
           age,
           "body_analysis.bmi": bmi,
           "body_analysis.status": status,
           "body_analysis.color": color,
-          "health_goals.tdee_target_kcal": tdee 
+          "health_goals.tdee_target_kcal": tdee,
+          "health_goals.activity_level": getActivityLabel(activityLevel),
+          "health_goals.target_calories": targetCalories,
+          "health_goals.protein_target_g": macroTargets.target_protein_g,
+          "health_goals.target_carb_g": macroTargets.target_carb_g,
+          "health_goals.target_fat_g": macroTargets.target_fat_g,
         }
       },
-      { returnDocument: 'after' } // 👈 แก้ตามคำแนะนำของ Mongoose
+      { returnDocument: 'after' }
     );
 
     if (!updatedUser) {
       return res.status(404).json({ success: false, message: "ไม่พบผู้ใช้รายนี้" });
     }
 
+    const safeUpdatedUser = updatedUser.toObject();
+    delete safeUpdatedUser.password;
+    delete safeUpdatedUser.auth_token_hash;
+    delete safeUpdatedUser.auth_token_expires_at;
+
     return res.status(200).json({
       success: true,
       message: "อัปเดตข้อมูลส่วนตัวและคำนวณ TDEE ใหม่สำเร็จ",
-      data: updatedUser
+      data: safeUpdatedUser
     });
 
   } catch (error) {
@@ -159,29 +223,38 @@ const updateUserProfile = async (req, res) => {
 // 🔒 2. ฟังก์ชันสำหรับเปลี่ยนรหัสผ่าน (สร้างขึ้นใหม่)
 const changePassword = async (req, res) => {
   try {
-    const { userId, password } = req.body;
+    const { currentPassword, password } = req.body;
 
-    if (!userId || !password) {
+    if (
+      typeof currentPassword !== "string" ||
+      !currentPassword ||
+      typeof password !== "string" ||
+      !password
+    ) {
       return res.status(400).json({ success: false, message: "ข้อมูลไม่ครบถ้วนสำหรับการเปลี่ยนรหัสผ่าน" });
     }
 
-    // เข้ารหัสผ่านใหม่ (บดสับรหัสผ่าน) ด้วย bcrypt ก่อนจัดเก็บลงฐานข้อมูล เพื่อความปลอดภัย
-    // หมายเหตุ: ถ้าในระบบของคุณตอนสมัครสมาชิกใช้สูตร bcrypt.hash ให้เปิดใช้งานตรงนี้ได้เลยครับ
+    const userId = req.user.user_id;
+    const user = await User.findOne({ user_id: userId });
+    if (!user || !(await bcrypt.compare(currentPassword, user.password))) {
+      return res.status(401).json({ success: false, message: "รหัสผ่านปัจจุบันไม่ถูกต้อง" });
+    }
+
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
     const updatedUser = await User.findOneAndUpdate(
-      { user_id: userId },
+      { user_id: userId, password: user.password },
       {
         $set: {
-          password: hashedPassword // 👈 อัปเดตรหัสผ่านที่เข้ารหัสแล้วลงใน DB
+          password: hashedPassword
         }
       },
       { returnDocument: 'after' }
     );
 
     if (!updatedUser) {
-      return res.status(404).json({ success: false, message: "ไม่พบข้อมูลผู้ใช้ที่ต้องการเปลี่ยนรหัสผ่าน" });
+      return res.status(401).json({ success: false, message: "ไม่สามารถยืนยันตัวตนได้ กรุณาลองอีกครั้ง" });
     }
 
     return res.status(200).json({
@@ -212,17 +285,36 @@ const updateUserGoal = async (req, res) => {
       return res.status(404).json({ success: false, message: "ไม่พบข้อมูลผู้ใช้" });
     }
 
-    // 4. อัปเดตข้อมูลลง MongoDB โดยอ้างอิงฟิลด์ให้ตรงเป๊ะ
+    // 4. Recalculate goal-adjusted targets (goal changed!)
+    const tdee = Number(user?.health_goals?.tdee_target_kcal) || 0;
+    const goal = String(primary_goal || '').trim();
+    const targetCalories = calculateTargetCalories(tdee, goal);
+    const macroTargets = calculateMacroTargets(
+      targetCalories,
+      user.health_goals?.protein_target_g
+    );
+    if (!macroTargets.valid) {
+      return res.status(400).json({
+        success: false,
+        message: macroTargets.message,
+      });
+    }
+
+    // 5. อัปเดตข้อมูลลง MongoDB โดยอ้างอิงฟิลด์ให้ตรงเป๊ะ
     const updatedUser = await User.findOneAndUpdate(
       { user_id: userId },
       {
         $set: {
           "health_goals.primary_goal": primary_goal,
           "health_goals.target_weight_kg": target_weight_kg,
-          "health_goals.duration_weeks": duration_weeks
+          "health_goals.duration_weeks": duration_weeks,
+          "health_goals.target_calories": targetCalories,
+          "health_goals.protein_target_g": macroTargets.target_protein_g,
+          "health_goals.target_carb_g": macroTargets.target_carb_g,
+          "health_goals.target_fat_g": macroTargets.target_fat_g,
         }
       },
-      { new: true } // ให้ส่งคืนข้อมูลที่อัปเดตแล้วกลับมา
+      { returnDocument: 'after' }
     );
 
     return res.status(200).json({
@@ -240,10 +332,56 @@ const updateUserGoal = async (req, res) => {
 // ฟังก์ชันสำหรับอัปเดตระดับกิจกรรมและโปรตีน (และคำนวณแคลอรี่ใหม่)
 const updateUserActivity = async (req, res) => {
   try {
-    const { userId, activity_level, protein_target_g, tdee_target_kcal } = req.body;
+    const { userId, activity_level, protein_target_g } = req.body;
 
-    if (!userId || !activity_level || !protein_target_g || !tdee_target_kcal) {
+    if (
+      !userId ||
+      !activity_level ||
+      !Number.isFinite(Number(protein_target_g)) ||
+      Number(protein_target_g) <= 0
+    ) {
       return res.status(400).json({ success: false, message: "กรุณาส่งข้อมูลมาให้ครบถ้วน" });
+    }
+
+    // Calculate TDEE on the server so client calculations cannot diverge.
+    const user = await User.findOne({ user_id: userId }).lean();
+    if (!user) {
+      return res.status(404).json({ success: false, message: "ไม่พบข้อมูลผู้ใช้" });
+    }
+
+    const normalizedActivity = normalizeActivityLevel(activity_level);
+    const birthDate = new Date(user.date_of_birth);
+    const today = new Date();
+    let age = Number(user.age) || today.getFullYear() - birthDate.getFullYear();
+    if (
+      !user.age &&
+      (today.getMonth() < birthDate.getMonth() ||
+        (today.getMonth() === birthDate.getMonth() &&
+          today.getDate() < birthDate.getDate()))
+    ) {
+      age -= 1;
+    }
+    const tdee = calculateTDEE(
+      user.gender,
+      user.weight_kg,
+      user.height_cm,
+      age,
+      normalizedActivity
+    );
+    const activityLabel = getActivityLabel(normalizedActivity);
+
+    // Apply goal-based calorie adjustment (mirrors frontend step1)
+    const goal = String(user?.health_goals?.primary_goal || '').trim();
+    const targetCalories = calculateTargetCalories(tdee, goal);
+    const macroTargets = calculateMacroTargets(
+      targetCalories,
+      protein_target_g
+    );
+    if (!macroTargets.valid) {
+      return res.status(400).json({
+        success: false,
+        message: macroTargets.message,
+      });
     }
 
     // อัปเดตข้อมูลลง MongoDB ให้สัมพันธ์กันทั้งหมด
@@ -251,12 +389,15 @@ const updateUserActivity = async (req, res) => {
       { user_id: userId },
       {
         $set: {
-          "health_goals.activity_level": activity_level,
-          "health_goals.protein_target_g": protein_target_g,
-          "health_goals.tdee_target_kcal": tdee_target_kcal
+          "health_goals.activity_level": activityLabel,
+          "health_goals.protein_target_g": macroTargets.target_protein_g,
+          "health_goals.tdee_target_kcal": tdee,
+          "health_goals.target_calories": targetCalories,
+          "health_goals.target_carb_g": macroTargets.target_carb_g,
+          "health_goals.target_fat_g": macroTargets.target_fat_g,
         }
       },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!updatedUser) {
@@ -275,42 +416,6 @@ const updateUserActivity = async (req, res) => {
   }
 };
 
-const updateUserAllergies = async (req, res) => {
-  try {
-    const { userId, allergies } = req.body;
-
-    if (!userId) {
-      return res.status(400).json({ success: false, message: "ไม่มีรหัสผู้ใช้" });
-    }
-
-    // Build atomic $set for each category to avoid full-document replacement
-    const setOps = {};
-    if (allergies && typeof allergies === 'object') {
-      if (allergies.veg !== undefined) setOps["allergies.veg"] = allergies.veg;
-      if (allergies.condiment !== undefined) setOps["allergies.condiment"] = allergies.condiment;
-      if (allergies.meat !== undefined) setOps["allergies.meat"] = allergies.meat;
-      if (allergies.other !== undefined) setOps["allergies.other"] = allergies.other;
-    }
-
-    if (Object.keys(setOps).length === 0) {
-      return res.status(400).json({ success: false, message: "ไม่มีข้อมูล allergies ที่ต้องอัปเดต" });
-    }
-
-    const updatedUser = await User.findOneAndUpdate(
-      { user_id: userId },
-      { $set: setOps },
-      { new: true, runValidators: false }
-    );
-
-    if (!updatedUser) return res.status(404).json({ success: false, message: "ไม่พบผู้ใช้" });
-
-    return res.status(200).json({ success: true, message: "อัปเดตอาหารที่แพ้สำเร็จ", data: updatedUser.allergies });
-
-  } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
-  }
-};
-
 const updateUserDislikedFoods = async (req, res) => {
   try {
     const { userId, disliked_foods } = req.body;
@@ -321,7 +426,7 @@ const updateUserDislikedFoods = async (req, res) => {
     const updatedUser = await User.findOneAndUpdate(
       { user_id: userId },
       { $set: { "disliked_foods": disliked_foods } }, 
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!updatedUser) return res.status(404).json({ success: false, message: "ไม่พบผู้ใช้" });
@@ -342,7 +447,7 @@ const updateUserInterestedCuisines = async (req, res) => {
     const updatedUser = await User.findOneAndUpdate(
       { user_id: userId },
       { $set: { "interested_cuisines": interested_cuisines } }, 
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!updatedUser) return res.status(404).json({ success: false, message: "ไม่พบผู้ใช้" });
@@ -356,20 +461,17 @@ const updateUserInterestedCuisines = async (req, res) => {
 // 🟢 เพิ่มฟังก์ชันอัปเดตรูปโปรไฟล์
 const uploadAvatar = async (req, res) => {
   try {
-    const { userId, avatar_url } = req.body;
+    const userId = req.user.user_id;
+    const { avatar_url } = req.body;
 
-    if (!userId) {
-      return res.status(400).json({ success: false, message: "กรุณาส่ง userId" });
-    }
-
-    if (!avatar_url) {
+    if (typeof avatar_url !== "string" || !avatar_url.trim()) {
       return res.status(400).json({ success: false, message: "กรุณาส่ง avatar_url" });
     }
 
     const updated = await User.findOneAndUpdate(
       { user_id: userId },
       { $set: { avatar_url, updated_at: new Date() } },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!updated) {
@@ -467,11 +569,86 @@ const saveUserAllergies = async (req, res) => {
     const updatedUser = await User.findOneAndUpdate(
       { user_id: userId },
       { $set: setOps },
-      { new: true, runValidators: false }
+      { returnDocument: 'after', runValidators: false }
     );
 
     if (!updatedUser) {
       return res.status(404).json({ success: false, message: "ไม่พบผู้ใช้" });
+    }
+
+    // ─── Post-Save: Auto-invalidate unsafe foods in active future plans ───
+    let invalidatedSlotsCount = 0;
+    try {
+      const DailyPlan = require("../models/DailyPlan");
+      const { checkFoodAllergensSync } = require("../utils/allergenChecker");
+
+      const todayStr = new Date().toISOString().split("T")[0];
+      const activePlans = await DailyPlan.find({
+        user_id: userId,
+        plan_status: "active",
+        date: { $gte: todayStr },
+      }).lean();
+
+      if (activePlans.length > 0) {
+        // Build ingredient doc cache for efficient allergen checking
+        const Ingredient = require("../models/Ingredient");
+        const allIngIds = new Set();
+        activePlans.forEach(function(plan) {
+          (plan.slots || []).forEach(function(slot) {
+            if (slot.main_food && Array.isArray(slot.main_food.ingredients)) {
+              slot.main_food.ingredients.forEach(function(ing) {
+                if (ing.ingredient_id) allIngIds.add(String(ing.ingredient_id));
+              });
+            }
+          });
+        });
+
+        const ingDocMap = {};
+        if (allIngIds.size > 0) {
+          try {
+            const docs = await Ingredient.find({ _id: { $in: Array.from(allIngIds) } }).lean();
+            docs.forEach(function(d) { ingDocMap[String(d._id)] = d; });
+          } catch (e) { /* non-fatal */ }
+        }
+
+        // Re-evaluate each plan's slots against updated allergies
+        const bulkOps = [];
+        for (const plan of activePlans) {
+          let planModified = false;
+          const updatedSlots = (plan.slots || []).map(function(slot) {
+            if (!slot.main_food) return slot;
+            const warning = checkFoodAllergensSync(slot.main_food, updatedUser, ingDocMap);
+            if (warning.has_allergen_warning) {
+              planModified = true;
+              invalidatedSlotsCount++;
+              console.log("Auto-clear:", plan.date, slot.slot_name, "->", slot.main_food.name || "?", "matched:", warning.matched_allergens.join(", "));
+              return Object.assign({}, slot, {
+                main_food: null,
+                status: "pending",
+                auto_cleared_reason: "allergen_change",
+                auto_cleared_at: new Date(),
+              });
+            }
+            return slot;
+          });
+
+          if (planModified) {
+            bulkOps.push({
+              updateOne: {
+                filter: { _id: plan._id },
+                update: { $set: { slots: updatedSlots, updated_at: new Date() } },
+              },
+            });
+          }
+        }
+
+        if (bulkOps.length > 0) {
+          await DailyPlan.bulkWrite(bulkOps);
+          console.log("Auto-cleared " + invalidatedSlotsCount + " slots across " + bulkOps.length + " plans");
+        }
+      }
+    } catch (clearErr) {
+      console.error("Post-save plan revalidation error (non-fatal):", clearErr.message);
     }
 
     return res.status(200).json({
@@ -479,6 +656,7 @@ const saveUserAllergies = async (req, res) => {
       message: "อัปเดตภูมิแพ้สำเร็จ",
       data: updatedUser.allergies,
       allergies_v2: updatedUser.allergies_v2 || [],
+      invalidated_slots_count: invalidatedSlotsCount,
     });
   } catch (error) {
     console.error("❌ Save User Allergies Error:", error);
@@ -520,7 +698,7 @@ const deleteUserAllergy = async (req, res) => {
     const updatedUser = await User.findOneAndUpdate(
       { user_id: userId },
       { $pull: { ...pullOps, ...pullV2 }, $set: { updated_at: new Date() } },
-      { new: true, runValidators: false }
+      { returnDocument: 'after', runValidators: false }
     );
 
     // Check if removal actually happened
@@ -548,11 +726,9 @@ const deleteUserAllergy = async (req, res) => {
 // ==========================================
 const updateProfilePicture = async (req, res) => {
   try {
-    const { userId, avatar_url } = req.body;
-    if (!userId) {
-      return res.status(400).json({ success: false, message: "กรุณาส่ง userId" });
-    }
-    if (!avatar_url) {
+    const userId = req.user.user_id;
+    const { avatar_url } = req.body;
+    if (typeof avatar_url !== "string" || !avatar_url.trim()) {
       return res.status(400).json({ success: false, message: "กรุณาส่ง avatar_url" });
     }
 
@@ -566,7 +742,7 @@ const updateProfilePicture = async (req, res) => {
           updated_at: new Date(),
         },
       },
-      { new: true, runValidators: false }
+      { returnDocument: 'after', runValidators: false }
     );
 
     if (!updatedUser) {
@@ -587,9 +763,24 @@ const updateProfilePicture = async (req, res) => {
 const updateMealWaterSettings = async (req, res) => {
   try {
     const { userId, meals, water_target_ml } = req.body;
+    const waterTarget = Number(water_target_ml);
 
     if (!userId) {
       return res.status(400).json({ success: false, message: "กรุณาระบุรหัสผู้ใช้" });
+    }
+    if (!Array.isArray(meals)) {
+      return res.status(400).json({ success: false, message: "กรุณาระบุตารางมื้ออาหาร" });
+    }
+    const existingUser = await User.findOne({ user_id: userId }).lean();
+    if (!existingUser) {
+      return res.status(404).json({ success: false, message: "ไม่พบข้อมูลผู้ใช้ในระบบ" });
+    }
+    const waterRange = getWaterTargetRange(existingUser.weight_kg);
+    if (!Number.isInteger(waterTarget) || waterTarget < waterRange.minimum || waterTarget > waterRange.maximum) {
+      return res.status(400).json({
+        success: false,
+        message: `เป้าหมายน้ำต้องอยู่ระหว่าง ${waterRange.minimum.toLocaleString()}-${waterRange.maximum.toLocaleString()} มล.`,
+      });
     }
 
     // ==========================================
@@ -601,10 +792,10 @@ const updateMealWaterSettings = async (req, res) => {
         $set: { 
           "meal_settings.meals_per_day": meals.length,
           "meal_settings.schedules": meals, 
-          "water_target_ml": water_target_ml 
+          "water_target_ml": waterTarget
         } 
       },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!updatedUser) {
@@ -641,12 +832,12 @@ const updateMealWaterSettings = async (req, res) => {
     // หาวันที่ปัจจุบันในฟอร์แมต YYYY-MM-DD อิงตาม Timezone ที่ใช้งาน
     // ตัวอย่างการสร้าง String วันที่ เช่น "2026-03-26"
     const today = new Date();
-    const todayString = today.toISOString().split('T')[0]; 
+    const todayString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
 
     // อัปเดตเป้าหมายน้ำของวันนี้ (ถ้าวันนี้ยังไม่มี log ก็ไม่เป็นไร ระบบจะได้ไม่พัง ใช้ findOneAndUpdate)
     await WaterLog.findOneAndUpdate(
       { user_id: userId, date: todayString },
-      { $set: { target_ml: water_target_ml } }
+      { $set: { target_ml: waterTarget } }
     );
 
     // ==========================================
@@ -663,20 +854,198 @@ const updateMealWaterSettings = async (req, res) => {
   }
 };
 
+const updateWaterTarget = async (req, res) => {
+  try {
+    const { userId, water_target_ml } = req.body;
+    const waterTarget = Number(water_target_ml);
+
+    if (!userId) {
+      return res.status(400).json({ success: false, message: "กรุณาระบุรหัสผู้ใช้" });
+    }
+    const existingUser = await User.findOne({ user_id: userId }).lean();
+    if (!existingUser) {
+      return res.status(404).json({ success: false, message: "ไม่พบข้อมูลผู้ใช้ในระบบ" });
+    }
+    const waterRange = getWaterTargetRange(existingUser.weight_kg);
+    if (!Number.isInteger(waterTarget) || waterTarget < waterRange.minimum || waterTarget > waterRange.maximum) {
+      return res.status(400).json({
+        success: false,
+        message: `เป้าหมายน้ำต้องอยู่ระหว่าง ${waterRange.minimum.toLocaleString()}-${waterRange.maximum.toLocaleString()} มล.`,
+      });
+    }
+
+    const user = await User.findOneAndUpdate(
+      { user_id: userId },
+      { $set: { water_target_ml: waterTarget } },
+      { new: true, runValidators: true }
+    );
+
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const waterLog = await WaterLog.findOneAndUpdate(
+      { user_id: userId, date: today },
+      {
+        $set: { target_ml: waterTarget },
+        $setOnInsert: { user_id: userId, date: today, total_drank_ml: 0, records: [] },
+      },
+      { new: true, upsert: true, runValidators: true }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "บันทึกเป้าหมายการดื่มน้ำเรียบร้อยแล้ว",
+      water_target_ml: waterTarget,
+      waterLog,
+    });
+  } catch (error) {
+    console.error("❌ Update Water Target Error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ======================================================
+// PUT /api/users/dislikes
+// อัปเดต ingredients ที่ไม่ชอบแบบ atomic (v2 structured + legacy flat)
+// ======================================================
+const saveUserDislikes = async (req, res) => {
+  try {
+    const { userId, disliked_ingredients_v2, disliked_foods } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ success: false, message: "กรุณาส่ง userId" });
+    }
+
+    const setOps = { updated_at: new Date() };
+
+    // v2: structured array
+    if (Array.isArray(disliked_ingredients_v2)) {
+      setOps["disliked_ingredients_v2"] = disliked_ingredients_v2;
+    }
+
+    // legacy: category-based object
+    if (disliked_foods && typeof disliked_foods === "object") {
+      setOps["disliked_foods"] = disliked_foods;
+    }
+
+    const updatedUser = await User.findOneAndUpdate(
+      { user_id: userId },
+      { $set: setOps },
+      { returnDocument: "after" }
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({ success: false, message: "ไม่พบผู้ใช้" });
+    }
+
+    // Auto-clear future daily plans that contain disliked ingredients
+    let clearedSlots = 0;
+    try {
+      const DailyPlan = require("../models/DailyPlan");
+      const today = new Date().toISOString().split("T")[0];
+      const futurePlans = await DailyPlan.find({
+        user_id: userId,
+        date: { $gte: today },
+        plan_status: "active",
+      });
+
+      const blockedNames = new Set();
+      if (Array.isArray(disliked_ingredients_v2)) {
+        disliked_ingredients_v2.forEach(function (d) {
+          if (d.name) blockedNames.add(d.name.toLowerCase());
+        });
+      }
+      if (disliked_foods && typeof disliked_foods === "object") {
+        Object.values(disliked_foods).forEach(function (arr) {
+          if (Array.isArray(arr)) arr.forEach(function (n) { blockedNames.add(String(n).toLowerCase()); });
+        });
+      }
+
+      if (blockedNames.size > 0 && futurePlans.length > 0) {
+        for (const plan of futurePlans) {
+          let modified = false;
+          const updatedSlots = (plan.slots || []).map(function (slot) {
+            if (!slot.main_food) return slot;
+            const foodIngredients = (slot.main_food.ingredients || []);
+            const hasBlocked = foodIngredients.some(function (ing) {
+              return ing.name && blockedNames.has(ing.name.toLowerCase());
+            });
+            if (hasBlocked) {
+              modified = true;
+              clearedSlots++;
+              return Object.assign({}, slot, {
+                main_food: null,
+                status: "pending",
+                pending_reason: "disliked_ingredient_removed",
+              });
+            }
+            return slot;
+          });
+          if (modified) {
+            await DailyPlan.updateOne(
+              { _id: plan._id },
+              { $set: { slots: updatedSlots, updated_at: new Date() } }
+            );
+          }
+        }
+      }
+    } catch (clearErr) {
+      console.error("⚠ Auto-clear future plans error (non-fatal):", clearErr.message);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "อัปเดตวัตถุดิบที่ไม่ชอบสำเร็จ",
+      data: updatedUser.disliked_foods,
+      disliked_ingredients_v2: updatedUser.disliked_ingredients_v2 || [],
+      cleared_slots: clearedSlots,
+    });
+  } catch (error) {
+    console.error("❌ Save User Dislikes Error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ======================================================
+// GET /api/users/dislikes
+// ดึงรายการวัตถุดิบที่ไม่ชอบ
+// ======================================================
+const getUserDislikes = async (req, res) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) {
+      return res.status(400).json({ success: false, message: "กรุณาส่ง userId" });
+    }
+    const user = await User.findOne({ user_id: userId }).lean();
+    if (!user) {
+      return res.status(404).json({ success: false, message: "ไม่พบผู้ใช้" });
+    }
+    return res.status(200).json({
+      success: true,
+      data: user.disliked_foods || {},
+      disliked_ingredients_v2: user.disliked_ingredients_v2 || [],
+    });
+  } catch (error) {
+    console.error("❌ Get User Dislikes Error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   getMealSettings,
   getUserProfile,
-  updateUserProfile, 
+  updateUserProfile,
   changePassword,
   updateUserGoal,
   updateUserActivity,
-  updateUserAllergies,
   updateUserDislikedFoods,
   updateUserInterestedCuisines,
   updateMealWaterSettings,
+  updateWaterTarget,
   uploadAvatar,
   getUserAllergies,
   saveUserAllergies,
   deleteUserAllergy,
   updateProfilePicture,
+  saveUserDislikes,
+  getUserDislikes,
 };

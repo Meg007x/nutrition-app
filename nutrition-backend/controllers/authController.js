@@ -1,6 +1,14 @@
 const bcrypt = require('bcryptjs');
 const mongoose = require('mongoose');
 const crypto = require('crypto');
+const { createSession } = require("../utils/authSession");
+const {
+  calculateTDEE,
+  getActivityLabel,
+} = require("../utils/activityLevels");
+const { calculateTargetCalories } = require("../utils/calorieTargets");
+const { getWaterTargetRange } = require("../utils/waterTargets");
+const { calculateMacroTargets } = require("../utils/macroTargets");
 
 // --- ฟังก์ชันคำนวณ BMI และ สถานะ ---
 const calculateBMI = (weight, height) => {
@@ -43,22 +51,6 @@ const calculateAge = (dateOfBirth) => {
   return age;
 };
 
-// ฟังก์ชันคำนวณ TDEE (สมองของระบบ)
-const calculateTDEE = (gender, weight, height, age, activityLevel) => {
-  let bmr = (10 * weight) + (6.25 * height) - (5 * age);
-  bmr = (gender === 'ชาย') ? bmr + 5 : bmr - 161;
-
-  const factors = {
-    'น้อย': 1.2,
-    'ปานกลาง': 1.375,
-    'มาก': 1.55,
-    'หนัก': 1.725
-  };
-
-  const factor = factors[activityLevel] || 1.2;
-  return Math.round(bmr * factor);
-};
-
 // --- ฟังก์ชันสร้าง "คำแนะนำอัจฉริยะ" ---
 const generateAdvice = (bmiStatus, userGoal) => {
   if (bmiStatus === "น้ำหนักน้อย" && userGoal === "เพิ่มกล้ามเนื้อ") {
@@ -96,18 +88,7 @@ const normalizeGoal = (goal) => {
 };
 
 const normalizeActivity = (activity) => {
-  const map = {
-    sedentary: 'น้อย',
-    light: 'น้อย',
-    moderate: 'ปานกลาง',
-    active: 'มาก',
-    very_active: 'หนัก',
-    น้อย: 'น้อย',
-    ปานกลาง: 'ปานกลาง',
-    มาก: 'มาก',
-    หนัก: 'หนัก',
-  };
-  return map[activity] || activity || 'น้อย';
+  return getActivityLabel(activity);
 };
 
 const registerUser = async (req, res) => {
@@ -147,13 +128,31 @@ const registerUser = async (req, res) => {
       age,
       normalizedActivity
     );
+    const targetCalories = calculateTargetCalories(
+      tdeeResult,
+      normalizedGoal
+    );
+    const proteinTargetG = Number(d.protein_target_g || 140);
+    const macroTargets = calculateMacroTargets(
+      targetCalories,
+      proteinTargetG
+    );
+    if (!macroTargets.valid) {
+      return res.status(400).json({
+        success: false,
+        message: macroTargets.message,
+      });
+    }
     const adviceText = generateAdvice(bmiResult.status, normalizedGoal);
 
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(d.password, salt);
 
+    const session = createSession();
     const newUser = {
       user_id: "U" + crypto.randomUUID(),
+      auth_token_hash: session.tokenHash,
+      auth_token_expires_at: session.expiresAt,
 
       // [หน้า 1] ข้อมูลบัญชี
       username: d.username,
@@ -166,6 +165,7 @@ const registerUser = async (req, res) => {
       // [หน้า 2 & 3] ร่างกาย
       height_cm: Number(d.height_cm),
       weight_kg: Number(d.weight_kg),
+      water_target_ml: getWaterTargetRange(Number(d.weight_kg)).minimum,
 
       body_analysis: {
         bmi: bmiResult.bmi,
@@ -179,13 +179,18 @@ const registerUser = async (req, res) => {
         target_weight_kg: d.target_weight_kg ? Number(d.target_weight_kg) : null,
         duration_weeks: d.duration_weeks ? Number(d.duration_weeks) : null,
         activity_level: normalizedActivity,
-        protein_target_g: d.protein_target_g ? Number(d.protein_target_g) : 140,
-        tdee_target_kcal: tdeeResult
+        protein_target_g: macroTargets.target_protein_g,
+        tdee_target_kcal: tdeeResult,
+        // v2: Stored daily targets (Single Source of Truth)
+        target_calories: targetCalories,
+        target_carb_g: macroTargets.target_carb_g,
+        target_fat_g: macroTargets.target_fat_g,
       },
 
 // [หน้า 6] การแพ้อาหาร (แก้ให้เป็น Object)
       allergies: (typeof d.allergies === 'object' && d.allergies !== null && !Array.isArray(d.allergies)) ? 
         d.allergies : { veg: [], condiment: [], meat: [], other: [] },
+      allergies_v2: Array.isArray(d.allergies_v2) ? d.allergies_v2 : [],
 
       // [หน้า 7] อาหารที่ไม่ชอบ (แก้ให้เป็น Object)
       disliked_foods: (typeof d.disliked_foods === 'object' && d.disliked_foods !== null && !Array.isArray(d.disliked_foods)) ? 
@@ -233,11 +238,16 @@ const registerUser = async (req, res) => {
     };
     await db.collection('BodyLogs').insertOne(initialBodyLog);
 
-    const { password, ...userWithoutPassword } = newUser;
+    const {
+      password,
+      auth_token_hash,
+      auth_token_expires_at,
+      ...userWithoutPassword
+    } = newUser;
 
     return res.status(201).json({
       message: "🎉 บันทึกข้อมูลสมาชิกและประวัติน้ำหนักเรียบร้อย!",
-      user: userWithoutPassword
+      user: { ...userWithoutPassword, access_token: session.token }
     });
   } catch (error) {
     console.error("Register Error:", error);
@@ -270,11 +280,27 @@ const loginUser = async (req, res) => {
       return res.status(401).json({ message: "รหัสผ่านไม่ถูกต้อง" });
     }
 
-    const { password: hiddenPassword, ...userWithoutPassword } = user;
+    const session = createSession();
+    await db.collection('Users').updateOne(
+      { user_id: user.user_id },
+      {
+        $set: {
+          auth_token_hash: session.tokenHash,
+          auth_token_expires_at: session.expiresAt,
+        },
+      }
+    );
+
+    const {
+      password: hiddenPassword,
+      auth_token_hash,
+      auth_token_expires_at,
+      ...userWithoutPassword
+    } = user;
 
     return res.status(200).json({
       message: "เข้าสู่ระบบสำเร็จ",
-      user: userWithoutPassword
+      user: { ...userWithoutPassword, access_token: session.token }
     });
   } catch (error) {
     console.error("Login Error:", error);

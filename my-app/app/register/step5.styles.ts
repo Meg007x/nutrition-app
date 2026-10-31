@@ -1,7 +1,9 @@
 import { StyleSheet, Platform } from "react-native";
 
 // 1. ใส่ export ให้ตัวแปรสี เพื่อส่งไปใช้ในไฟล์หลัก
+
 export const ORANGE = "#F5A400";
+
 export const BG = "#F3F3F3";
 export const IOS_GREEN = "#34C759";
 export const ROW_COLOR_1 = "#EBA032";

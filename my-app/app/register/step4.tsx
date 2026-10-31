@@ -40,6 +40,7 @@ const goalOptions: { label: string; value: GoalType }[] = [
  * ไม่ใช่ข้อกำหนดทางการแพทย์เฉพาะบุคคล
  */
 const GOAL_WEIGHT_PACE_KG_PER_WEEK = 0.5;
+const MAINTAIN_WEIGHT_TOLERANCE_KG = 2;
 
 export default function RegisterStep4Screen() {
   const { form, updateForm } = useRegister();
@@ -85,6 +86,9 @@ export default function RegisterStep4Screen() {
 
   const [warningMessage, setWarningMessage] =
     useState("");
+
+  const [warningTitle, setWarningTitle] =
+    useState("ตรวจสอบเป้าหมาย");
 
   const selectedGoalLabel = useMemo(() => {
     const found = goalOptions.find(
@@ -200,7 +204,7 @@ export default function RegisterStep4Screen() {
       return "ควรเพิ่มน้ำหนักอย่างค่อยเป็นค่อยไป โดยเน้นรับประทานอาหารที่มีคุณค่าทางโภชนาการและได้รับพลังงานเพียงพอ";
     }
 
-    return "เป้าหมายนี้เหมาะกับการรักษาน้ำหนักปัจจุบัน ควรเน้นการรับประทานอาหารที่สมดุลและการเคลื่อนไหวอย่างสม่ำเสมอ";
+    return `เป้าหมายนี้เน้นรักษาน้ำหนักให้อยู่ในช่วง ±${MAINTAIN_WEIGHT_TOLERANCE_KG} กก. จากน้ำหนักปัจจุบัน ช่วงเวลาที่เลือกใช้สำหรับติดตามและทบทวนเป้าหมาย ควรเน้นการรับประทานอาหารที่สมดุลและการเคลื่อนไหวอย่างสม่ำเสมอ`;
   }, [selectedGoalType]);
 
   const goalHint = useMemo(() => {
@@ -212,7 +216,7 @@ export default function RegisterStep4Screen() {
       return "ควรตั้งเป้าหมายให้มากกว่าน้ำหนักปัจจุบัน";
     }
 
-    return "สามารถใช้น้ำหนักปัจจุบันเป็นเป้าหมายได้";
+    return `ควรตั้งเป้าหมายไม่เกิน ±${MAINTAIN_WEIGHT_TOLERANCE_KG} กก. จากน้ำหนักปัจจุบัน`;
   }, [selectedGoalType]);
 
   const summaryText = useMemo(() => {
@@ -238,8 +242,12 @@ export default function RegisterStep4Screen() {
   /**
    * แสดง Warning
    */
-  const openWarning = (message: string) => {
+  const openWarning = (
+    message: string,
+    title = "ตรวจสอบเป้าหมาย"
+  ) => {
     Keyboard.dismiss();
+    setWarningTitle(title);
     setWarningMessage(message);
     setShowWarningModal(true);
   };
@@ -348,6 +356,28 @@ export default function RegisterStep4Screen() {
     }
 
     if (
+      selectedGoalType === "maintain" &&
+      Math.abs(safeTargetWeight - currentWeight) >
+        MAINTAIN_WEIGHT_TOLERANCE_KG
+    ) {
+      openWarning(
+        `เป้าหมายรักษารูปร่างควรอยู่ในช่วงน้ำหนักปัจจุบัน ±${MAINTAIN_WEIGHT_TOLERANCE_KG} กก.\n\nน้ำหนักปัจจุบัน ${currentWeight.toFixed(
+          1
+        )} กก.\nช่วงเป้าหมายที่กำหนดได้ ${Math.max(
+          0,
+          currentWeight - MAINTAIN_WEIGHT_TOLERANCE_KG
+        ).toFixed(1)}-${(
+          currentWeight + MAINTAIN_WEIGHT_TOLERANCE_KG
+        ).toFixed(1)} กก.\nน้ำหนักเป้าหมายที่กรอก ${safeTargetWeight.toFixed(
+          1
+        )} กก.\n\nกรุณาปรับน้ำหนักเป้าหมายให้อยู่ในช่วงที่กำหนด`,
+        "น้ำหนักเป้าหมายไม่อยู่ในช่วง"
+      );
+
+      return false;
+    }
+
+    if (
       selectedGoalType === "lose_weight" &&
       safeTargetWeight >= currentWeight
     ) {
@@ -356,7 +386,8 @@ export default function RegisterStep4Screen() {
           1
         )} กก.\nน้ำหนักเป้าหมาย ${safeTargetWeight.toFixed(
           1
-        )} กก.\n\nกรุณากำหนดน้ำหนักเป้าหมายให้น้อยกว่าน้ำหนักปัจจุบัน`
+        )} กก.\n\nกรุณากำหนดน้ำหนักเป้าหมายให้น้อยกว่าน้ำหนักปัจจุบัน`,
+        "น้ำหนักเป้าหมายไม่สอดคล้อง"
       );
 
       return false;
@@ -371,7 +402,8 @@ export default function RegisterStep4Screen() {
           1
         )} กก.\nน้ำหนักเป้าหมาย ${safeTargetWeight.toFixed(
           1
-        )} กก.\n\nกรุณากำหนดน้ำหนักเป้าหมายให้มากกว่าน้ำหนักปัจจุบัน`
+        )} กก.\n\nกรุณากำหนดน้ำหนักเป้าหมายให้มากกว่าน้ำหนักปัจจุบัน`,
+        "น้ำหนักเป้าหมายไม่สอดคล้อง"
       );
 
       return false;
@@ -415,7 +447,8 @@ export default function RegisterStep4Screen() {
         `${absoluteWeightDiff.toFixed(1)} กก.\n` +
         `แต่ระยะเวลา ${selectedWeekNumber} สัปดาห์สั้นเกินไปสำหรับเป้าหมายนี้\n\n` +
         `ระยะเวลาแนะนำโดยประมาณ: อย่างน้อย ${suggestedWeek} สัปดาห์\n\n` +
-        `กรุณาเลือกระยะเวลา ${suggestedWeek} สัปดาห์ขึ้นไป`
+        `กรุณาเลือกระยะเวลา ${suggestedWeek} สัปดาห์ขึ้นไป`,
+      "ระยะเวลาไม่เหมาะสม"
     );
 
     return false;
@@ -469,7 +502,7 @@ export default function RegisterStep4Screen() {
       goalDurationWeeks: selectedWeek,
     });
 
-    router.push("/register/step5");
+    router.push("/register/step5-activity");
   };
 
   /**
@@ -507,7 +540,8 @@ export default function RegisterStep4Screen() {
             `${absoluteWeightDiff.toFixed(1)} กก.\n` +
             `แต่ระยะเวลา ${selected} สัปดาห์สั้นเกินไปสำหรับเป้าหมายนี้\n\n` +
             `ระยะเวลาแนะนำโดยประมาณ: อย่างน้อย ${suggestedWeek} สัปดาห์\n\n` +
-            `กรุณาเลือกระยะเวลา ${suggestedWeek} สัปดาห์ขึ้นไป`
+            `กรุณาเลือกระยะเวลา ${suggestedWeek} สัปดาห์ขึ้นไป`,
+          "ระยะเวลาไม่เหมาะสม"
         );
       }
     }
@@ -720,6 +754,12 @@ export default function RegisterStep4Screen() {
           <Text style={styles.inputLabel}>
             ระยะเวลา (สัปดาห์)
           </Text>
+
+          {selectedGoalType === "maintain" && (
+            <Text style={styles.durationHelperText}>
+              ใช้กำหนดช่วงเวลาสำหรับติดตามและทบทวนเป้าหมาย ไม่ใช่กำหนดเวลาที่ต้องเปลี่ยนน้ำหนักให้ถึงเป้าหมาย
+            </Text>
+          )}
 
           <TouchableOpacity
             style={[
@@ -1051,7 +1091,7 @@ export default function RegisterStep4Screen() {
                   },
                 ]}
               >
-                ⚠️ ระยะเวลาไม่เหมาะสม
+                ⚠️ {warningTitle}
               </Text>
 
               <Text

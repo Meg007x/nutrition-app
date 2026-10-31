@@ -67,6 +67,28 @@ async function detectDishFromImage(ai, imagePath, mimeType) {
   };
 }
 
+function isRateLimitError(error) {
+  const statusText = String(
+    error?.status || error?.statusCode || error?.response?.status || ""
+  );
+  const status = Number(statusText);
+  const code = String(error?.code || error?.error?.status || "");
+  const message = String(
+    error?.message ||
+      error?.error?.message ||
+      error?.response?.data?.error?.message ||
+      error ||
+      ""
+  );
+
+  return (
+    status === 429 ||
+    /RESOURCE_EXHAUSTED|rate.?limit|quota|\b429\b/i.test(
+      `${statusText} ${code} ${message}`
+    )
+  );
+}
+
 async function findFoodInDatabase(aiDetection) {
   const rawKeywords = [
     aiDetection.dishName,
@@ -170,21 +192,41 @@ exports.analyzeFood = async (req, res) => {
       });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY?.trim();
     if (!apiKey) {
       throw new Error("ไม่พบ GEMINI_API_KEY ในไฟล์ .env");
     }
+    const apiKeys = [
+      apiKey,
+      process.env.GEMINI_API_KEY_BACKUP?.trim(),
+      process.env.GEMINI_API_KEY_BACKUP_2?.trim(),
+    ].filter((key, index, keys) => key && keys.indexOf(key) === index);
 
     console.log("📸 วิเคราะห์รูป:", req.file.filename);
 
-    const ai = new GoogleGenAI({ apiKey });
-
     // 1) AI ระบุชื่ออาหาร
-    const aiDetection = await detectDishFromImage(
-      ai,
-      req.file.path,
-      req.file.mimetype
-    );
+    let aiDetection;
+    for (let index = 0; index < apiKeys.length; index += 1) {
+      try {
+        const ai = new GoogleGenAI({ apiKey: apiKeys[index] });
+        aiDetection = await detectDishFromImage(
+          ai,
+          req.file.path,
+          req.file.mimetype
+        );
+        break;
+      } catch (error) {
+        if (index === apiKeys.length - 1 || !isRateLimitError(error)) {
+          throw error;
+        }
+
+        const providerLabel =
+          index === 0 ? "Gemini API หลัก" : `Gemini API สำรองลำดับ ${index}`;
+        console.warn(
+          `⚠️ ${providerLabel} ติด rate limit; กำลังลองใช้ API key ถัดไป`
+        );
+      }
+    }
 
     console.log("🤖 AI Detection:", aiDetection);
 
@@ -209,25 +251,38 @@ exports.analyzeFood = async (req, res) => {
     // 4) ดึงรายละเอียด ingredient จากคอลเลกชัน Ingredients
     const hydratedIngredients = await hydrateIngredients(food.ingredients || []);
 
-    // 5) คำนวณสารอาหารสดจาก ingredients × weight_g (v2)
-    const { calculateFromIngredients } = require("../utils/nutritionCalculator");
-    let dynamicNutrition = null;
-    if (hydratedIngredients.some(ing => (ing.weight_g || ing.qty) > 0)) {
-      dynamicNutrition = await calculateFromIngredients(hydratedIngredients);
-      if (dynamicNutrition.kcal === 0) dynamicNutrition = null; // fallback ถ้าไม่มีข้อมูล USDA
-    }
-
-    // ใช้ dynamic ถ้าได้, fallback เป็น static
-    const finalNutrition = dynamicNutrition || {
-      kcal: food.nutrition_per_portion?.kcal || 0,
-      protein_g: food.nutrition_per_portion?.protein_g || 0,
-      carb_g: food.nutrition_per_portion?.carb_g || 0,
-      fat_g: food.nutrition_per_portion?.fat_g || 0,
-      fiber_g: food.nutrition_per_portion?.fiber_g || 0,
-      sodium_mg: food.nutrition_per_portion?.sodium_mg || 0,
+    // Use the matched MasterFood document as the nutrition source of truth.
+    const portionNutrition = food.nutrition_per_portion || {};
+    const hasPortionNutrition = Number(portionNutrition.kcal) > 0;
+    const menuNutrition = hasPortionNutrition ? portionNutrition : (food.nutrition_per_100g || portionNutrition);
+    const nutritionFactor = hasPortionNutrition
+      ? 1
+      : (Number(food.portion_reference?.total_weight_g) || 100) / 100;
+    const finalNutrition = {
+      kcal: (Number(menuNutrition.kcal) || 0) * nutritionFactor,
+      protein_g: (Number(menuNutrition.protein_g) || 0) * nutritionFactor,
+      carb_g: (Number(menuNutrition.carb_g) || 0) * nutritionFactor,
+      fat_g: (Number(menuNutrition.fat_g) || 0) * nutritionFactor,
+      fiber_g: (Number(menuNutrition.fiber_g) || 0) * nutritionFactor,
+      sodium_mg: (Number(menuNutrition.sodium_mg) || 0) * nutritionFactor,
     };
 
-    // 6) ส่งข้อมูลกลับ
+    // 6) Allergen warning check
+    let allergen_warning = null;
+    const { user_id } = req.query;
+    if (user_id) {
+      const { checkFoodAllergens } = require("../utils/allergenChecker");
+      const User = require("../models/User");
+      const userDoc = await User.findOne({ $or: [{ user_id }, { username: user_id }, { email: user_id }] }).lean();
+      if (userDoc) {
+        // Build ingredient cache from hydrated ingredients
+        const ingDocMap = {};
+        hydratedIngredients.forEach(function(ing) { if (ing.ingredient_id) ingDocMap[ing.ingredient_id] = ing; });
+        allergen_warning = await checkFoodAllergens(food, userDoc, ingDocMap);
+      }
+    }
+
+    // 7) ส่งข้อมูลกลับ
     return res.json({
       success: true,
       source: "database",
@@ -253,6 +308,7 @@ exports.analyzeFood = async (req, res) => {
         ingredients: hydratedIngredients,
         allergens: food.allergens || [],
         allergens_summary: food.allergens_summary || [],
+        allergen_warning: allergen_warning,
       },
     });
   } catch (error) {
@@ -265,10 +321,7 @@ exports.analyzeFood = async (req, res) => {
     let errorMessage = "เกิดข้อผิดพลาดในการวิเคราะห์อาหาร";
     const rawMessage = error.message || "";
 
-    if (
-      rawMessage.includes("RESOURCE_EXHAUSTED") ||
-      rawMessage.includes("429")
-    ) {
+    if (isRateLimitError(error)) {
       errorMessage = "โควตา Gemini API เต็ม กรุณาลองใหม่อีกครั้งภายหลัง";
     } else if (rawMessage.includes("API key not valid")) {
       errorMessage = "API Key ไม่ถูกต้อง กรุณาตรวจสอบ GEMINI_API_KEY";

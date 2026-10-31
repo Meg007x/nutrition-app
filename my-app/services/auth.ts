@@ -14,10 +14,11 @@ const mapGoalToBackend = (goalType: RegisterData["goalType"]) => {
 
 const mapActivityToBackend = (activityLevel: RegisterData["activityLevel"]) => {
   if (activityLevel === "sedentary") return "น้อย";
-  if (activityLevel === "light") return "น้อย";
+  if (activityLevel === "light") return "เล็กน้อย";
   if (activityLevel === "moderate") return "ปานกลาง";
-  if (activityLevel === "active") return "มาก";
+  if (activityLevel === "active") return "หนัก";
   if (activityLevel === "very_active") return "หนัก";
+  if (activityLevel === "extra_active") return "หนักมาก";
   return "น้อย";
 };
 
@@ -87,6 +88,7 @@ export async function registerUserFromForm(form: RegisterData): Promise<AuthResp
     protein_target_g: form.recommendedProteinG ?? null,
 
     allergies: form.allergies,
+    allergies_v2: form.allergies_v2,
     disliked_foods: form.dislikedFoods,
     interested_cuisines: form.interestedCuisines,
 

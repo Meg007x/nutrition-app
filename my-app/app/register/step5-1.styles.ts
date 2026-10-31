@@ -1,7 +1,9 @@
 import { StyleSheet, Platform } from "react-native";
 
 // 1. ใส่ export ให้ตัวแปรสี เพื่อส่งไปใช้ในไฟล์หลัก
+
 export const ORANGE = "#F5A400";
+
 export const BG = "#F3F3F3";
 export const IOS_GREEN = "#34C759";
 export const ROW_COLOR_1 = "#EBA032";
@@ -9,7 +11,7 @@ export const ROW_COLOR_2 = "#DF9226";
 export const WHITE = "#FFFFFF"; 
 
 // สีสำหรับสถานะการแจ้งเตือน
-export const WARN_COLOR = "#FF9500";
+export const WARN_COLOR = "#EBA032";
 export const ERROR_COLOR = "#FF3B30";
 
 // 2. ตัวแปรฟอนต์
@@ -69,11 +71,76 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     fontFamily: FONT_REGULAR,
   },
+
+  // --- Help Button (mirrors step5) ---
+  helpButtonWrap: {
+    marginTop: 12,
+    alignItems: "flex-end",
+  },
+  helperButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
+  },
+  helperButtonText: {
+    fontSize: 14,
+    color: "#666",
+    fontFamily: FONT_BOLD,
+  },
+
+  // --- Info Modal (mirrors step5) ---
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    padding: 24,
+  },
+  modalCard: {
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    padding: 22,
+  },
+  modalTitle: {
+    fontSize: 22,
+    textAlign: "center",
+    color: "#111",
+    marginBottom: 14,
+    fontFamily: FONT_BOLD,
+  },
+  modalItem: {
+    marginBottom: 14,
+  },
+  modalItemTitle: {
+    fontSize: 16,
+    color: "#111",
+    fontFamily: FONT_BOLD,
+  },
+  modalItemDesc: {
+    marginTop: 4,
+    fontSize: 14,
+    color: "#555",
+    lineHeight: 21,
+    fontFamily: FONT_REGULAR,
+  },
+  modalCloseButton: {
+    marginTop: 16,
+    backgroundColor: ORANGE,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  modalCloseText: {
+    color: "#fff",
+    fontSize: 16,
+    fontFamily: FONT_BOLD,
+  },
   
   modeRow: {
     flexDirection: "row",
     gap: 12,
-    marginBottom: 16,
+    marginTop: 12,
+    marginBottom: 20,
   },
 
   modeButton: {
@@ -103,6 +170,7 @@ const styles = StyleSheet.create({
 
   optionList: {
     gap: 12,
+    marginTop: 12,
   },
 
   optionCard: {

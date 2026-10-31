@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Platform,
   Modal,
+  TextInput,
 } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -22,13 +23,20 @@ import {
   BLUE,
   BLUE_DARK,
   TEXT,
+  WHITE,
 } from "../style/water-log.styles";
 import { BASE_URL } from "../constants/config";
+import {
+  notifyWaterGoalReached,
+  startWebWaterReminderTimer,
+  syncWaterReminderSchedule,
+} from "../utils/notificationService";
 
 type WaterRecord = {
   time: string;
   amount_ml: number;
   container_type?: "glass" | "bottle";
+  last_edited_at?: string;
 };
 
 type WaterLogDoc = {
@@ -91,6 +99,9 @@ const getContainerLabel = (containerType?: "glass" | "bottle") => {
   return "น้ำเปล่า (แก้ว)";
 };
 
+const getWaterReminderPreferenceKey = (id: string) =>
+  `water_reminders_enabled_${id}`;
+
 export default function WaterLogScreen() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [userId, setUserId] = useState("");
@@ -105,6 +116,18 @@ export default function WaterLogScreen() {
     index: number;
     item: WaterRecord;
   } | null>(null);
+  const [itemToEdit, setItemToEdit] = useState<{
+    index: number;
+    item: WaterRecord;
+  } | null>(null);
+  const [editAmount, setEditAmount] = useState("");
+  const [editTime, setEditTime] = useState("");
+  const [editPickerTime, setEditPickerTime] = useState("");
+  const [editContainerType, setEditContainerType] = useState<"glass" | "bottle">("glass");
+  const [showEditTimePicker, setShowEditTimePicker] = useState(false);
+  const [editError, setEditError] = useState("");
+  const [waterRemindersEnabled, setWaterRemindersEnabled] = useState(false);
+  const [reminderPreferenceLoaded, setReminderPreferenceLoaded] = useState(false);
 
   const today = getTodayDateString();
   const isToday = selectedDate === today;
@@ -136,7 +159,7 @@ export default function WaterLogScreen() {
     }
   };
 
-  const fetchWaterLog = async () => {
+  const fetchWaterLog = useCallback(async () => {
     if (!userId) return;
     try {
       setLoading(true);
@@ -153,16 +176,38 @@ export default function WaterLogScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId, selectedDate]);
 
   useEffect(() => {
     loadCurrentUser();
   }, []);
 
   useEffect(() => {
-    if (!userId) return;
     fetchWaterLog();
-  }, [userId, selectedDate]);
+  }, [fetchWaterLog]);
+
+  useEffect(() => {
+    if (!userId) {
+      setReminderPreferenceLoaded(false);
+      return;
+    }
+
+    let active = true;
+    AsyncStorage.getItem(getWaterReminderPreferenceKey(userId))
+      .then((value) => {
+        if (active) setWaterRemindersEnabled(value === "true");
+      })
+      .catch((error) => {
+        console.error("Load water reminder preference error:", error);
+      })
+      .finally(() => {
+        if (active) setReminderPreferenceLoaded(true);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [userId]);
 
   const totalMl = waterLog?.total_drank_ml || 0;
   const targetMl =
@@ -177,6 +222,47 @@ export default function WaterLogScreen() {
   }, [totalMl, targetMl]);
 
   const progressPercent = Math.round(progress * 100);
+
+  useEffect(() => {
+    if (!userId || !isToday || !reminderPreferenceLoaded) return;
+
+    let cancelled = false;
+    let stopWebTimer = () => {};
+    syncWaterReminderSchedule({
+      userId,
+      enabled: waterRemindersEnabled,
+      totalMl,
+      targetMl,
+    })
+      .then((result) => {
+        if (cancelled) return;
+        if (!result.ok) {
+          console.error("Water reminder permission is not granted");
+        }
+        if (
+          Platform.OS === "web" &&
+          waterRemindersEnabled &&
+          !result.completed
+        ) {
+          stopWebTimer = startWebWaterReminderTimer({ totalMl, targetMl });
+        }
+      })
+      .catch((error) => {
+        console.error("Sync water reminder schedule error:", error);
+      });
+
+    return () => {
+      cancelled = true;
+      stopWebTimer();
+    };
+  }, [
+    userId,
+    isToday,
+    reminderPreferenceLoaded,
+    waterRemindersEnabled,
+    totalMl,
+    targetMl,
+  ]);
 
   const addWaterLog = async (
     amount: number,
@@ -212,6 +298,14 @@ export default function WaterLogScreen() {
       if (!response.ok || !res.success) {
         throw new Error(res.error || "ไม่สามารถบันทึกการดื่มน้ำได้");
       }
+      void notifyWaterGoalReached({
+        userId,
+        date: new Date(),
+        previousTotalMl: totalMl,
+        totalMl: Number(res.waterLog?.total_drank_ml || 0),
+        targetMl,
+        enabled: waterRemindersEnabled,
+      }).catch((error) => console.error("Notify water goal completion error:", error));
       setWaterLog(res.waterLog);
     } catch (error: any) {
       Alert.alert("เกิดข้อผิดพลาด", error.message || "บันทึกน้ำไม่สำเร็จ");
@@ -237,6 +331,135 @@ export default function WaterLogScreen() {
       setWaterLog(res.waterLog);
     } catch (error: any) {
       Alert.alert("เกิดข้อผิดพลาด", error.message || "ลบรายการไม่สำเร็จ");
+    }
+  };
+
+  const handlePressEdit = (index: number, item: WaterRecord) => {
+    if (!isToday) {
+      if (Platform.OS === "web") {
+        window.alert("ไม่สามารถแก้ไขได้\nสามารถแก้ไขรายการน้ำได้เฉพาะวันปัจจุบันเท่านั้น");
+      } else {
+        Alert.alert("ไม่สามารถแก้ไขได้", "สามารถแก้ไขรายการน้ำได้เฉพาะวันปัจจุบันเท่านั้น");
+      }
+      return;
+    }
+
+    setItemToEdit({ index, item });
+    setEditAmount(String(item.amount_ml));
+    setEditTime(item.time);
+    setEditContainerType(item.container_type || "glass");
+    setEditError("");
+  };
+
+  const cancelEdit = () => {
+    setItemToEdit(null);
+    setEditAmount("");
+    setEditTime("");
+    setEditPickerTime("");
+    setShowEditTimePicker(false);
+    setEditError("");
+  };
+
+  const openEditTimePicker = () => {
+    setEditPickerTime(editTime);
+    setShowEditTimePicker(true);
+  };
+
+  const selectEditTimePart = (part: "hours" | "minutes", value: number) => {
+    const [selectedHours, selectedMinutes] = editPickerTime.split(":").map(Number);
+    const nextHours = part === "hours" ? value : selectedHours;
+    let nextMinutes = part === "minutes" ? value : selectedMinutes;
+    const now = new Date();
+
+    if (isToday) {
+      if (nextHours > now.getHours()) return;
+      if (nextHours === now.getHours() && nextMinutes > now.getMinutes()) {
+        if (part === "hours") {
+          nextMinutes = now.getMinutes();
+        } else {
+          return;
+        }
+      }
+    }
+
+    setEditPickerTime(
+      `${String(nextHours).padStart(2, "0")}:${String(nextMinutes).padStart(2, "0")}`
+    );
+  };
+
+  const confirmEditTime = () => {
+    const now = new Date();
+    const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    if (isToday && editPickerTime > currentTime) {
+      Alert.alert("เวลาไม่ถูกต้อง", "ไม่สามารถเลือกเวลาในอนาคตได้");
+      return;
+    }
+    setEditTime(editPickerTime);
+    setShowEditTimePicker(false);
+  };
+
+  const saveWaterRecord = async () => {
+    if (!userId || !itemToEdit) return;
+    setEditError("");
+
+    const amount = Number(editAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setEditError("ปริมาณน้ำต้องมากกว่า 0 ml");
+      return;
+    }
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(editTime)) {
+      setEditError("กรุณาเลือกเวลาให้ถูกต้อง");
+      return;
+    }
+    const now = new Date();
+    const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    if (isToday && editTime > currentTime) {
+      setEditError("ไม่สามารถเลือกเวลาในอนาคตได้");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const response = await fetch(
+        `${BASE_URL}/api/water-logs/${userId}/${selectedDate}/${itemToEdit.index}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            amount_ml: amount,
+            time: editTime,
+            container_type: editContainerType,
+          }),
+        }
+      );
+      const responseText = await response.text();
+      let res: { success?: boolean; error?: string; waterLog?: WaterLogDoc };
+      try {
+        res = JSON.parse(responseText);
+      } catch {
+        throw new Error(`เซิร์ฟเวอร์ส่งคำตอบที่อ่านไม่ได้ (HTTP ${response.status})`);
+      }
+      if (!response.ok || !res.success || !res.waterLog) {
+        throw new Error(res.error || `บันทึกไม่สำเร็จ (HTTP ${response.status})`);
+      }
+      void notifyWaterGoalReached({
+        userId,
+        date: new Date(),
+        previousTotalMl: totalMl,
+        totalMl: Number(res.waterLog.total_drank_ml || 0),
+        targetMl,
+        enabled: waterRemindersEnabled,
+      }).catch((error) => console.error("Notify water goal completion error:", error));
+      setWaterLog(res.waterLog);
+      cancelEdit();
+    } catch (error: any) {
+      const message = error.message || "แก้ไขรายการไม่สำเร็จ";
+      setEditError(message);
+      if (Platform.OS === "web") {
+        window.alert(`บันทึกไม่สำเร็จ\n${message}`);
+      }
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -401,17 +624,37 @@ export default function WaterLogScreen() {
                 <View style={styles.logMiddle}>
                   <Text style={styles.logTitle}>{getContainerLabel(item.container_type)}</Text>
                   <Text style={styles.logSubtitle}>ปริมาณน้ำ</Text>
+                  {item.last_edited_at && (
+                    <Text style={styles.logEditedAt}>
+                      แก้ไขล่าสุด {new Date(item.last_edited_at).toLocaleTimeString("th-TH", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })} น.
+                    </Text>
+                  )}
                 </View>
                 <View style={styles.logRight}>
                   <Text style={styles.logAmount}>+{item.amount_ml} ml</Text>
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={() => handlePressDelete(index, item)}
-                    disabled={!isToday}
-                    style={styles.deleteIconButton}
-                  >
-                    <Ionicons name="trash-outline" size={18} color={!isToday ? "#C8C8C8" : "#D9534F"} />
-                  </TouchableOpacity>
+                  <View style={styles.logActions}>
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={() => handlePressEdit(index, item)}
+                      disabled={!isToday}
+                      style={styles.deleteIconButton}
+                      accessibilityLabel="แก้ไขรายการน้ำ"
+                    >
+                      <Ionicons name="create-outline" size={18} color={!isToday ? "#C8C8C8" : BLUE} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={() => handlePressDelete(index, item)}
+                      disabled={!isToday}
+                      style={styles.deleteIconButton}
+                      accessibilityLabel="ลบรายการน้ำ"
+                    >
+                      <Ionicons name="trash-outline" size={18} color={!isToday ? "#C8C8C8" : "#D9534F"} />
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
             ))}
@@ -456,6 +699,185 @@ export default function WaterLogScreen() {
                 <Text style={styles.modalConfirmText}>ลบรายการ</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={itemToEdit !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={cancelEdit}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <ScrollView
+              style={styles.editModalScroll}
+              contentContainerStyle={styles.editModalScrollContent}
+              keyboardShouldPersistTaps="always"
+              showsVerticalScrollIndicator={false}
+            >
+            <View style={styles.editModalIconWrap}>
+              <Ionicons name="water-outline" size={30} color={BLUE} />
+            </View>
+            <Text style={styles.modalTitle}>แก้ไขรายการน้ำ</Text>
+
+            <Text style={styles.editFieldLabel}>ปริมาณ (ml)</Text>
+            <TextInput
+              value={editAmount}
+              onChangeText={setEditAmount}
+              keyboardType="decimal-pad"
+              style={styles.editInput}
+              placeholder="เช่น 250"
+              accessibilityLabel="ปริมาณน้ำ มิลลิลิตร"
+            />
+
+            <Text style={styles.editFieldLabel}>เวลา (ชั่วโมง:นาที)</Text>
+            <TouchableOpacity
+              style={styles.editTimeButton}
+              onPress={openEditTimePicker}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={`เลือกเวลาดื่มน้ำ ${editTime}`}
+            >
+              <Text style={styles.editTimeText}>{editTime} น.</Text>
+              <Ionicons name="time-outline" size={20} color={BLUE_DARK} />
+            </TouchableOpacity>
+            {showEditTimePicker && (
+              <View style={styles.timePickerWrap}>
+                <View style={styles.timePickerColumns}>
+                  <View style={styles.timePickerColumnWrap}>
+                    <Text style={styles.timePickerColumnTitle}>ชั่วโมง</Text>
+                    <ScrollView
+                      style={styles.timePickerColumn}
+                      nestedScrollEnabled
+                      showsVerticalScrollIndicator
+                    >
+                      {Array.from({ length: 24 }, (_, hour) => {
+                        const [selectedHours] = editPickerTime.split(":").map(Number);
+                        const disabled = isToday && hour > new Date().getHours();
+                        const selected = hour === selectedHours;
+                        return (
+                          <TouchableOpacity
+                            key={hour}
+                            style={[styles.timePickerOption, selected && styles.timePickerOptionSelected]}
+                            onPress={() => selectEditTimePart("hours", hour)}
+                            disabled={disabled}
+                            accessibilityState={{ disabled, selected }}
+                          >
+                            <Text style={[
+                              styles.timePickerOptionText,
+                              selected && styles.timePickerOptionTextSelected,
+                              disabled && styles.timePickerOptionTextDisabled,
+                            ]}>
+                              {String(hour).padStart(2, "0")}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                  <View style={styles.timePickerColumnWrap}>
+                    <Text style={styles.timePickerColumnTitle}>นาที</Text>
+                    <ScrollView
+                      style={styles.timePickerColumn}
+                      nestedScrollEnabled
+                      showsVerticalScrollIndicator
+                    >
+                      {Array.from({ length: 60 }, (_, minute) => {
+                        const [selectedHours, selectedMinutes] = editPickerTime.split(":").map(Number);
+                        const now = new Date();
+                        const disabled = isToday &&
+                          (selectedHours > now.getHours() ||
+                            (selectedHours === now.getHours() && minute > now.getMinutes()));
+                        const selected = minute === selectedMinutes;
+                        return (
+                          <TouchableOpacity
+                            key={minute}
+                            style={[styles.timePickerOption, selected && styles.timePickerOptionSelected]}
+                            onPress={() => selectEditTimePart("minutes", minute)}
+                            disabled={disabled}
+                            accessibilityState={{ disabled, selected }}
+                          >
+                            <Text style={[
+                              styles.timePickerOptionText,
+                              selected && styles.timePickerOptionTextSelected,
+                              disabled && styles.timePickerOptionTextDisabled,
+                            ]}>
+                              {String(minute).padStart(2, "0")}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={styles.timePickerDoneButton}
+                  onPress={confirmEditTime}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.timePickerDoneText}>เสร็จสิ้น</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <Text style={styles.editFieldLabel}>ภาชนะ</Text>
+            <View style={styles.containerTypeRow}>
+              {(["glass", "bottle"] as const).map((containerType) => {
+                const selected = editContainerType === containerType;
+                return (
+                  <TouchableOpacity
+                    key={containerType}
+                    style={[
+                      styles.containerTypeButton,
+                      selected && styles.containerTypeButtonSelected,
+                    ]}
+                    onPress={() => {
+                      setEditContainerType(containerType);
+                      setEditAmount(containerType === "glass" ? "250" : "600");
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Text
+                      style={[
+                        styles.containerTypeText,
+                        selected && styles.containerTypeTextSelected,
+                      ]}
+                    >
+                      {containerType === "glass" ? "แก้ว" : "ขวด"}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <View style={styles.modalButtonRow}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancelBtn]}
+                onPress={cancelEdit}
+                activeOpacity={0.8}
+                disabled={saving}
+              >
+                <Text style={styles.modalCancelText}>ยกเลิก</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.editConfirmBtn]}
+                onPress={saveWaterRecord}
+                activeOpacity={0.8}
+                disabled={saving}
+              >
+                {saving ? (
+                  <ActivityIndicator color={WHITE} />
+                ) : (
+                  <Text style={styles.modalConfirmText}>บันทึก</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+            {editError ? (
+              <Text style={styles.editErrorText}>{editError}</Text>
+            ) : null}
+            </ScrollView>
           </View>
         </View>
       </Modal>

@@ -7,7 +7,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BASE_URL } from '../../constants/config';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Brand } from '../../constants/theme';
 
 const DEFAULT_AVATAR = 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png';
@@ -69,12 +69,18 @@ const ProfileScreen: React.FC = () => {
       const userJson = await AsyncStorage.getItem('currentUser');
       if (!userJson) return;
       const userObj = JSON.parse(userJson);
-      const userId = userObj.user_id || userObj.id;
+      if (!userObj.access_token) {
+        Alert.alert('กรุณาเข้าสู่ระบบใหม่', 'เซสชันไม่ถูกต้องหรือหมดอายุ');
+        return;
+      }
 
       const response = await fetch(`${BASE_URL}/api/users/profile-picture`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, avatar_url: avatarData }),
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${userObj.access_token}`,
+        },
+        body: JSON.stringify({ avatar_url: avatarData }),
       });
       const json = await response.json();
       if (json.success) {
@@ -84,6 +90,8 @@ const ProfileScreen: React.FC = () => {
         await AsyncStorage.setItem('currentUser', JSON.stringify(updatedUser));
         setUserData((prev: any) => ({ ...prev, avatar_url: savedUrl }));
         Alert.alert('สำเร็จ', 'อัปเดตรูปโปรไฟล์แล้ว');
+      } else {
+        Alert.alert('ไม่สำเร็จ', json.message || 'ไม่สามารถอัปเดตรูปโปรไฟล์ได้');
       }
     } catch (error) {
       console.error('Upload error:', error);
@@ -127,12 +135,6 @@ const ProfileScreen: React.FC = () => {
       icon: () => <MaterialCommunityIcons name="emoticon-sad" size={24} color={Brand.primary} />,
       path: '/profile/editDislikedFoodScreen' // 👈 เติมที่อยู่หน้าใหม่เข้าไปตรงนี้เลยครับ!
      },
-    { id: 6, 
-      title: 'อาหารที่สนใจ',
-       subtitle: 'หมวดอาหารที่สนใจ', 
-       icon: () => <MaterialCommunityIcons name="emoticon-happy" size={24} color="#388E3C" />,
-       path: '/profile/editInterestedCuisinesScreen' // 👈 เติมที่อยู่หน้าใหม่เข้าไปตรงนี้เลยครับ! 
-      },
     { id: 7, title: 
       'แผนมื้ออาหารและน้ำ', 
       subtitle: 'จำนวนมื้อ เวลา ปริมาณน้ำ', 

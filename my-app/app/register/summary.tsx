@@ -12,6 +12,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { useRegister } from "../../context/register-context";
 import { registerUserFromForm } from "../../services/auth";
+import { getActivityFactor } from "../../utils/activityLevels";
+import { calculateTargetCalories } from "../../utils/calorieTargets";
 
 type BmiStatus = {
   label: string;
@@ -90,7 +92,8 @@ export default function RegisterSummaryScreen() {
   const targetCalories = useMemo(() => {
     if (!weight || !heightCm || !age) return 0;
 
-    const genderFactor = form.gender === "หญิง" ? -161 : 5;
+    const genderFactor =
+      form.gender === "ชาย" || form.gender === "male" ? 5 : -161;
 
     const bmr =
       10 * weight +
@@ -98,35 +101,8 @@ export default function RegisterSummaryScreen() {
       5 * age +
       genderFactor;
 
-    let activityMultiplier = 1.2;
-
-    if (form.activityLevel === "light") {
-      activityMultiplier = 1.2;
-    }
-
-    if (form.activityLevel === "moderate") {
-      activityMultiplier = 1.375;
-    }
-
-    if (form.activityLevel === "active") {
-      activityMultiplier = 1.55;
-    }
-
-    if (form.activityLevel === "very_active") {
-      activityMultiplier = 1.725;
-    }
-
-    let tdee = bmr * activityMultiplier;
-
-    if (form.goalType === "lose_weight") {
-      tdee -= 300;
-    }
-
-    if (form.goalType === "gain_weight") {
-      tdee += 300;
-    }
-
-    return Math.round(tdee);
+    const tdee = bmr * getActivityFactor(form.activityLevel);
+    return calculateTargetCalories(tdee, form.goalType);
   }, [
     weight,
     heightCm,
@@ -220,7 +196,7 @@ export default function RegisterSummaryScreen() {
       // ==================================================
 
       router.replace(
-        "/create-plan/step1"
+        "/create-plan/water-target"
       );
 
     } catch (error: any) {
@@ -302,6 +278,10 @@ export default function RegisterSummaryScreen() {
             </Text>
           </View>
         </View>
+
+        <Text style={styles.targetDisclaimer}>
+          เป้าหมายสารอาหารที่แนะนำให้ได้รับต่อวัน
+        </Text>
 
         <View style={styles.statusRow}>
           <View
@@ -437,7 +417,7 @@ export default function RegisterSummaryScreen() {
                 styles.startButtonText
               }
             >
-              เริ่มต้นแผนการกินของคุณ
+              ตั้งเป้าหมายและเริ่มสร้างแผน
             </Text>
 
             <Text style={styles.startArrow}>
@@ -499,6 +479,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     marginBottom: 26,
+  },
+
+  targetDisclaimer: {
+    color: "#676767",
+    fontSize: 12,
+    fontFamily: "NotoSansThai",
+    textAlign: "center",
+    marginTop: -16,
+    marginBottom: 16,
   },
 
   statItem: {

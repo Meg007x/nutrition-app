@@ -17,6 +17,9 @@ const WaterRecordSchema = new mongoose.Schema(
       enum: ["glass", "bottle"],
       default: "glass",
     },
+    last_edited_at: {
+      type: Date,
+    },
   },
   { _id: false }
 );
@@ -40,6 +43,7 @@ const WaterLogSchema = new mongoose.Schema(
       required: true,
       default: 2000,
       min: 0,
+      max: 4000,
     },
     total_drank_ml: {
       type: Number,

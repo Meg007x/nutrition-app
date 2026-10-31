@@ -7,6 +7,7 @@ import {
   Modal,
   Pressable,
   FlatList,
+  ScrollView,
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from "react-native";
@@ -171,7 +172,11 @@ export default function RegisterStep3Screen() {
         <Text style={styles.headerBarText}>ลงทะเบียนผู้ใช้งาน</Text>
       </View>
 
-      <View style={styles.content}>
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.titleRow}>
           <Text style={styles.stepTitle}>3.น้ำหนัก</Text>
 
@@ -291,7 +296,7 @@ export default function RegisterStep3Screen() {
             <Text style={styles.nextButtonText}>ถัดไป</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </ScrollView>
 
       <Modal visible={showInfoModal} transparent animationType="fade">
         <Pressable

@@ -12,9 +12,9 @@ const tintColorDark = '#fff';
 // Official Brand / Primary Color Palette
 // =============================================
 export const Brand = {
-  primary: '#F26522',
-  primaryLight: '#FFF3EB',
-  primaryDark: '#D4550E',
+  primary: '#DF9226',
+  primaryLight: '#EBA032',
+  primaryDark: '#C67A1A',
 
   white: '#FFFFFF',
   black: '#000000',

@@ -20,12 +20,15 @@ const UserSchema = new mongoose.Schema(
     username: { type: String, default: "" },
     email: { type: String, default: "" },
     password: { type: String, default: "" },
+    auth_token_hash: { type: String, default: "", select: false },
+    auth_token_expires_at: { type: Date, default: null },
     avatar_url: { type: String, default: "" },
     gender: { type: String, default: "" },
     date_of_birth: { type: Date, default: null },
     age: { type: Number, default: 0 },
     height_cm: { type: Number, default: 0 },
     weight_kg: { type: Number, default: 0 },
+    water_target_ml: { type: Number, default: 2000, min: 0, max: 4000 },
 
     body_analysis: {
       bmi: { type: Number, default: 0 },
@@ -40,6 +43,10 @@ const UserSchema = new mongoose.Schema(
       activity_level: { type: String, default: "" },
       protein_target_g: { type: Number, default: 0 },
       tdee_target_kcal: { type: Number, default: 0 },
+      // v2: Stored daily targets (Single Source of Truth)
+      target_calories: { type: Number, default: 0 },
+      target_carb_g: { type: Number, default: 0 },
+      target_fat_g: { type: Number, default: 0 },
     },
 
     // ── v2: allergies เปลี่ยนเป็น structured array ──
@@ -68,10 +75,23 @@ const UserSchema = new mongoose.Schema(
       veg_fruit: { type: [String], default: [] },
     },
 
+    // v2: structured disliked ingredients (flat array for easy filtering)
+    disliked_ingredients_v2: {
+      type: [{
+        ingredient_id: { type: String, default: null },
+        name: { type: String, default: "" },
+        category_key: { type: String, default: "" },
+        category_name: { type: String, default: "" },
+        sub_category: { type: String, default: "" },
+      }],
+      default: [],
+    },
+
     interested_cuisines: { type: [String], default: [] },
 
     meal_settings: {
       meals_per_day: { type: Number, default: 3 },
+      hide_allergen_meals: { type: Boolean, default: false },
       schedules: [
         {
           name: { type: String, default: "" },
@@ -101,5 +121,6 @@ const UserSchema = new mongoose.Schema(
 
 UserSchema.index({ user_id: 1 }, { unique: true });
 UserSchema.index({ email: 1 }, { sparse: true });
+UserSchema.index({ auth_token_hash: 1, auth_token_expires_at: 1 });
 
 module.exports = mongoose.model("User", UserSchema);

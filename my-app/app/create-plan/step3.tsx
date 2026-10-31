@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 import {
   View,
@@ -9,6 +9,7 @@ import {
   StatusBar,
   Switch,
   Alert,
+  Platform,
 } from "react-native";
 
 import { Ionicons } from "@expo/vector-icons";
@@ -19,6 +20,7 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { BASE_URL } from "../../constants/config";
 import { Brand } from "../../constants/theme";
+import { getWaterTargetRange } from "../../utils/waterTargets";
 
 // ======================================================
 // Component
@@ -81,7 +83,25 @@ export default function Step3Screen() {
 
   // เป้าหมายน้ำเริ่มต้น
   const [waterTarget, setWaterTarget] =
-    useState(2200);
+    useState(2000);
+  const [waterRange, setWaterRange] = useState(() => getWaterTargetRange(0));
+
+  useEffect(() => {
+    const loadSavedWaterTarget = async () => {
+      const raw = await AsyncStorage.getItem("currentUser");
+      if (!raw) return;
+
+      const user = JSON.parse(raw);
+      const range = getWaterTargetRange(Number(user?.weight_kg || 0));
+      const savedTarget = Number(user?.water_target_ml || range.minimum);
+      setWaterRange(range);
+      setWaterTarget(Math.min(range.maximum, Math.max(range.minimum, savedTarget)));
+    };
+
+    loadSavedWaterTarget().catch((error) => {
+      console.error("Load water target error:", error);
+    });
+  }, []);
 
   // เปิด / ปิด การแจ้งเตือน
   const [notificationEnabled, setNotificationEnabled] =
@@ -91,8 +111,8 @@ export default function Step3Screen() {
   // Water Range
   // ====================================================
 
-  const MIN_WATER = 1500;
-  const MAX_WATER = 4500;
+  const MIN_WATER = waterRange.minimum;
+  const MAX_WATER = waterRange.maximum;
   const STEP = 100;
 
   // ====================================================
@@ -123,11 +143,13 @@ export default function Step3Screen() {
 
   const sliderPercent = useMemo(() => {
     return (
-      ((waterTarget - MIN_WATER) /
-        (MAX_WATER - MIN_WATER)) *
+      (MAX_WATER === MIN_WATER
+        ? 0
+        : (waterTarget - MIN_WATER) /
+          (MAX_WATER - MIN_WATER)) *
       100
     );
-  }, [waterTarget]);
+  }, [waterTarget, MIN_WATER, MAX_WATER]);
 
   // ====================================================
   // Start Using
@@ -140,29 +162,31 @@ export default function Step3Screen() {
 
     try {
       setSaving(true);
-      let userId = "";
-      for (const k of ["user_id", "userId"]) {
-        const v = await AsyncStorage.getItem(k);
-        if (v) { userId = v; break; }
-      }
-      if (!userId) {
-        const raw = await AsyncStorage.getItem("currentUser");
-        if (raw) { const o = JSON.parse(raw); if (o?.user_id) userId = String(o.user_id); }
-      }
+      const raw = await AsyncStorage.getItem("currentUser");
+      const user = raw ? JSON.parse(raw) : null;
+      const userId = user?.user_id;
+      if (!userId) throw new Error("ไม่พบข้อมูลผู้ใช้ กรุณาเข้าสู่ระบบใหม่");
 
-      if (userId) {
-        const resp = await fetch(`${BASE_URL}/api/users/update-meal-water-settings`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId, water_target_ml: waterTarget }),
-        });
-        console.log("💧 Water save:", await resp.json());
+      const response = await fetch(`${BASE_URL}/api/users/water-target`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, water_target_ml: waterTarget }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "ไม่สามารถบันทึกเป้าหมายน้ำได้");
       }
+      await AsyncStorage.setItem(
+        "currentUser",
+        JSON.stringify({ ...user, water_target_ml: waterTarget })
+      );
+      router.replace("/(tabs)/plan");
     } catch (e: any) {
-      console.warn("⚠️ Water save failed:", e?.message);
+      const message = e?.message || "ไม่สามารถบันทึกเป้าหมายน้ำได้";
+      if (Platform.OS === "web") window.alert(message);
+      else Alert.alert("บันทึกไม่สำเร็จ", message);
     } finally {
       setSaving(false);
-      router.replace("/(tabs)/plan");
     }
   };
 
@@ -174,7 +198,7 @@ export default function Step3Screen() {
     <SafeAreaView style={styles.container}>
       <StatusBar
         barStyle="dark-content"
-        backgroundColor="Brand.primary"
+        backgroundColor={Brand.primary}
       />
 
       {/* ============================================= */}
@@ -282,15 +306,15 @@ export default function Step3Screen() {
           <View style={styles.sliderLabels}>
 
             <Text style={styles.sliderLabel}>
-              ขั้นต่ำ (1.5 L)
+              ขั้นต่ำ ({(MIN_WATER / 1000).toLocaleString()} L)
             </Text>
 
             <Text style={styles.sliderLabel}>
-              แนะนำ (2.2 L)
+              ปรับได้ทีละ 100 ml
             </Text>
 
             <Text style={styles.sliderLabel}>
-              มาก (4.5 L)
+              สูงสุด ({(MAX_WATER / 1000).toLocaleString()} L)
             </Text>
 
           </View>
@@ -332,6 +356,15 @@ export default function Step3Screen() {
           </View>
 
         </View>
+
+        {waterRange.isCapped && (
+          <Text style={styles.waterSafetyWarning}>
+            ระบบจำกัดเป้าหมายไว้ไม่เกิน 4,000 ml ซึ่งเป็นขีดจำกัดของแอป
+            ไม่ใช่ปริมาณที่เหมาะกับทุกคน การดื่มน้ำมากเกินไปในเวลาสั้นอาจเป็นอันตรายได้
+            หากเป็นนักกีฬาหรือออกกำลังกายหนักเป็นพิเศษ ควรปรึกษาแพทย์
+            เพื่อปรับปริมาณน้ำดื่มที่เหมาะสม
+          </Text>
+        )}
 
         {/* ========================================= */}
         {/* Notification */}
@@ -387,9 +420,10 @@ export default function Step3Screen() {
           style={styles.startButton}
           onPress={handleStartUsing}
           activeOpacity={0.8}
+          disabled={saving}
         >
           <Text style={styles.startButtonText}>
-            เริ่มต้นใช้งาน
+            {saving ? "กำลังบันทึก..." : "เริ่มต้นใช้งาน"}
           </Text>
         </TouchableOpacity>
 
@@ -415,7 +449,7 @@ const styles = StyleSheet.create({
 
   header: {
     height: 0,
-    backgroundColor: "Brand.primary",
+    backgroundColor: Brand.primary,
   },
 
   // ====================================================
@@ -505,6 +539,17 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "700",
     color: "#111",
+  },
+  waterSafetyWarning: {
+    marginTop: 10,
+    marginHorizontal: 12,
+    color: "#A15C00",
+    backgroundColor: "#FFF6E5",
+    borderRadius: 10,
+    padding: 10,
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: "center",
   },
 
   // ====================================================

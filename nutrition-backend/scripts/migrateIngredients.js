@@ -109,7 +109,7 @@ function classifyIngredient(doc) {
   if (category === "dairy") {
     return {
       category_group: "seasoning_group",
-      category_group_label: "เครื่องปรุง/ส่วนผสม",
+      category_group_label: "นมและผลิตภัณฑ์นม",
       sub_category: "dairy",
       sub_category_label: "นมและผลิตภัณฑ์นม",
     };

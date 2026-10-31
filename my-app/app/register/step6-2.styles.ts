@@ -1,254 +1,345 @@
-
 import { StyleSheet } from "react-native";
 
+// 1. ใส่ export ให้ตัวแปรสี เพื่อส่งไปใช้ในไฟล์หลัก
 export const ORANGE = "#F5A400";
+export const DARK = "#C67A1A";
 export const BG = "#F3F3F3";
+export const IOS_GREEN = "#34C759";
+export const ROW_COLOR_1 = "#EBA032";
+export const ROW_COLOR_2 = "#DF9226";
+
+// 2. ตัวแปรฟอนต์
 export const FONT_REGULAR = "NotoSansThai";
 export const FONT_BOLD = "NotoSansThaiBold";
 
-export default StyleSheet.create({
+const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: BG,
   },
+  
   headerBar: {
     backgroundColor: ORANGE,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "space-between",
+    paddingVertical: 14,
+    paddingHorizontal: 16,
   },
-  headerText: {
+
+  backIcon: {
+    padding: 4,
+  },
+
+  headerTitle: {
+    color: "#fff",
+    fontSize: 20,
     fontFamily: FONT_BOLD,
-    fontSize: 18,
-    color: "#FFFFFF",
   },
+
+  headerRight: {
+    width: 32,
+  },
+  
   scroll: {
     flex: 1,
   },
+  
   scrollContent: {
-    padding: 20,
+    padding: 16,
     paddingBottom: 30,
+    flexGrow: 1,
   },
+  
   stepTitle: {
+    fontSize: 26,
+    color: "#111",
     fontFamily: FONT_BOLD,
-    fontSize: 22,
-    color: "#222222",
-    marginBottom: 16,
   },
+  
   progressTrack: {
+    marginTop: 12,
     height: 6,
-    backgroundColor: "#E5E5E5",
-    borderRadius: 10,
-    overflow: "hidden",
-    marginBottom: 20,
+    backgroundColor: "#D8D0C0",
+    borderRadius: 8,
   },
+  
   progressFill: {
+    width: "75%",
     height: "100%",
-    width: "77.78%",
     backgroundColor: ORANGE,
-    borderRadius: 10,
+    borderRadius: 8,
   },
+  
   subtitle: {
-    fontFamily: FONT_REGULAR,
-    fontSize: 14,
-    color: "#666666",
-    lineHeight: 22,
+    marginTop: 24,
+    fontSize: 18,
+    color: "#333",
+    marginBottom: 20,
+    fontFamily: FONT_BOLD,
+  },
+  
+  dropdownWrapper: {
     marginBottom: 16,
   },
-  searchInput: {
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#DDDDDD",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontFamily: FONT_REGULAR,
-    fontSize: 14,
-    marginBottom: 18,
-  },
-  avoidAllButton: {
+  
+  dropdownBtn: {
     flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    padding: 14,
-    marginBottom: 18,
-    borderWidth: 1,
-    borderColor: "#DDDDDD",
-    borderRadius: 12,
-    backgroundColor: "#FFFFFF",
-  },
-  avoidAllButtonActive: {
-    borderColor: ORANGE,
-    backgroundColor: "#FFF5DE",
-  },
-  avoidAllTextContainer: {
-    flex: 1,
-  },
-  avoidAllTitle: {
-    fontFamily: FONT_BOLD,
-    fontSize: 14,
-    color: "#333333",
-  },
-  avoidAllTitleActive: {
-    color: "#9A6000",
-  },
-  avoidAllDescription: {
-    fontFamily: FONT_REGULAR,
-    fontSize: 12,
-    color: "#777777",
-    lineHeight: 18,
-    marginTop: 4,
-  },
-  avoidAllDescriptionActive: {
-    color: "#9A6000",
-  },
-  ingredientContainer: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    borderWidth: 1,
-    borderColor: "#EEEEEE",
-  },
-  categorySection: {
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  categoryTitle: {
-    fontFamily: FONT_BOLD,
-    fontSize: 14,
-    color: "#555555",
-  },
-  ingredientRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 13,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
-  },
-  ingredientName: {
-    flex: 1,
-    fontFamily: FONT_REGULAR,
-    fontSize: 14,
-    color: "#333333",
-    marginLeft: 12,
-  },
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: "#BBBBBB",
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  checkboxActive: {
-    borderColor: ORANGE,
     backgroundColor: ORANGE,
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    zIndex: 2,
   },
-  checkboxTick: {
-    fontSize: 14,
-    color: "#FFFFFF",
-    fontFamily: FONT_BOLD,
-  },
-  centerBox: {
+  
+  dropdownLeft: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
   },
-  messageBox: {
-    backgroundColor: "#FFF8E8",
-    borderRadius: 12,
-    padding: 14,
-    marginTop: 14,
+  
+  emojiIcon: {
+    fontSize: 22,
   },
-  emptyTitle: {
+  
+  dropdownText: {
+    fontSize: 18,
+    color: "#FFF",
+    marginLeft: 12,
     fontFamily: FONT_BOLD,
-    fontSize: 15,
-    color: "#555555",
-    textAlign: "center",
-    marginBottom: 8,
   },
-  infoText: {
+  
+  listContainer: {
+    backgroundColor: "#FFF",
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 16,
+    marginTop: -12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
+    zIndex: 1,
+  },
+  
+  listItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#EAEAEA",
+  },
+  
+  listItemText: {
+    fontSize: 16,
+    color: "#333",
     fontFamily: FONT_REGULAR,
-    fontSize: 13,
-    color: "#777777",
-    lineHeight: 21,
-    textAlign: "center",
   },
-  errorText: {
-    fontFamily: FONT_REGULAR,
-    fontSize: 13,
-    color: "#C62828",
-    lineHeight: 21,
-    textAlign: "center",
+  
+  customInputRowInList: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 12,
+    gap: 8,
   },
-  retryBackButton: {
-    marginTop: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    backgroundColor: "#EEEEEE",
-  },
-  retryBackText: {
-    fontFamily: FONT_BOLD,
-    fontSize: 13,
-    color: "#444444",
-  },
-  summaryBox: {
-    marginTop: 20,
-    padding: 14,
-    borderRadius: 12,
-    backgroundColor: "#FFFFFF",
+  
+  customInputInList: {
+    flex: 1,
+    backgroundColor: "#F5F5F5",
     borderWidth: 1,
-    borderColor: "#EEEEEE",
+    borderColor: "#DDD",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: "#222",
+    fontFamily: FONT_REGULAR,
   },
-  summaryTitle: {
+  
+  addButtonInList: {
+    backgroundColor: ORANGE,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  
+  addButtonTextInList: {
+    color: "#FFF",
+    fontSize: 14,
     fontFamily: FONT_BOLD,
+  },
+  
+  legacyCustomSection: {
+    marginTop: 4,
+    marginBottom: 12,
+    backgroundColor: "#FFF",
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#EFEFEF",
+  },
+  
+  legacyCustomTitle: {
     fontSize: 15,
-    color: "#333333",
+    color: "#666",
+    marginBottom: 8,
+    fontFamily: FONT_BOLD,
+  },
+  
+  customChipWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+  },
+  
+  customChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFF4DD",
+    borderWidth: 1,
+    borderColor: "#F3D299",
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginRight: 8,
     marginBottom: 8,
   },
-  summaryText: {
-    fontFamily: FONT_REGULAR,
-    fontSize: 13,
-    color: "#666666",
-    lineHeight: 21,
+  
+  customChipText: {
+    color: "#8A5A00",
+    fontSize: 14,
+    fontFamily: FONT_BOLD,
   },
+  
+  customChipRemove: {
+    marginLeft: 8,
+    color: "#C96E00",
+    fontSize: 14,
+    fontFamily: FONT_BOLD,
+  },
+  
+  summaryBox: {
+    marginTop: 8,
+    backgroundColor: "#FFF8EC",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#F0D3A3",
+    padding: 14,
+  },
+  
+  summaryTitle: {
+    fontSize: 15,
+    color: "#6B5A3D",
+    marginBottom: 6,
+    fontFamily: FONT_BOLD,
+  },
+  
+  summaryText: {
+    fontSize: 14,
+    color: "#333",
+    lineHeight: 20,
+    fontFamily: FONT_BOLD,
+  },
+
+  // Hierarchical ingredient picker styles, shared with the profile allergy editor.
+  searchBox: { height: 48, flexDirection: "row", alignItems: "center", backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DDDDDD", borderRadius: 12, paddingHorizontal: 14, marginBottom: 14 },
+  searchInput: { flex: 1, minWidth: 0, marginLeft: 8, paddingVertical: 8, fontFamily: FONT_REGULAR, fontSize: 14, color: "#333333" },
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+  emptyText: { textAlign: "center", fontSize: 15, color: "#999999", fontFamily: FONT_REGULAR, marginTop: 40 },
+  categoryCard: { backgroundColor: "#FFFFFF", borderRadius: 14, borderWidth: 1, borderColor: "#E8E8E8", marginBottom: 10, overflow: "hidden" },
+  categoryCardExpanded: { borderColor: ORANGE },
+  categoryHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 14, paddingHorizontal: 16 },
+  categoryHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
+  categoryEmoji: { fontSize: 22 },
+  categoryName: { fontSize: 15, fontFamily: FONT_BOLD, color: "#222222" },
+  categoryBadge: { backgroundColor: "#FFF8ED", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2, marginLeft: 6, borderWidth: 1, borderColor: "#F0E0C8" },
+  categoryBadgeText: { fontSize: 11, fontFamily: FONT_BOLD, color: ORANGE },
+  subCategoryArea: { backgroundColor: "#FFF8ED", paddingTop: 6, paddingBottom: 10, paddingHorizontal: 12 },
+  subCategoryCard: { backgroundColor: "#FFFFFF", borderRadius: 10, borderWidth: 1, borderColor: "#F0E0C8", marginBottom: 8, overflow: "hidden" },
+  subCategoryHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 10, paddingHorizontal: 12 },
+  subCategoryName: { fontSize: 14, fontFamily: FONT_BOLD, color: DARK },
+  chipContainer: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 10, paddingBottom: 10 },
+  chip: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1.5, backgroundColor: "#FFFFFF", borderColor: "#DCDCDC" },
+  chipSelected: { backgroundColor: ORANGE, borderColor: ORANGE },
+  chipUnselected: { backgroundColor: "#FFFFFF", borderColor: "#DCDCDC" },
+  chipText: { fontSize: 14, fontFamily: FONT_REGULAR, color: "#000000" },
+  chipTextSelected: { color: "#FFFFFF", fontFamily: FONT_BOLD },
+  chipTextUnselected: { color: "#000000" },
+  customInputRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12, marginBottom: 16 },
+  customInput: { flex: 1, minWidth: 0, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DDDDDD", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: "#222222", fontFamily: FONT_REGULAR },
+  addBtnSmall: { backgroundColor: ORANGE, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, justifyContent: "center", alignItems: "center" },
+  addBtnSmallText: { color: "#FFFFFF", fontSize: 14, fontFamily: FONT_BOLD },
+  summaryHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 },
+  clearAllText: { fontSize: 13, color: "#A66B00", fontFamily: FONT_BOLD },
+  selectedItems: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  selectedItem: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 7, paddingHorizontal: 10, borderRadius: 20, borderWidth: 1.5, borderColor: ORANGE, backgroundColor: "#FFF1D6" },
+  selectedItemText: { fontSize: 13, color: "#6B5A3D", fontFamily: FONT_BOLD },
+  
+  spacer: {
+    flex: 1,
+    minHeight: 40,
+  },
+  
   buttonRow: {
     flexDirection: "row",
-    gap: 12,
-    marginTop: 24,
+    justifyContent: "space-between",
+    marginTop: 20,
   },
+
+  bottomBar: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 20,
+  },
+  
   backButton: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#CCCCCC",
+    width: 120,
+    borderWidth: 1.8,
+    borderColor: "#333",
+    borderRadius: 15,
+    paddingVertical: 15,
     backgroundColor: "#FFFFFF",
-  },
-  backText: {
-    fontFamily: FONT_BOLD,
-    color: "#555555",
-    fontSize: 15,
-  },
-  saveButton: {
-    flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: ORANGE,
   },
-  saveText: {
+  
+  backText: {
+    color: "#111",
+    fontSize: 16,
     fontFamily: FONT_BOLD,
-    color: "#FFFFFF",
-    fontSize: 15,
   },
-  disabledButton: {
-    opacity: 0.45,
+  
+  saveButton: {
+    width: 120,
+    backgroundColor: ORANGE,
+    borderRadius: 15,
+    paddingVertical: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: ORANGE,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  
+  saveText: {
+    color: "#fff",
+    fontSize: 16,
+    fontFamily: FONT_BOLD,
   },
 });
+
+export default styles;
